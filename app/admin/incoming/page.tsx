@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EVENT_TYPES, SEVERITY_LEVELS } from "@/lib/types";
 import { EVENT_TYPE_LABEL } from "@/components/events/event-type-icon";
-import { DB_VERIFICATION_STATUSES, type RawIngestionItemWithSourceDTO } from "@/lib/types/db";
+import { DB_VERIFICATION_STATUSES, type RawIngestionItemWithSourceDTO, type ConflictDTO } from "@/lib/types/db";
 import { timeAgo } from "@/lib/utils";
 import type { ConflictEvent } from "@/lib/types";
 
@@ -24,6 +24,7 @@ interface PublishDraft {
   severity: string;
   importance: string;
   verificationStatus: string;
+  conflictId: string;
 }
 
 function draftFromItem(item: RawIngestionItemWithSourceDTO): PublishDraft {
@@ -41,6 +42,7 @@ function draftFromItem(item: RawIngestionItemWithSourceDTO): PublishDraft {
     severity: "elevated",
     importance: "50",
     verificationStatus: "reported",
+    conflictId: "",
   };
 }
 
@@ -54,6 +56,10 @@ export default function AdminIncomingPage() {
   const { data: publishedEvents = [] } = useQuery({
     queryKey: ["events", "published"],
     queryFn: async (): Promise<ConflictEvent[]> => (await fetch("/api/events")).json(),
+  });
+  const { data: conflicts = [] } = useQuery({
+    queryKey: ["admin", "conflicts"],
+    queryFn: async (): Promise<ConflictDTO[]> => (await fetch("/api/admin/conflicts")).json(),
   });
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, PublishDraft>>({});
@@ -93,6 +99,7 @@ export default function AdminIncomingPage() {
         severity: draft.severity,
         importance: Number(draft.importance),
         verificationStatus: draft.verificationStatus,
+        conflictId: draft.conflictId || null,
       }),
     });
     if (!res.ok) {
@@ -235,6 +242,7 @@ export default function AdminIncomingPage() {
                     <label className="text-xs text-ink-faint">
                       Event type
                       <select
+                        aria-label="Event type"
                         className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
                         value={draft.eventType}
                         onChange={(e) => setDraft(item.id, { eventType: e.target.value })}
@@ -254,6 +262,22 @@ export default function AdminIncomingPage() {
                         value={draft.summary}
                         onChange={(e) => setDraft(item.id, { summary: e.target.value })}
                       />
+                    </label>
+                    <label className="text-xs text-ink-faint">
+                      Conflict
+                      <select
+                        aria-label="Conflict"
+                        className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+                        value={draft.conflictId}
+                        onChange={(e) => setDraft(item.id, { conflictId: e.target.value })}
+                      >
+                        <option value="">None</option>
+                        {conflicts.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                     <label className="text-xs text-ink-faint">
                       Location name

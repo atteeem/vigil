@@ -103,13 +103,93 @@ Phase 1 ships the full TypeScript type layer (`lib/types`) and mock data
 (`lib/data`) shaped exactly like the Postgres schema in `DATA_MODEL.md`, so
 Phase 2 is "point the hooks at Supabase" rather than "redesign the app."
 
+## Source ingestion pipeline (Phase 2, local development)
+
+Real, working local-development infrastructure — parallel to the mock-data
+UI above, not a replacement for it. SQLite/Prisma per Decisions.md
+("Current backend strategy"); this is temporary until the Supabase
+migration described later in this file.
+
+**Flow**: `Source` → adapter (`fetchLatest`/`normalize`/`healthCheck`) →
+`RawIngestionItem` (deduplicated) → human review in `/admin/incoming` →
+`Event` (+ `EventSource` attribution) → merged into `/world`'s live feed.
+**Nothing publishes automatically** — publish is always a human action.
+
+- **Adapters** (`lib/ingestion/`): a `SourceAdapter` interface
+  (`fetchLatest`, `normalize`, `healthCheck`), implemented for `rss` (a
+  dependency-free regex-based RSS 2.0 parser — no XML library needed for
+  typical feeds), `manual` (never auto-fetches; human-submitted items go
+  through the same normalize→dedupe path via `POST
+  /api/admin/incoming/manual`), and `telegram` (placeholder only —
+  `fetchLatest`/`healthCheck` always report disabled; real Telegram
+  ingestion is explicitly out of scope until authorized credentials
+  exist).
+- **Deduplication**: `raw_ingestion_items` has a unique constraint on
+  `(sourceId, externalId)` (`prisma/schema.prisma`). The RSS adapter sets
+  `externalId` to the feed item's GUID, falling back to its link URL, then
+  to a synthesized `sourceId:title` key if both are absent — see
+  `lib/ingestion/rss-adapter.ts`. `createRawIngestionItemIfNew`
+  (`lib/db/repositories/raw-ingestion-items.ts`) checks-then-creates
+  against that constraint and returns whether it actually inserted, so a
+  re-fetch of an already-seen feed is a guaranteed no-op, not just an
+  unlikely collision.
+- **Two ways to trigger ingestion**: (1) a background poll loop
+  (`lib/ingestion/poll.ts`'s `runIngestionPass`, started once per server
+  process from `instrumentation.ts`, default 60s /
+  `INGESTION_POLL_INTERVAL_MS`) that polls every `enabled && autoIngest`
+  source; (2) an explicit admin "Fetch Now" button per RSS source
+  (`POST /api/admin/sources/[id]/fetch`) that polls that one source
+  immediately regardless of its auto-ingest flag. Both call the same
+  `pollSource()` function, so they behave identically — same dedup, same
+  health-tracking (`lastSuccessfulIngestion`/`lastError`), same "never
+  publishes."
+- **Review & publish** (`/admin/incoming`, `app/api/admin/incoming/`):
+  every field (event type, conflict, country/region/location name,
+  lat/lng, occurred-at, title, summary, severity, importance,
+  verification status) is manually set or corrected by a human before
+  publishing — there is no automatic geocoding or AI classification. The
+  admin is expected to write an independently paraphrased `Event.summary`
+  rather than republish the raw source text verbatim. Publish creates the
+  `Event`, links the originating
+  `RawIngestionItem` via `EventSource` (`relationship: "originating"`),
+  and sets `processingStatus: "published"` on the raw item — the raw item
+  is never deleted, preserving the audit trail back to the original
+  source.
+- **Rejection**: `Reject` sets `processingStatus: "rejected"` on the raw
+  item. Rejected items stay in the database (audit/history) but are
+  excluded from `/admin/incoming`'s default pending view, never create an
+  `Event`, and therefore never appear on the public map.
+- **Conflict assignment**: minimum viable support — one `Conflict` row
+  (`russia-ukraine`, seeded in `prisma/seed.mjs`, matching
+  `lib/data/mock-conflicts.ts`'s entry) is selectable from a dropdown in
+  the review form (`GET /api/admin/conflicts`) and stored as the
+  published event's `conflictId`. There's no admin CRUD yet for creating
+  additional conflicts from the UI.
+- **Live refresh**: `/world` merges mock events with published DB events
+  fetched via `hooks/use-live-events.ts`, which polls `GET /api/events`
+  every 20s (chosen over SSE deliberately — one plain endpoint, no
+  transport/reconnect logic, trivially swappable for SSE later if the
+  interval becomes a real latency concern; see the map-upgrade commit's
+  reasoning, same trade-off). A newly published event reaches the map
+  without a manual browser reload.
+- **Event detail page** (`app/event/[slug]/page.tsx`): checks mock events
+  first, then falls back to a DB lookup (`getDbEventBySlug` in
+  `lib/data/world-events.ts`) for a published admin-review event — a
+  freshly published RSS-sourced event has a fully working detail page,
+  not just a `/world` preview panel. The Sources section shows each
+  source's name, an "Originating report" badge on the first
+  (originating, non-relay) source, its type (preferring the source's own
+  configured category, e.g. "News", over a generic per-adapter label),
+  an absolute "Published:" timestamp, and the clickable original URL.
+
 ## Backend (Phase 2+, not built in Phase 1)
 
 - **Supabase**: Postgres + PostGIS (event/country geography), Auth (Google /
   Apple / email), Realtime (event feed updates), Storage (source assets).
-- **Ingestion pipeline**: scheduled functions pull news/RSS + conflict-data
-  APIs into `raw_ingestion_items`, then a classification step promotes
-  qualifying items into `events` with `event_sources` attribution.
+- **Ingestion pipeline (post-Supabase-migration)**: the local pipeline
+  above, migrated onto Supabase — scheduled functions instead of an
+  in-process poll loop, `raw_ingestion_items` as a real Postgres table.
+  Same flow and dedup rule, different infrastructure underneath.
 - **AI pipeline (OpenAI)**: translation, summarization, classification,
   entity/location extraction, geocoding assistance, duplicate detection,
   conflict matching, brief generation, impact-driver explanation. Always

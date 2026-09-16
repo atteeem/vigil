@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, MapPin } from "lucide-react";
 import type { ConflictEvent } from "@/lib/types";
@@ -26,6 +27,25 @@ export function EventDetailPanel({
   const conflict = event.conflictId ? getConflictById(event.conflictId) : undefined;
   const timezone = useAppStore((s) => s.timezone);
 
+  // formatAbsoluteTime(..., "auto") resolves to the *runtime's* local
+  // timezone via Intl.DateTimeFormat(undefined, ...) — the server
+  // (Node.js process) and the browser client are different runtimes with
+  // different local timezones, so the "auto" case renders different text
+  // in each, which is a hydration mismatch (this component is server-
+  // rendered on first load via app/event/[slug]/page.tsx). Server render
+  // and the client's pre-hydration render both use a fixed "UTC" instead;
+  // the real device timezone (if "auto") only takes effect after mount,
+  // which is always a safe post-hydration update, never a mismatch.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    // One-time client-only mount flag for the hydration-safe timezone
+    // fallback above — the same pattern conflict-globe.tsx uses for its
+    // client-only WebGL capability probe.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
+  const effectiveTimezone = mounted ? timezone : "UTC";
+
   return (
     <div>
       <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
@@ -38,7 +58,7 @@ export function EventDetailPanel({
         <span className="flex items-center gap-1">
           <MapPin className="h-3 w-3" /> {country ? `${country.flag} ${country.name}` : event.region}
         </span>
-        <span>{formatAbsoluteTime(event.occurredAt, timezone)}</span>
+        <span>{formatAbsoluteTime(event.occurredAt, effectiveTimezone)}</span>
         <span>{timeAgo(event.occurredAt, MOCK_NOW)}</span>
       </div>
 
@@ -78,21 +98,31 @@ export function EventDetailPanel({
           Sources ({event.sources.length})
         </p>
         <ul className="mt-2 space-y-2">
-          {event.sources.map((s) => (
+          {event.sources.map((s, i) => (
             <li key={s.id} className="rounded-lg border border-border px-3 py-2 text-xs">
               <div className="flex items-center justify-between gap-2">
-                <p className="font-medium text-ink">{s.name}</p>
+                <p className="font-medium text-ink">
+                  {s.name}
+                  {i === 0 && (
+                    <span className="ml-1.5 rounded-full border border-accent/30 bg-accent-dim px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-accent">
+                      Originating report
+                    </span>
+                  )}
+                </p>
                 <p className="shrink-0 text-ink-faint">{timeAgo(s.publishedAt, MOCK_NOW)}</p>
               </div>
-              <p className="mt-0.5 text-ink-faint">{s.sourceType}</p>
-              <a
-                href={s.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-1 block truncate text-accent hover:underline"
-              >
-                {s.url}
-              </a>
+              <p className="mt-0.5 text-ink-faint">Source type: {s.sourceType}</p>
+              <p className="mt-0.5 text-ink-faint">Published: {formatAbsoluteTime(s.publishedAt, effectiveTimezone)}</p>
+              {s.url && (
+                <a
+                  href={s.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 block truncate text-accent hover:underline"
+                >
+                  Original source: {s.url}
+                </a>
+              )}
               {s.note && <p className="mt-1 text-[10px] italic text-ink-faint">{s.note}</p>}
             </li>
           ))}

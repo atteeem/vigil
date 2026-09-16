@@ -1,33 +1,52 @@
+import type { Source } from "@prisma/client";
 import { prisma } from "@/lib/db/client";
 import { getAdapter } from "@/lib/ingestion/registry";
 import { createRawIngestionItemIfNew } from "@/lib/db/repositories/raw-ingestion-items";
 import { recordIngestionSuccess, recordIngestionError } from "@/lib/db/repositories/sources";
 
-/** One ingestion pass: every enabled + auto-ingest source is polled once,
- * new items are written to raw_ingestion_items (deduplicated on
- * source+externalId — see createRawIngestionItemIfNew), nothing is
- * auto-published. Safe to call concurrently/repeatedly; a source with a
- * fetch error is recorded on the source (lastError) and skipped, not
- * thrown, so one broken feed can't stop the rest of the pass. */
+export interface FetchResult {
+  fetched: number;
+  alreadyKnown: number;
+  new: number;
+  errors: number;
+  error?: string;
+}
+
+/** Fetches, normalizes, and dedupes one source's latest items into
+ * raw_ingestion_items — never publishes anything. Shared by the
+ * background poller (runIngestionPass, enabled+auto-ingest sources only)
+ * and the admin "Fetch Now" action (any single source, on demand,
+ * regardless of its auto-ingest flag). A fetch failure is caught and
+ * recorded on the source (lastError) rather than thrown, so the caller
+ * always gets a result back instead of an exception. */
+export async function pollSource(source: Source): Promise<FetchResult> {
+  try {
+    const adapter = getAdapter(source.type);
+    const rawItems = await adapter.fetchLatest(source);
+    let created = 0;
+    for (const raw of rawItems) {
+      const normalized = adapter.normalize(raw, source);
+      const result = await createRawIngestionItemIfNew({ sourceId: source.id, ...normalized });
+      if (result.created) created++;
+    }
+    await recordIngestionSuccess(source.id);
+    return { fetched: rawItems.length, alreadyKnown: rawItems.length - created, new: created, errors: 0 };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await recordIngestionError(source.id, message);
+    return { fetched: 0, alreadyKnown: 0, new: 0, errors: 1, error: message };
+  }
+}
+
+/** One ingestion pass: every enabled + auto-ingest source is polled once
+ * via pollSource. Safe to call concurrently/repeatedly. */
 export async function runIngestionPass(): Promise<{ sourcesPolled: number; itemsCreated: number }> {
   const sources = await prisma.source.findMany({ where: { enabled: true, autoIngest: true } });
   let itemsCreated = 0;
-
   for (const source of sources) {
-    try {
-      const adapter = getAdapter(source.type);
-      const rawItems = await adapter.fetchLatest(source);
-      for (const raw of rawItems) {
-        const normalized = adapter.normalize(raw, source);
-        const { created } = await createRawIngestionItemIfNew({ sourceId: source.id, ...normalized });
-        if (created) itemsCreated++;
-      }
-      await recordIngestionSuccess(source.id);
-    } catch (err) {
-      await recordIngestionError(source.id, err instanceof Error ? err.message : String(err));
-    }
+    const result = await pollSource(source);
+    itemsCreated += result.new;
   }
-
   return { sourcesPolled: sources.length, itemsCreated };
 }
 

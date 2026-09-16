@@ -48,6 +48,44 @@ const sources = [
     enabled: false,
     autoIngest: false,
   },
+  // First real external-source ingestion proof (RSS -> raw item -> admin
+  // review -> publish -> /world). See ARCHITECTURE.md "Source ingestion
+  // pipeline". auto_publish is NOT a field on Source — nothing here (or
+  // anywhere in the ingestion pipeline) auto-publishes; publish is always
+  // a human action in /admin/incoming.
+  {
+    name: "BBC World",
+    type: "rss",
+    url: "https://feeds.bbci.co.uk/news/world/rss.xml",
+    language: "en",
+    sourceCategory: "News",
+    reliabilityTier: "A",
+    permissionStatus: "authorized",
+    enabled: true,
+    autoIngest: true,
+  },
+];
+
+// Minimum conflict-assignment support for the ingestion proof (spec §5) —
+// matches lib/data/mock-conflicts.ts's russia-ukraine entry so the two
+// stay recognizable as "the same conflict" even though they're on
+// different sides of the mock/DB boundary for now.
+const conflicts = [
+  {
+    slug: "russia-ukraine",
+    name: "Russia–Ukraine War",
+    region: "Europe",
+    status: "active",
+    severity: "severe",
+    intensity: 88,
+    intensityChange24h: 4,
+    startedAt: new Date("2022-02-24"),
+    lat: 48.5,
+    lng: 37.0,
+    primaryEffects: JSON.stringify(["Security", "Trade", "Energy"]),
+    summary:
+      "Large-scale conventional war along a shifting front line in eastern and southern Ukraine, with sustained long-range strikes on infrastructure on both sides.",
+  },
 ];
 
 async function main() {
@@ -60,6 +98,15 @@ async function main() {
     }
   }
   console.log(`Seeded ${sources.length} sources.`);
+
+  for (const conflict of conflicts) {
+    await prisma.conflict.upsert({
+      where: { slug: conflict.slug },
+      update: conflict,
+      create: conflict,
+    });
+  }
+  console.log(`Seeded ${conflicts.length} conflict(s).`);
 }
 
 main()

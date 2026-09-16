@@ -56,6 +56,15 @@ export interface SourceDTO {
   lastError: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Raw items received today — only present on the /admin/sources list response. */
+  itemsToday?: number;
+}
+
+export interface ConflictDTO {
+  id: string;
+  slug: string;
+  name: string;
+  region: string;
 }
 
 export interface RawIngestionItemWithSourceDTO {

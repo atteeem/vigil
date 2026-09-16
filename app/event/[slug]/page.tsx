@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MapPin } from "lucide-react";
 import { getEventBySlug, MOCK_EVENTS } from "@/lib/data/mock-events";
+import { getDbEventBySlug } from "@/lib/data/world-events";
 import { EventDetailPanel } from "@/components/events/event-detail-panel";
 import { EventCard } from "@/components/events/event-card";
 
@@ -16,7 +17,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const event = getEventBySlug(slug);
+  const event = getEventBySlug(slug) ?? (await getDbEventBySlug(slug));
   return { title: event ? `${event.title} — Vigil` : "Event — Vigil" };
 }
 
@@ -26,7 +27,10 @@ export default async function EventDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const event = getEventBySlug(slug);
+  // Mock events are the common case (checked first, no DB round-trip);
+  // published admin-review events (e.g. from RSS ingestion) fall back to
+  // the DB lookup — see lib/data/world-events.ts.
+  const event = getEventBySlug(slug) ?? (await getDbEventBySlug(slug));
   if (!event) notFound();
 
   const related = MOCK_EVENTS.filter(

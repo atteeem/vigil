@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, Pencil, Radio, Loader2 } from "lucide-react";
+import { Plus, Trash2, Pencil, Radio, Loader2, Download } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SOURCE_TYPES, type SourceDTO, type SourceType } from "@/lib/types/db";
+import type { FetchResult } from "@/lib/ingestion/poll";
 import { timeAgo, cn } from "@/lib/utils";
 
 interface SourceFormState {
@@ -60,6 +61,8 @@ export default function AdminSourcesPage() {
   const [form, setForm] = useState<SourceFormState>(EMPTY_FORM);
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; message?: string }>>({});
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [fetchResults, setFetchResults] = useState<Record<string, FetchResult>>({});
+  const [fetchingId, setFetchingId] = useState<string | null>(null);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin", "sources"] });
 
@@ -117,6 +120,16 @@ export default function AdminSourcesPage() {
     setTestResults((prev) => ({ ...prev, [id]: result }));
     setTestingId(null);
     refresh();
+  }
+
+  async function fetchNow(id: string) {
+    setFetchingId(id);
+    const res = await fetch(`/api/admin/sources/${id}/fetch`, { method: "POST" });
+    const result = (await res.json()) as FetchResult;
+    setFetchResults((prev) => ({ ...prev, [id]: result }));
+    setFetchingId(null);
+    refresh();
+    queryClient.invalidateQueries({ queryKey: ["admin", "incoming"] });
   }
 
   async function removeSource(id: string) {
@@ -249,6 +262,7 @@ export default function AdminSourcesPage() {
               <th className="px-4 py-3">Enabled</th>
               <th className="px-4 py-3">Auto</th>
               <th className="px-4 py-3">Last update</th>
+              <th className="px-4 py-3">Items today</th>
               <th className="px-4 py-3">Health</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
@@ -256,20 +270,21 @@ export default function AdminSourcesPage() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-ink-faint">
+                <td colSpan={11} className="px-4 py-8 text-center text-ink-faint">
                   Loading…
                 </td>
               </tr>
             )}
             {!loading && sources.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-ink-faint">
+                <td colSpan={11} className="px-4 py-8 text-center text-ink-faint">
                   No sources yet. Add one to get started.
                 </td>
               </tr>
             )}
             {sources.map((source) => {
               const test = testResults[source.id];
+              const fetchResult = fetchResults[source.id];
               const healthy = test ? test.ok : !source.lastError;
               return (
                 <tr key={source.id} className="border-b border-border/60 align-top">
@@ -309,6 +324,7 @@ export default function AdminSourcesPage() {
                   <td className="px-4 py-3 text-xs text-ink-faint">
                     {source.lastSuccessfulIngestion ? timeAgo(source.lastSuccessfulIngestion) : "Never"}
                   </td>
+                  <td className="px-4 py-3 text-ink-dim">{source.itemsToday ?? 0}</td>
                   <td className="px-4 py-3">
                     <span className={cn("flex items-center gap-1 text-xs", healthy ? "text-elevated" : "text-high")}>
                       <Radio className="h-3 w-3" />
@@ -319,9 +335,32 @@ export default function AdminSourcesPage() {
                         {test?.message ?? source.lastError}
                       </div>
                     )}
+                    {fetchResult && (
+                      <div className="mt-1 max-w-[200px] text-[11px] text-ink-faint">
+                        {fetchResult.fetched} fetched · {fetchResult.alreadyKnown} already known · {fetchResult.new}{" "}
+                        new · {fetchResult.errors} error{fetchResult.errors === 1 ? "" : "s"}
+                        {fetchResult.error && <span className="text-high"> — {fetchResult.error}</span>}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1.5">
+                      {source.type === "rss" && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => fetchNow(source.id)}
+                          disabled={fetchingId === source.id}
+                        >
+                          {fetchingId === source.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <>
+                              <Download className="h-3.5 w-3.5" /> Fetch Now
+                            </>
+                          )}
+                        </Button>
+                      )}
                       <Button size="sm" variant="ghost" onClick={() => testSource(source.id)} disabled={testingId === source.id}>
                         {testingId === source.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Test"}
                       </Button>

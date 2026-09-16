@@ -3,7 +3,7 @@ import type { EventType, Severity, VerificationStatus } from "./severity";
 export interface SourceRef {
   id: string;
   name: string;
-  sourceType: "Wire" | "Official" | "Local News" | "OSINT" | "Social" | "NGO";
+  sourceType: "Wire" | "Official" | "Local News" | "News" | "OSINT" | "Social" | "NGO";
   url: string;
   publishedAt: string; // ISO datetime
   note?: string;

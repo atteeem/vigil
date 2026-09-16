@@ -31,6 +31,17 @@ export function clamp(n: number, min: number, max: number): number {
  * Formats an absolute timestamp respecting the user's timezone preference
  * (Profile page). "auto" defers to the device's own timezone; any IANA
  * zone name is passed straight to Intl.DateTimeFormat.
+ *
+ * Locale is deliberately pinned to "en-US" (never `undefined`, i.e. never
+ * "the ambient locale"): passing `undefined` lets Intl.DateTimeFormat pick
+ * up whatever default locale the *current runtime* resolves to, and
+ * Node's bundled ICU data can render the same "en-US"-equivalent format
+ * with different punctuation than a browser's (observed: "02:01" in
+ * Chrome vs "02.01" in Node for `hour:"2-digit", minute:"2-digit"`) — for
+ * a component that's server-rendered (app/event/[slug]/page.tsx) and then
+ * hydrated client-side, that's a real hydration mismatch, not a
+ * theoretical one. An explicit locale makes the output identical
+ * regardless of which runtime formats it.
  */
 export function formatAbsoluteTime(iso: string, timezone: string): string {
   const date = new Date(iso);
@@ -45,10 +56,10 @@ export function formatAbsoluteTime(iso: string, timezone: string): string {
     options.timeZone = timezone;
   }
   try {
-    return new Intl.DateTimeFormat(undefined, options).format(date);
+    return new Intl.DateTimeFormat("en-US", options).format(date);
   } catch {
     // Unknown/invalid zone — fall back to the device default rather than crash.
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat("en-US", {
       month: "short",
       day: "numeric",
       hour: "2-digit",

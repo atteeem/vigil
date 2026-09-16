@@ -39,36 +39,89 @@ so the migration is mechanical.
 | slug | text (unique) | |
 | title | text | |
 | summary | text | neutral, attribution-preserving |
-| event_type | enum | Airstrike/Drone/Ground/Naval/Terrorism/Civil Unrest/Cyber/Diplomacy/Sanctions/Conflict(general) |
+| event_type | enum | the full 21-category set in `lib/types/severity.ts` `EVENT_TYPES` (airstrike, drone, missile, explosion, artillery, ground, ground_clash, naval, air_defense, protest, civil_unrest, fire, security, terrorism, cyber, border, diplomacy, sanctions, infrastructure, conflict, other) — see `lib/map/event-icons.ts` for the matching icon per category |
 | latitude / longitude | double | mirrored into `location geography(Point)` |
 | country_code | text (FK → countries) | |
 | region | text | |
-| conflict_id | uuid (FK → conflicts, nullable) | |
+| conflict_id | uuid (FK → conflicts, nullable) | implemented in the local schema — see "sources, raw_ingestion_items, event_sources, conflicts" above |
 | occurred_at | timestamptz | |
 | created_at / updated_at | timestamptz | |
-| severity | enum | Stable/Elevated/High/Severe/Extreme (event-local) |
+| severity | enum | Stable/Guarded/Elevated/High/Severe/Extreme (event-local) |
 | importance | integer 0–100 | ranking signal |
-| verification_status | enum | Unverified/Reported/Multiple Sources/Confirmed/Official Claim (+ `disputed: boolean`) |
+| verification_status | enum | mock-data UI uses 5 states (Unverified/Reported/Multiple Sources/Confirmed/Official Claim) + a separate `disputed: boolean`; the local DB schema uses Decisions.md's 6-state vocabulary instead, with `disputed` as its own status rather than a separate flag — `lib/data/world-events.ts`'s `toUiVerification()` maps one onto the other for display |
 | source_count | integer | denormalized count of `event_sources` |
 | published | boolean | |
 | raw_metadata | jsonb | ingestion passthrough |
 
-## `sources`
-| field | type | notes |
-|---|---|---|
-| id | uuid (PK) | |
-| name | text | publisher / outlet / official body |
-| source_type | enum | Wire / Official / Local News / OSINT / Social / NGO |
-| url | text | |
-| published_at | timestamptz | |
-| reliability_note | text | optional |
+## `sources`, `raw_ingestion_items`, `event_sources`, `conflicts` — implemented (Phase 2, local SQLite/Prisma)
 
-## `event_sources` (join)
+Unlike the rest of this file, these four tables are **not** aspirational —
+they're the actual schema in `prisma/schema.prisma`, running today against
+SQLite (temporary local-development infrastructure per Decisions.md; see
+ARCHITECTURE.md's "Source ingestion pipeline" for the full flow these
+support). They're richer than the original sketch below them in this file
+needed to support the admin Source Manager (ingest scheduling, health
+tracking) and the review/publish workflow — this section supersedes the
+earlier plain `sources`/`event_sources` shapes. SQLite has no native enum
+type, so every enum-shaped field is a plain `String`, validated at the
+TypeScript boundary instead (`lib/types/db.ts`) — the field *names* still
+match this doc's convention so a future Postgres migration stays close to
+mechanical.
+
+### `sources`
 | field | type | notes |
 |---|---|---|
-| event_id | uuid (FK) | |
-| source_id | uuid (FK) | |
-| note | text | how this source's account differs, if it does |
+| id | text (PK, cuid) | |
+| name | text | e.g. "BBC World" |
+| type | text | `rss` \| `telegram` \| `manual` |
+| url | text, nullable | feed URL for `rss` |
+| telegram_handle | text, nullable | |
+| country | text, nullable | |
+| region | text, nullable | |
+| language | text, nullable | e.g. `en` |
+| source_category | text, nullable | e.g. "News" — shown as the source's displayed type on event detail pages, preferred over a generic per-`type` label |
+| reliability_tier | text, nullable | e.g. `A` |
+| permission_status | text | `authorized` \| `unauthorized` \| `pending` — Telegram sources default `unauthorized` until real credentials exist |
+| enabled | boolean | |
+| auto_ingest | boolean | polled by the background loop when true; "Fetch Now" works regardless |
+| last_successful_ingestion | timestamp, nullable | |
+| last_error | text, nullable | |
+| created_at / updated_at | timestamp | |
+
+### `raw_ingestion_items`
+| field | type | notes |
+|---|---|---|
+| id | text (PK, cuid) | |
+| source_id | text (FK → sources) | |
+| external_id | text | GUID, or a stable fallback (link URL, then `sourceId:title`) — see ARCHITECTURE.md |
+| original_url / original_title / original_text | text, nullable | stored for internal review only — public event summaries must be independently paraphrased, never a republish of this text |
+| language | text, nullable | |
+| published_at | timestamp, nullable | |
+| received_at | timestamp | |
+| media_urls | text, nullable | JSON-encoded `string[]` (SQLite has no array type) |
+| processing_status | text | `pending` \| `published` \| `rejected` \| `merged` |
+| raw_metadata | text, nullable | JSON-encoded, adapter-specific passthrough |
+
+Unique constraint: `(source_id, external_id)` — the deduplication rule; see ARCHITECTURE.md.
+
+### `event_sources` (join)
+| field | type | notes |
+|---|---|---|
+| id | text (PK, cuid) | |
+| event_id | text (FK → events) | |
+| raw_ingestion_item_id | text (FK → raw_ingestion_items) | |
+| relationship | text | `originating` \| `relay` \| `corroborating` |
+| is_originating_source | boolean | a relay of the same originating source is not an independent confirmation — see Decisions.md § Source verification |
+
+Unique constraint: `(event_id, raw_ingestion_item_id)`.
+
+### `conflicts` (local schema)
+Minimum viable subset of the target `conflicts` table below, actually
+implemented: `id`, `slug` (unique), `name`, `region`, `status`,
+`severity`, `intensity`, `intensity_change_24h`, `started_at`, `lat`,
+`lng`, `primary_effects` (JSON-encoded `string[]`), `summary`,
+`created_at`/`updated_at`. One row seeded (`russia-ukraine`, matching
+`lib/data/mock-conflicts.ts`'s entry) — no admin CRUD to create more yet.
 
 ## `market_assets`
 | field | type | notes |
@@ -127,9 +180,13 @@ scaffold only — not built in Phase 1).
 id, conflict_id, window (`6h`/`24h`), body_md, grounded_event_ids (uuid[]),
 generated_at, model_version.
 
-## `raw_ingestion_items` (Phase 2+)
-id, source_url, fetched_at, raw_payload jsonb, processing_status
-(`pending`/`classified`/`discarded`/`promoted`), promoted_event_id.
+## `raw_ingestion_items` — superseded, see above
+
+This original sketch (id, source_url, fetched_at, raw_payload jsonb,
+processing_status, promoted_event_id) is superseded by the actual
+implemented schema documented earlier in this file under "sources,
+raw_ingestion_items, event_sources, conflicts — implemented" — kept here
+only so old links/references don't 404.
 
 ## Relationships
 

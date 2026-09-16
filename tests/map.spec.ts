@@ -37,10 +37,12 @@ test.describe("World map (/world)", () => {
     const countAfter = await page.getByText(/events in range/).textContent();
     expect(countAfter).toBe(countBefore);
 
-    // No MapTiler key in this environment, so Street/Satellite should show
-    // the graceful fallback notice rather than a broken map.
-    await expect(page.getByText(/MapTiler key/)).toBeVisible();
-
+    // Whether the "no MapTiler key" fallback notice shows in Street mode
+    // depends on whether this environment has NEXT_PUBLIC_MAPTILER_KEY set
+    // (it does in local dev once configured, but not in every environment
+    // this suite might run in) — the one invariant true either way is that
+    // the notice never shows in Intel mode (world-map.tsx only shows it
+    // when basemapMode !== "intel" && no key).
     await basemapGroup.getByRole("radio", { name: "Intel" }).click();
     await expect(page.getByText(/MapTiler key/)).not.toBeVisible();
   });
