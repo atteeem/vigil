@@ -52,6 +52,7 @@ export interface SourceDTO {
   permissionStatus: PermissionStatus;
   enabled: boolean;
   autoIngest: boolean;
+  autoProcessing: boolean;
   lastSuccessfulIngestion: string | null;
   lastError: string | null;
   createdAt: string;
@@ -60,11 +61,70 @@ export interface SourceDTO {
   itemsToday?: number;
 }
 
+export const CONFLICT_STATUSES = ["active", "dormant", "resolved", "archived"] as const;
+export type ConflictStatus = (typeof CONFLICT_STATUSES)[number];
+
 export interface ConflictDTO {
   id: string;
   slug: string;
   name: string;
+  shortName: string | null;
   region: string;
+  status: ConflictStatus;
+  severity: string;
+  intensity: number;
+  startedAt: string | null;
+  lat: number | null;
+  lng: number | null;
+  countries: string[];
+  summary: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** Only present on the /admin/conflicts list response. */
+  eventCount?: number;
+}
+
+export interface DuplicateCandidateDTO {
+  eventId: string;
+  slug: string;
+  title: string;
+  score: number; // 0-100
+  distanceKm: number | null;
+  minutesApart: number | null;
+  sameEventType: boolean;
+  sameConflict: boolean;
+  sameRegionOrCountry: boolean;
+  titleSimilarity: number; // 0-1
+}
+
+export interface LocationCandidateDTO {
+  label: string;
+  lat: number;
+  lng: number;
+  countryCode?: string;
+  region?: string;
+}
+
+export interface DraftSuggestionDTO {
+  eventType: string;
+  countryCode: string | null;
+  region: string | null;
+  locationName: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  conflictId: string | null;
+  conflictName: string | null;
+  title: string;
+  summary: string;
+  verificationStatus: DbVerificationStatus;
+  importance: number;
+  severity: string;
+  /** "resolved": exactly one gazetteer/geocoder match, used to fill lat/lng.
+   * "ambiguous": multiple candidates found — never auto-picked, human must
+   * choose (spec §4). "none": no place name recognized in the text. */
+  locationSource: "resolved" | "ambiguous" | "none";
+  locationCandidates: LocationCandidateDTO[];
+  duplicates: DuplicateCandidateDTO[];
 }
 
 export interface RawIngestionItemWithSourceDTO {

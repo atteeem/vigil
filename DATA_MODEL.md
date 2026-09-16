@@ -84,6 +84,7 @@ mechanical.
 | permission_status | text | `authorized` \| `unauthorized` \| `pending` — Telegram sources default `unauthorized` until real credentials exist |
 | enabled | boolean | |
 | auto_ingest | boolean | polled by the background loop when true; "Fetch Now" works regardless |
+| auto_processing | boolean, default true | gates automated draft extraction (spec "Automated Draft Extraction") per source — independent of `auto_ingest`, which only gates *fetching*. `false` means the review screen shows source data only, no automated-suggestion panel |
 | last_successful_ingestion | timestamp, nullable | |
 | last_error | text, nullable | |
 | created_at / updated_at | timestamp | |
@@ -113,15 +114,47 @@ Unique constraint: `(source_id, external_id)` — the deduplication rule; see AR
 | relationship | text | `originating` \| `relay` \| `corroborating` |
 | is_originating_source | boolean | a relay of the same originating source is not an independent confirmation — see Decisions.md § Source verification |
 
-Unique constraint: `(event_id, raw_ingestion_item_id)`.
+Unique constraint: `(event_id, raw_ingestion_item_id)`. `relationship:
+"relay"` sets `is_originating_source: false` on create (see
+`lib/ingestion/duplicates.ts`'s caller in the merge route) — a relay of
+the same originating report is never counted as independent confirmation,
+even though it's still attached to the event as a source row (spec
+"Source Independence").
+
+### Automated draft extraction & duplicate candidates — computed, not stored
+Spec §3/§4's "Automated Suggestion" (event type, location, conflict,
+title, summary, verification, severity, duplicate candidates) and §2's
+duplicate-candidate list are **never persisted** — both are recomputed on
+every `GET /api/admin/incoming/[id]/draft` / `POST
+/api/admin/incoming/[id]/duplicates` call (`lib/ingestion/draft.ts`,
+`lib/ingestion/duplicates.ts`), specifically so they can never go stale
+relative to conflicts/events that changed after a raw item first arrived.
+A rule-based heuristic (keyword matching + a curated gazetteer + a
+weighted distance/time/type/region/conflict/title-similarity score) —
+deliberately not an AI/LLM call, since no external processing provider is
+configured for this project. See ARCHITECTURE.md "Automated draft
+extraction" and "Duplicate-candidate engine."
 
 ### `conflicts` (local schema)
-Minimum viable subset of the target `conflicts` table below, actually
-implemented: `id`, `slug` (unique), `name`, `region`, `status`,
-`severity`, `intensity`, `intensity_change_24h`, `started_at`, `lat`,
-`lng`, `primary_effects` (JSON-encoded `string[]`), `summary`,
-`created_at`/`updated_at`. One row seeded (`russia-ukraine`, matching
-`lib/data/mock-conflicts.ts`'s entry) — no admin CRUD to create more yet.
+Now a full admin-managed table (`/admin/conflicts`, spec "Admin Conflict
+Management") — superset of the target `conflicts` table below: `id`,
+`slug` (unique), `name`, `short_name` (text, nullable — used as the
+display name in the admin table/dropdowns when present), `region`,
+`status`, `countries` (JSON-encoded `string[]` of ISO alpha-2 codes — used
+by `findConflictByCountryCode()` to suggest a conflict from a resolved
+location), `severity`, `intensity`, `intensity_change_24h`, `started_at`,
+`lat`, `lng`, `primary_effects` (JSON-encoded `string[]`), `summary`,
+`created_at`/`updated_at`. Seeded with exactly the 14 conflicts the spec
+named: Russia–Ukraine, Israel–Palestine, Israel–Lebanon, Syria, Persian
+Gulf / Iran, Yemen / Red Sea, Sudan, DRC, Somalia, Sahel, Myanmar,
+India–Pakistan, Korean Peninsula, Taiwan Strait (`prisma/seed.mjs`).
+Delete is refused (409) while any `Event.conflict_id` still references the
+row — `archived`/`resolved` status is the correct way to retire one
+instead (`deleteConflictIfSafe()` in `lib/db/repositories/conflicts.ts`).
+Only `active`/`dormant` conflicts appear in the incoming-report review and
+event-editor picker (`GET /api/admin/conflicts?selectable=true`) —
+`archived`/`resolved` ones stay visible in `/admin/conflicts` itself so
+history isn't lost.
 
 ## `market_assets`
 | field | type | notes |

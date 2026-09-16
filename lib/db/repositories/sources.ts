@@ -21,6 +21,7 @@ export interface SourceInput {
   permissionStatus?: PermissionStatus;
   enabled?: boolean;
   autoIngest?: boolean;
+  autoProcessing?: boolean;
 }
 
 export function listSources(): Promise<Source[]> {

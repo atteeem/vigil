@@ -159,12 +159,81 @@ migration described later in this file.
   item. Rejected items stay in the database (audit/history) but are
   excluded from `/admin/incoming`'s default pending view, never create an
   `Event`, and therefore never appear on the public map.
-- **Conflict assignment**: minimum viable support — one `Conflict` row
-  (`russia-ukraine`, seeded in `prisma/seed.mjs`, matching
-  `lib/data/mock-conflicts.ts`'s entry) is selectable from a dropdown in
-  the review form (`GET /api/admin/conflicts`) and stored as the
-  published event's `conflictId`. There's no admin CRUD yet for creating
-  additional conflicts from the UI.
+- **Conflict management** (`/admin/conflicts`): full CRUD over the
+  `Conflict` table — create/edit/enable-disable (status)/archive/
+  delete-only-when-safe, plus each row's linked-event count
+  (`lib/db/repositories/conflicts.ts`). Seeded with exactly 14 conflicts
+  (`prisma/seed.mjs`) — see DATA_MODEL.md. `GET
+  /api/admin/conflicts?selectable=true` (active/dormant only) feeds both
+  the incoming-report review form and the event editor's conflict picker,
+  so both surfaces always draw from the same DB-backed list rather than a
+  hardcoded one. Delete is refused (409, `deleteConflictIfSafe()`) while
+  any event still references the conflict — archive it via the status
+  dropdown instead.
+- **Automated draft extraction** (`lib/ingestion/draft.ts`, spec §3): for
+  sources with `autoProcessing: true`, `extractDraft()` computes a
+  suggestion — event type (`lib/ingestion/event-type-keywords.ts`'s
+  keyword table), a resolved/ambiguous/none location (see "Geocoding"
+  below), a suggested conflict (via the resolved location's country code
+  → `findConflictByCountryCode()`), title, a starting-point summary,
+  severity/importance, and duplicate candidates (only once a location is
+  resolved) — computed fresh on every `GET
+  /api/admin/incoming/[id]/draft` call, never persisted, never
+  auto-published. It's a deterministic rule-based heuristic (keyword
+  matching + gazetteer lookup), not an AI/LLM call — no external
+  processing provider is configured for this project. `/admin/incoming`'s
+  review card renders this in a visually distinct "Automated Suggestion —
+  not source data, review before publishing" panel, separate from the
+  "Source Data" section above it; every field in it maps 1:1 to an
+  editable form field the human can override before publishing (spec
+  "Human can override everything").
+- **Geocoding abstraction** (`lib/geocoding/`, spec §4): `GeocodingProvider`
+  is a one-method interface (`search(query): Promise<GeocodeCandidate[]>`)
+  behind `getGeocodingProvider()`, so the concrete provider can change
+  later without touching callers. Two implementations: a curated
+  in-repo gazetteer (`gazetteer.ts`, fast/deterministic/no network — also
+  what `extractDraft()` scans report text against to auto-detect a place
+  name) and OpenStreetMap Nominatim (`nominatim.ts`, real free/keyless
+  geocoding, used as the fallback for anything not in the gazetteer).
+  `GEOCODING_PROVIDER=fixture` forces gazetteer-only, set in
+  `playwright.config.ts`'s `webServer.env` so the automated Playwright
+  suite never depends on live network geocoding. The gazetteer
+  deliberately includes an ambiguous entry — three different
+  "Novoselivka, [Oblast], Ukraine" candidates — matching spec §4's exact
+  example, and the pipeline never silently picks one: `extractDraft()`
+  reports `locationSource: "ambiguous"` with `latitude`/`longitude: null`
+  whenever a place name resolves to more than one candidate, and
+  `components/admin/location-picker.tsx` shows all candidates for a human
+  to pick from (plus a search box for any other place name, manual
+  lat/lng inputs, and an embedded MapLibre marker preview).
+- **Duplicate-candidate engine** (`lib/ingestion/duplicates.ts`, spec §2):
+  `findDuplicateCandidates()` scores every already-published event within
+  a ±14-day window of the candidate's `occurredAt` against a weighted sum
+  of distance (haversine, decaying to 0 past 25km), time-apart (decaying
+  to 0 past 12h), same event type, same country/region, same conflict,
+  and title similarity (Jaccard over stopword-filtered tokens) — returns
+  the top 5 candidates scoring ≥35/100, descending. Never merges
+  anything automatically. The review UI shows each as "Possible
+  duplicate — N% / title / N min apart / N km away" with three actions:
+  **View existing event** (opens `/event/[slug]`), **Merge into event**
+  (`POST /api/admin/incoming/[id]/merge`), and **Ignore suggestion**
+  (client-side only — removes it from that review session's list without
+  touching the database, so a re-check or page reload can surface it
+  again). Re-scoring after a manual edit (location, type, conflict) goes
+  through the same function via `POST
+  /api/admin/incoming/[id]/duplicates`, so "Re-check" in the UI reflects
+  whatever the human has currently typed, not just the original
+  auto-detected draft.
+- **Merge**: attaches the raw item to an *existing* event as an
+  additional `EventSource` (`relationship` defaults to `"corroborating"`
+  for a genuinely independent second report, or `"relay"` when the admin
+  identifies it as a repost of the same originating source) and sets that
+  raw item's `processingStatus` to `"merged"` — it never creates a second
+  public `Event`. `Event.sourceCount` (`lib/data/world-events.ts`) counts
+  only sources with `isOriginatingSource: true` (set for every
+  relationship except `"relay"`), so a wire relay of an already-counted
+  report attaches real provenance without inflating the displayed
+  independent-source count (spec "Source Independence").
 - **Live refresh**: `/world` merges mock events with published DB events
   fetched via `hooks/use-live-events.ts`, which polls `GET /api/events`
   every 20s (chosen over SSE deliberately — one plain endpoint, no
@@ -250,3 +319,25 @@ counts where other specs' fixture data could affect them. True
 multi-touch pinch-zoom gesture simulation is out of scope (Playwright's
 touch emulation doesn't model it usefully) — mobile viewport rendering
 and tap interaction are covered instead.
+
+**`tests/rss-ingestion.spec.ts` is a manual/smoke test, not part of the
+deterministic core** — it hits the real, live BBC World feed on purpose
+(that's the point of a *real* ingestion proof), so a feed change, network
+hiccup, or BBC republishing a headline can fail it without any code
+regression; that's expected, not a bug to chase. `tests/classification.spec.ts`
+is the deterministic core suite for conflict management, automated draft
+extraction, geocoding, the duplicate-candidate engine, merge, source
+independence, and the review UI — it never touches the live BBC feed.
+Instead it points a throwaway `Source` at a static RSS payload served by
+`app/api/test-fixtures/rss/[name]/route.ts` (content defined in
+`lib/testing/rss-fixtures.ts`), so it's immune to external feed/network
+changes, and `playwright.config.ts`'s `webServer.env` sets
+`GEOCODING_PROVIDER=fixture` so its geocoding assertions never depend on
+live Nominatim either. Because both suites share one un-reset SQLite DB
+and this repo's two Playwright projects (Desktop/Mobile) run the whole
+suite twice in sequence, `classification.spec.ts`'s tests that need to
+refer back to "the event this test just published" capture that event's
+id directly from the publish/duplicate-check response (`kyivEventId`,
+`duplicate-candidate-${eventId}` test ids) rather than searching
+`/api/events` by title — titles alone aren't unique once a run has
+happened more than once against the same database.

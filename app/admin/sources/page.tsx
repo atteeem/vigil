@@ -20,6 +20,7 @@ interface SourceFormState {
   sourceCategory: string;
   reliabilityTier: string;
   autoIngest: boolean;
+  autoProcessing: boolean;
 }
 
 const EMPTY_FORM: SourceFormState = {
@@ -33,6 +34,7 @@ const EMPTY_FORM: SourceFormState = {
   sourceCategory: "",
   reliabilityTier: "",
   autoIngest: false,
+  autoProcessing: true,
 };
 
 function toPayload(form: SourceFormState) {
@@ -47,6 +49,7 @@ function toPayload(form: SourceFormState) {
     sourceCategory: form.sourceCategory || null,
     reliabilityTier: form.reliabilityTier || null,
     autoIngest: form.autoIngest,
+    autoProcessing: form.autoProcessing,
   };
 }
 
@@ -100,6 +103,7 @@ export default function AdminSourcesPage() {
       sourceCategory: source.sourceCategory ?? "",
       reliabilityTier: source.reliabilityTier ?? "",
       autoIngest: source.autoIngest,
+      autoProcessing: source.autoProcessing,
     });
     setShowForm(true);
   }
@@ -237,6 +241,14 @@ export default function AdminSourcesPage() {
                 onChange={(e) => setForm({ ...form, autoIngest: e.target.checked })}
               />
               Auto-ingest (poll automatically every ~60s)
+            </label>
+            <label className="flex items-center gap-2 text-xs text-ink-faint">
+              <input
+                type="checkbox"
+                checked={form.autoProcessing}
+                onChange={(e) => setForm({ ...form, autoProcessing: e.target.checked })}
+              />
+              Auto-processing (generate an automated draft suggestion for incoming items)
             </label>
           </div>
           <div className="mt-4 flex items-center gap-2">

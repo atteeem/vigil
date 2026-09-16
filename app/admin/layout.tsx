@@ -28,6 +28,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           >
             Incoming Reports
           </Link>
+          <Link
+            href="/admin/conflicts"
+            className="rounded-full px-3 py-1.5 text-sm font-medium text-ink-dim hover:bg-white/5 hover:text-ink"
+          >
+            Conflicts
+          </Link>
         </nav>
         {children}
       </div>

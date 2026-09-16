@@ -73,6 +73,29 @@ Full workflow proved end-to-end against the **live** BBC World feed (not a mock/
 | 45 | Fixed two real bugs surfaced by testing against a real, freshly-published event (not caught by mock data, whose timestamps are static): (a) `formatAbsoluteTime`'s `timezone="auto"` resolved to the *runtime's* local zone via `Intl.DateTimeFormat(undefined,...)`, differing between the Node SSR process and the browser — fixed with a mount-gated "UTC until hydrated" fallback in `EventDetailPanel`; (b) `Intl.DateTimeFormat(undefined, ...)` (ambient locale) rendered `02:01` in Chrome vs `02.01` in Node for the *same* explicit UTC zone — fixed by pinning locale to `"en-US"` always. Both were genuine SSR/client hydration mismatches on `/event/[slug]`, confirmed fixed via a fresh, cold browser tab (zero console errors) | DONE |
 | 46 | `tests/rss-ingestion.spec.ts`: 8 tests against the live BBC feed proving the full spec §13 checklist (source config, Fetch Now, dedup on a second fetch, queue display, review/edit/conflict-assignment/publish, map+feed integration, event-detail source attribution, reject behavior, live refresh without reload). Passes on both Desktop and Mobile Playwright projects | DONE |
 
+### Phase 2c — Classifiable & manageable at scale (conflict management, duplicate detection, automated drafts, geocoding)
+
+Full spec: milestone message "Make incoming reports intelligently
+classifiable and manageable at scale." See ARCHITECTURE.md's "Conflict
+management" / "Automated draft extraction" / "Geocoding abstraction" /
+"Duplicate-candidate engine" / "Merge" entries and DATA_MODEL.md's
+`conflicts` (local schema) / `sources.auto_processing` / "Automated draft
+extraction & duplicate candidates" entries for the architecture this
+exercises. Explicit constraints honored: no unrelated frontend features,
+no auto-publishing, no Telegram, no Supabase.
+
+| # | Task | Status |
+|---|---|---|
+| 47 | Admin Conflict Management (`/admin/conflicts`): full CRUD (create/edit/enable-disable via status/archive/delete-only-when-safe/linked-event-count), seeded with exactly the 14 named conflicts (`prisma/seed.mjs`); `GET /api/admin/conflicts?selectable=true` feeds both the incoming-report review form and the event editor from one DB-backed list | DONE |
+| 48 | Duplicate-candidate engine (`lib/ingestion/duplicates.ts`): weighted distance/time/event-type/region/conflict/title-similarity scoring against published events in a ±14-day window, top-5 ranked ≥35/100, rendered as "Possible duplicate — N% / title / N min apart / N km away"; View existing event / Merge into event / Ignore suggestion actions; never auto-merges | DONE |
+| 49 | Merge (`POST /api/admin/incoming/[id]/merge`): attaches the raw item as an additional `EventSource` on the *existing* event (never a second public event), preserves original source metadata, `relationship: "relay"` vs `"corroborating"` choice controls independent-source counting | DONE |
+| 50 | Automated Draft Extraction (`lib/ingestion/draft.ts`): rule-based (not AI/LLM — no processing provider configured) suggestion of event type/location/conflict/title/summary/verification/severity/duplicates per incoming report, computed on demand (never persisted, never stale), gated per-source by the new `Source.autoProcessing` flag; review UI clearly separates "Source Data" from "Automated Suggestion — not source data, review before publishing," every suggested field is a normal editable form field | DONE |
+| 51 | Geocoding abstraction (`lib/geocoding/`): `GeocodingProvider` interface behind `getGeocodingProvider()`; gazetteer (fast/deterministic, also used for auto-detecting place names in report text) + OpenStreetMap Nominatim (real, free, keyless) fallback; ambiguous place names (exact spec example: "Novoselivka," 3 oblasts) never silently resolved — `locationSource: "ambiguous"` + candidate list surfaced for a human to pick, `components/admin/location-picker.tsx` (search, candidate list, manual lat/lng, embedded MapLibre marker preview) | DONE |
+| 52 | Source independence: `Event.sourceCount` (`lib/data/world-events.ts`) now counts only sources with `isOriginatingSource: true` — a `relationship: "relay"` merge attaches real provenance without inflating the independent-source count; verified via a corroborating merge (+1) followed by a relay merge (+0) against the same event | DONE |
+| 53 | Review UI upgrade (`/admin/incoming`): each report shows Source/Published time/Original title+text/Original link (Source Data) plus Event type/Location(+ambiguous flag)/Conflict/Suggested title/Verification/Duplicate probability (Automated Suggestion); Publish/Edit/Merge/Reject actions; `LocationPicker` embedded in the publish form | DONE |
+| 54 | Deterministic local RSS fixtures + core test suite: `app/api/test-fixtures/rss/[name]/route.ts` + `lib/testing/rss-fixtures.ts` serve a static feed with fixed guids/titles/pubDates so ingestion tests never depend on the live BBC feed or network state; `tests/classification.spec.ts` (34 tests × 2 projects) covers conflict CRUD, conflict assignment, duplicate suggestion, merge, source-count-after-merge (both relay and corroborating), ambiguous-location handling, automated draft creation, human overrides, no-auto-publish, rejection, and deterministic RSS ingestion+dedup; `tests/rss-ingestion.spec.ts` kept as-is, now documented as a manual/smoke test against the live feed, not part of the deterministic gate | DONE |
+| 55 | Full re-verification: typecheck / lint / production build clean; 88/88 Playwright checks pass across 3 consecutive full runs (Desktop + Mobile), aside from pre-existing live-BBC-feed flakiness in the smoke test unrelated to this milestone's code | DONE |
+
 ## Beyond the Phase 1 floor (built ahead of schedule)
 
 The spec listed these as later-phase, but they were straightforward
@@ -191,3 +214,30 @@ rather than left as stubs:
   guaranteed to never resolve to a real or spoofable site) with an
   explicit "Development data — placeholder link, not a live source" note,
   rather than fabricating URLs that look like real outlets.
+
+### Phase 2c decisions
+
+- **Automated processing stays rule-based, not AI/LLM.** No LLM API key
+  is configured for this project, and the spec didn't ask for one —
+  keyword matching, a curated gazetteer, Jaccard title similarity, and
+  haversine distance are all deterministic, free, and fully testable
+  without network access. If a real classification/geocoding provider is
+  added later, `lib/ingestion/draft.ts` and `lib/geocoding/` are the two
+  seams to swap.
+- **"Ignore suggestion" is deliberately UI-only, not a database write.**
+  It's a same-session dismissal (spec's third duplicate action alongside
+  View/Merge) — re-checking or reloading can surface the same candidate
+  again, which is correct: the underlying event data hasn't changed, only
+  the reviewer's momentary judgment about this one report.
+- **`Source.autoProcessing` is a separate flag from `Source.autoIngest`.**
+  Ingest (fetching into `raw_ingestion_items`) and automated processing
+  (generating a draft suggestion) are independent decisions — a source
+  can be trusted enough to auto-fetch but not to auto-classify, or vice
+  versa.
+- **Deterministic test fixtures over a full DB reset.** Following the
+  existing suite's convention (`playwright.config.ts`'s comment: "does
+  not seed/reset the DB itself"), `tests/classification.spec.ts` captures
+  IDs directly from API responses (e.g. the event id returned by
+  Publish) rather than re-querying by title, so it stays correct even
+  when the shared SQLite DB accumulates near-identical fixture data
+  across repeated local runs or the Desktop/Mobile Playwright projects.

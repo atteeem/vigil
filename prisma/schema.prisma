@@ -44,6 +44,11 @@ model Source {
   permissionStatus String @default("unauthorized") @map("permission_status")
   enabled     Boolean  @default(true)
   autoIngest  Boolean  @default(false) @map("auto_ingest")
+  // Gates the automated draft-extraction stage (lib/ingestion/draft.ts) —
+  // "for sources where automated processing is allowed" per spec. Distinct
+  // from autoIngest (fetching); a source can fetch without draft
+  // suggestions being generated, or vice versa.
+  autoProcessing Boolean @default(true) @map("auto_processing")
   lastSuccessfulIngestion DateTime? @map("last_successful_ingestion")
   lastError   String?  @map("last_error")
   createdAt   DateTime @default(now()) @map("created_at")
@@ -79,7 +84,13 @@ model Conflict {
   id          String   @id @default(cuid())
   slug        String   @unique
   name        String
+  shortName   String?  @map("short_name")
   region      String
+  // "active" | "dormant" | "resolved" | "archived" — enable/disable/archive
+  // (spec §1) is implemented as status transitions rather than a separate
+  // flag, so there's one place that governs whether a conflict is
+  // selectable in the review/publish conflict picker (active + dormant
+  // only — see app/api/admin/conflicts/route.ts).
   status      String   @default("active")
   severity    String
   intensity   Int
@@ -88,7 +99,8 @@ model Conflict {
   lat         Float?
   lng         Float?
   primaryEffects String? @map("primary_effects") // JSON-encoded string[]
-  summary     String?
+  countries   String?  // JSON-encoded string[] of ISO country codes
+  summary     String?  // doubles as "description" per spec §1's field list
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 

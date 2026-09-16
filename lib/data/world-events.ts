@@ -59,7 +59,12 @@ export function dbEventToConflictEvent(event: EventWithSources): ConflictEvent {
     importance: event.importance,
     verificationStatus,
     disputed,
-    sourceCount: sources.length,
+    // Independent-source count (spec §5): a relay post of the same
+    // originating report is linked (shown in the Sources list for
+    // transparency) but must NOT inflate this count — only links marked
+    // isOriginatingSource (the true originating report, or a genuinely
+    // separate corroborating source) count.
+    sourceCount: event.sources.filter((link) => link.isOriginatingSource).length,
     sources,
     timeline: [
       {

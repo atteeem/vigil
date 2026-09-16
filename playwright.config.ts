@@ -23,5 +23,9 @@ export default defineConfig({
     url: "http://localhost:3000",
     reuseExistingServer: true,
     timeout: 60_000,
+    // Forces the gazetteer-only geocoding provider (no live Nominatim
+    // calls) so /api/admin/geocode is deterministic too — see
+    // lib/geocoding/provider.ts.
+    env: { GEOCODING_PROVIDER: "fixture" },
   },
 });

@@ -2,12 +2,19 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, X, GitMerge, Pencil, ExternalLink } from "lucide-react";
+import { Check, X, GitMerge, Pencil, ExternalLink, Sparkles, Eye, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { LocationPicker } from "@/components/admin/location-picker";
 import { EVENT_TYPES, SEVERITY_LEVELS } from "@/lib/types";
 import { EVENT_TYPE_LABEL } from "@/components/events/event-type-icon";
-import { DB_VERIFICATION_STATUSES, type RawIngestionItemWithSourceDTO, type ConflictDTO } from "@/lib/types/db";
+import {
+  DB_VERIFICATION_STATUSES,
+  type RawIngestionItemWithSourceDTO,
+  type ConflictDTO,
+  type DraftSuggestionDTO,
+  type DuplicateCandidateDTO,
+} from "@/lib/types/db";
 import { timeAgo } from "@/lib/utils";
 import type { ConflictEvent } from "@/lib/types";
 
@@ -46,6 +53,25 @@ function draftFromItem(item: RawIngestionItemWithSourceDTO): PublishDraft {
   };
 }
 
+function draftFromSuggestion(item: RawIngestionItemWithSourceDTO, s: DraftSuggestionDTO): PublishDraft {
+  const occurred = item.publishedAt ?? item.receivedAt;
+  return {
+    title: s.title,
+    summary: s.summary,
+    eventType: s.eventType,
+    locationName: s.locationName ?? "",
+    latitude: s.latitude !== null ? String(s.latitude) : "",
+    longitude: s.longitude !== null ? String(s.longitude) : "",
+    countryCode: s.countryCode ?? "",
+    region: s.region ?? "",
+    occurredAt: new Date(occurred).toISOString().slice(0, 16),
+    severity: s.severity,
+    importance: String(s.importance),
+    verificationStatus: s.verificationStatus,
+    conflictId: s.conflictId ?? "",
+  };
+}
+
 export default function AdminIncomingPage() {
   const queryClient = useQueryClient();
   const { data: items = [], isLoading: loading } = useQuery({
@@ -58,11 +84,15 @@ export default function AdminIncomingPage() {
     queryFn: async (): Promise<ConflictEvent[]> => (await fetch("/api/events")).json(),
   });
   const { data: conflicts = [] } = useQuery({
-    queryKey: ["admin", "conflicts"],
-    queryFn: async (): Promise<ConflictDTO[]> => (await fetch("/api/admin/conflicts")).json(),
+    queryKey: ["admin", "conflicts", "selectable"],
+    queryFn: async (): Promise<ConflictDTO[]> => (await fetch("/api/admin/conflicts?selectable=true")).json(),
   });
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, PublishDraft>>({});
+  const [suggestions, setSuggestions] = useState<Record<string, DraftSuggestionDTO | null | undefined>>({});
+  const [duplicates, setDuplicates] = useState<Record<string, DuplicateCandidateDTO[]>>({});
+  const [ignoredDuplicates, setIgnoredDuplicates] = useState<Record<string, Set<string>>>({});
+  const [checkingDuplicates, setCheckingDuplicates] = useState<string | null>(null);
   const [mergeTargets, setMergeTargets] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<Record<string, boolean>>({});
 
@@ -75,6 +105,60 @@ export default function AdminIncomingPage() {
 
   function setDraft(id: string, patch: Partial<PublishDraft>) {
     setDrafts((prev) => ({ ...prev, [id]: { ...(prev[id] ?? draftFromItem(items.find((i) => i.id === id)!)), ...patch } }));
+  }
+
+  async function toggleReview(item: RawIngestionItemWithSourceDTO) {
+    const willExpand = expandedId !== item.id;
+    setExpandedId(willExpand ? item.id : null);
+    if (!willExpand || item.id in suggestions) return;
+
+    const res = await fetch(`/api/admin/incoming/${item.id}/draft`);
+    const { draft }: { draft: DraftSuggestionDTO | null } = await res.json();
+    setSuggestions((prev) => ({ ...prev, [item.id]: draft }));
+    if (draft) {
+      setDrafts((prev) => (prev[item.id] ? prev : { ...prev, [item.id]: draftFromSuggestion(item, draft) }));
+      setDuplicates((prev) => ({ ...prev, [item.id]: draft.duplicates }));
+    }
+  }
+
+  async function recheckDuplicates(item: RawIngestionItemWithSourceDTO) {
+    const draft = getDraft(item);
+    if (!draft.latitude || !draft.longitude) return;
+    setCheckingDuplicates(item.id);
+    const res = await fetch(`/api/admin/incoming/${item.id}/duplicates`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: draft.title,
+        eventType: draft.eventType,
+        latitude: Number(draft.latitude),
+        longitude: Number(draft.longitude),
+        countryCode: draft.countryCode || null,
+        region: draft.region || null,
+        conflictId: draft.conflictId || null,
+        occurredAt: new Date(draft.occurredAt).toISOString(),
+      }),
+    });
+    const nextCandidates = await res.json();
+    setDuplicates((prev) => ({ ...prev, [item.id]: nextCandidates }));
+    setCheckingDuplicates(null);
+  }
+
+  function ignoreDuplicate(itemId: string, eventId: string) {
+    setIgnoredDuplicates((prev) => {
+      const next = new Set(prev[itemId] ?? []);
+      next.add(eventId);
+      return { ...prev, [itemId]: next };
+    });
+  }
+
+  async function mergeIntoEvent(itemId: string, eventId: string) {
+    await fetch(`/api/admin/incoming/${itemId}/merge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId, relationship: "corroborating" }),
+    });
+    refresh();
   }
 
   async function publish(item: RawIngestionItemWithSourceDTO) {
@@ -121,12 +205,7 @@ export default function AdminIncomingPage() {
       alert("Pick an existing event to merge into first.");
       return;
     }
-    await fetch(`/api/admin/incoming/${id}/merge`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eventId, relationship: "corroborating" }),
-    });
-    refresh();
+    await mergeIntoEvent(id, eventId);
   }
 
   async function saveEdit(item: RawIngestionItemWithSourceDTO, title: string, text: string) {
@@ -159,11 +238,18 @@ export default function AdminIncomingPage() {
           const draft = getDraft(item);
           const expanded = expandedId === item.id;
           const isEditing = editing[item.id];
+          const suggestion = suggestions[item.id];
+          const itemDuplicates = (duplicates[item.id] ?? []).filter((d) => !ignoredDuplicates[item.id]?.has(d.eventId));
+
           return (
             <Card key={item.id} className="p-4" data-testid={`incoming-item-${item.id}`}>
+              {/* ---------- SOURCE DATA (always shown, never auto-generated) ---------- */}
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="mb-1 flex items-center gap-2 text-xs text-ink-faint">
+                    <span className="rounded bg-white/5 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-ink-faint">
+                      Source Data
+                    </span>
                     <span className="font-medium text-ink-dim">{item.source.name}</span>
                     <span>·</span>
                     <span>{timeAgo(item.receivedAt)}</span>
@@ -222,7 +308,7 @@ export default function AdminIncomingPage() {
                   <Button size="icon" variant="ghost" onClick={() => reject(item.id)} aria-label="Reject">
                     <X className="h-3.5 w-3.5" />
                   </Button>
-                  <Button size="sm" variant="accent" onClick={() => setExpandedId(expanded ? null : item.id)}>
+                  <Button size="sm" variant="accent" onClick={() => toggleReview(item)}>
                     {expanded ? "Close" : "Review"}
                   </Button>
                 </div>
@@ -230,6 +316,39 @@ export default function AdminIncomingPage() {
 
               {expanded && (
                 <div className="mt-4 border-t border-border pt-4">
+                  {/* ---------- AUTOMATED SUGGESTION (clearly distinct from source data above) ---------- */}
+                  {suggestion === undefined ? (
+                    <p className="mb-4 text-xs text-ink-faint">Generating automated suggestion…</p>
+                  ) : suggestion === null ? (
+                    <p className="mb-4 text-xs text-ink-faint">
+                      Automated processing is disabled for this source — review from source data only.
+                    </p>
+                  ) : (
+                    <div className="mb-4 rounded-lg border border-accent/25 bg-accent-dim/40 p-3">
+                      <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-accent">
+                        <Sparkles className="h-3 w-3" /> Automated Suggestion — not source data, review before publishing
+                      </p>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-ink-dim sm:grid-cols-3">
+                        <span>Event type: {EVENT_TYPE_LABEL[suggestion.eventType as keyof typeof EVENT_TYPE_LABEL] ?? suggestion.eventType}</span>
+                        <span>
+                          Location:{" "}
+                          {suggestion.locationSource === "ambiguous"
+                            ? `${suggestion.locationName ?? "?"} (ambiguous)`
+                            : suggestion.locationSource === "resolved"
+                              ? suggestion.locationName
+                              : "not detected"}
+                        </span>
+                        <span>Conflict: {suggestion.conflictName ?? "none detected"}</span>
+                        <span>Verification: {suggestion.verificationStatus}</span>
+                        <span>Severity: {suggestion.severity}</span>
+                        <span>
+                          Duplicate probability:{" "}
+                          {suggestion.duplicates[0] ? `${suggestion.duplicates[0].score}%` : "none found"}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="text-xs text-ink-faint">
                       Title
@@ -255,7 +374,7 @@ export default function AdminIncomingPage() {
                       </select>
                     </label>
                     <label className="sm:col-span-2 text-xs text-ink-faint">
-                      Summary
+                      Summary (independently written — never republish source text verbatim)
                       <textarea
                         rows={2}
                         className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
@@ -280,52 +399,6 @@ export default function AdminIncomingPage() {
                       </select>
                     </label>
                     <label className="text-xs text-ink-faint">
-                      Location name
-                      <input
-                        className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
-                        value={draft.locationName}
-                        onChange={(e) => setDraft(item.id, { locationName: e.target.value })}
-                      />
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <label className="text-xs text-ink-faint">
-                        Latitude
-                        <input
-                          className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
-                          value={draft.latitude}
-                          onChange={(e) => setDraft(item.id, { latitude: e.target.value })}
-                          placeholder="required"
-                        />
-                      </label>
-                      <label className="text-xs text-ink-faint">
-                        Longitude
-                        <input
-                          className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
-                          value={draft.longitude}
-                          onChange={(e) => setDraft(item.id, { longitude: e.target.value })}
-                          placeholder="required"
-                        />
-                      </label>
-                    </div>
-                    <label className="text-xs text-ink-faint">
-                      Country code
-                      <input
-                        className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
-                        value={draft.countryCode}
-                        onChange={(e) => setDraft(item.id, { countryCode: e.target.value.toUpperCase() })}
-                        placeholder="e.g. UA"
-                      />
-                    </label>
-                    <label className="text-xs text-ink-faint">
-                      Region
-                      <input
-                        className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
-                        value={draft.region}
-                        onChange={(e) => setDraft(item.id, { region: e.target.value })}
-                        placeholder="Europe / Middle East / …"
-                      />
-                    </label>
-                    <label className="text-xs text-ink-faint">
                       Occurred at
                       <input
                         type="datetime-local"
@@ -334,6 +407,70 @@ export default function AdminIncomingPage() {
                         onChange={(e) => setDraft(item.id, { occurredAt: e.target.value })}
                       />
                     </label>
+
+                    <div className="sm:col-span-2">
+                      <p className="mb-1 text-xs text-ink-faint">Location</p>
+                      <LocationPicker
+                        value={{
+                          lat: draft.latitude,
+                          lng: draft.longitude,
+                          locationName: draft.locationName,
+                          countryCode: draft.countryCode,
+                          region: draft.region,
+                        }}
+                        ambiguousCandidates={
+                          suggestion?.locationSource === "ambiguous" ? suggestion.locationCandidates : undefined
+                        }
+                        onChange={(patch) =>
+                          setDraft(item.id, {
+                            ...(patch.lat !== undefined ? { latitude: patch.lat } : {}),
+                            ...(patch.lng !== undefined ? { longitude: patch.lng } : {}),
+                            ...(patch.locationName !== undefined ? { locationName: patch.locationName } : {}),
+                            ...(patch.countryCode !== undefined ? { countryCode: patch.countryCode } : {}),
+                            ...(patch.region !== undefined ? { region: patch.region } : {}),
+                          })
+                        }
+                      />
+                      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        <label className="text-xs text-ink-faint">
+                          Latitude
+                          <input
+                            className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+                            value={draft.latitude}
+                            onChange={(e) => setDraft(item.id, { latitude: e.target.value })}
+                            placeholder="required"
+                          />
+                        </label>
+                        <label className="text-xs text-ink-faint">
+                          Longitude
+                          <input
+                            className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+                            value={draft.longitude}
+                            onChange={(e) => setDraft(item.id, { longitude: e.target.value })}
+                            placeholder="required"
+                          />
+                        </label>
+                        <label className="text-xs text-ink-faint">
+                          Country code
+                          <input
+                            className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+                            value={draft.countryCode}
+                            onChange={(e) => setDraft(item.id, { countryCode: e.target.value.toUpperCase() })}
+                            placeholder="e.g. UA"
+                          />
+                        </label>
+                        <label className="text-xs text-ink-faint">
+                          Region
+                          <input
+                            className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+                            value={draft.region}
+                            onChange={(e) => setDraft(item.id, { region: e.target.value })}
+                            placeholder="Europe / Middle East / …"
+                          />
+                        </label>
+                      </div>
+                    </div>
+
                     <label className="text-xs text-ink-faint">
                       Severity
                       <select
@@ -373,6 +510,66 @@ export default function AdminIncomingPage() {
                         ))}
                       </select>
                     </label>
+                  </div>
+
+                  {/* ---------- Duplicate candidates ---------- */}
+                  <div className="mt-4 border-t border-border pt-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+                        Possible Duplicates
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => recheckDuplicates(item)}
+                        disabled={checkingDuplicates === item.id}
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${checkingDuplicates === item.id ? "animate-spin" : ""}`} />{" "}
+                        Re-check
+                      </Button>
+                    </div>
+                    {itemDuplicates.length === 0 ? (
+                      <p className="text-xs text-ink-faint">No likely duplicates found.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {itemDuplicates.map((d) => (
+                          <li
+                            key={d.eventId}
+                            data-testid={`duplicate-candidate-${d.eventId}`}
+                            className="rounded-lg border border-border px-3 py-2 text-xs"
+                          >
+                            <p className="font-medium text-ink">Possible duplicate — {d.score}%</p>
+                            <p className="mt-0.5 text-ink-dim">{d.title}</p>
+                            <p className="mt-0.5 text-ink-faint">
+                              {d.minutesApart !== null ? `${d.minutesApart} min apart` : "time unknown"}
+                              {d.distanceKm !== null ? ` · ${d.distanceKm} km away` : ""}
+                            </p>
+                            <div className="mt-1.5 flex flex-wrap gap-1.5">
+                              <a
+                                href={`/event/${d.slug}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 rounded-full border border-border-strong px-2 py-1 text-ink-dim hover:text-ink"
+                              >
+                                <Eye className="h-3 w-3" /> View existing event
+                              </a>
+                              <button
+                                onClick={() => mergeIntoEvent(item.id, d.eventId)}
+                                className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent-dim px-2 py-1 text-accent hover:bg-accent/20"
+                              >
+                                <GitMerge className="h-3 w-3" /> Merge into event
+                              </button>
+                              <button
+                                onClick={() => ignoreDuplicate(item.id, d.eventId)}
+                                className="inline-flex items-center gap-1 rounded-full border border-border-strong px-2 py-1 text-ink-dim hover:text-ink"
+                              >
+                                Ignore suggestion
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
 
                   <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">
