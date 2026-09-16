@@ -1,0 +1,138 @@
+@import "tailwindcss";
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+@theme {
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto,
+    ui-sans-serif, system-ui, sans-serif;
+
+  --color-bg: #080a0d;
+  --color-surface: #0e1116;
+  --color-card: #12161c;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.14);
+
+  --color-ink: #f3f5f7;
+  --color-ink-dim: #8d96a5;
+  --color-ink-faint: #5e6672;
+
+  --color-accent: #4cc2ff;
+  --color-accent-dim: rgba(76, 194, 255, 0.14);
+
+  /* Severity ramp — single source of truth mirrored in lib/utils/severity.ts
+     (SEVERITY_HEX). Keep these two in sync; see DESIGN_SYSTEM.md. */
+  --color-stable: #3ddc84;
+  --color-guarded: #8fc93a;
+  --color-elevated: #e4c441;
+  --color-high: #f0923b;
+  --color-severe: #ef4b4b;
+  /* Extreme intentionally breaks the green->red ramp: a deep, desaturated
+     blood/wine red rather than a brighter neon red, so it reads as "beyond
+     severe" without looking alarm-light or game-like. */
+  --color-extreme: #80152a;
+  --color-extreme-base: #5a0b18;
+  --color-extreme-accent: #80152a;
+
+  --color-stable-dim: rgba(61, 220, 132, 0.14);
+  --color-guarded-dim: rgba(143, 201, 58, 0.14);
+  --color-elevated-dim: rgba(228, 196, 65, 0.14);
+  --color-high-dim: rgba(240, 146, 59, 0.14);
+  --color-severe-dim: rgba(239, 75, 75, 0.14);
+  --color-extreme-dim: rgba(128, 21, 42, 0.22);
+
+  --animate-pulse-soft: pulse-soft 2.4s ease-in-out infinite;
+  --animate-count-fade: count-fade 0.4s ease-out;
+
+  @keyframes pulse-soft {
+    0%,
+    100% {
+      opacity: 0.55;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.12);
+    }
+  }
+
+  @keyframes count-fade {
+    from {
+      opacity: 0;
+      transform: translateY(2px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    font-feature-settings:
+      "tnum" 1,
+      "lnum" 1;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  ::selection {
+    background: var(--color-accent-dim);
+    color: var(--color-ink);
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+  }
+}
+
+@layer utilities {
+  .glass {
+    background: color-mix(in srgb, var(--color-surface) 70%, transparent);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  .glass-card {
+    background: color-mix(in srgb, var(--color-card) 88%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

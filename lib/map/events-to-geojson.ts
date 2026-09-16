@@ -1,0 +1,32 @@
+import type { FeatureCollection, Point } from "geojson";
+import type { ConflictEvent } from "@/lib/types";
+
+export interface EventFeatureProps {
+  id: string;
+  slug: string;
+  title: string;
+  eventType: string;
+  severity: string;
+  importance: number;
+}
+
+export function eventsToGeoJSON(
+  events: ConflictEvent[],
+): FeatureCollection<Point, EventFeatureProps> {
+  return {
+    type: "FeatureCollection",
+    features: events.map((e) => ({
+      type: "Feature",
+      id: e.id,
+      geometry: { type: "Point", coordinates: [e.lng, e.lat] },
+      properties: {
+        id: e.id,
+        slug: e.slug,
+        title: e.title,
+        eventType: e.eventType,
+        severity: e.severity,
+        importance: e.importance,
+      },
+    })),
+  };
+}
