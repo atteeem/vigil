@@ -159,3 +159,14 @@ No step is considered done with a known type error, lint error, or failed
 production build. Visual verification is done with a headless-browser
 screenshot of the running dev server at both a desktop and a mobile
 viewport.
+
+**Phase 2 addition**: a committed Playwright E2E suite (`playwright.config.ts`,
+`tests/`) covers the map, filters, admin Source Manager, admin Incoming
+Reports (publish/reject), profile/local account, and a responsive nav
+smoke test, running under both a Desktop and a Mobile (touch-emulated)
+project — `npm run test`. It shares the local SQLite DB rather than
+resetting it per run, so assertions avoid depending on exact record
+counts where other specs' fixture data could affect them. True
+multi-touch pinch-zoom gesture simulation is out of scope (Playwright's
+touch emulation doesn't model it usefully) — mobile viewport rendering
+and tap interaction are covered instead.

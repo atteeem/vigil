@@ -153,7 +153,7 @@ export default function AdminIncomingPage() {
           const expanded = expandedId === item.id;
           const isEditing = editing[item.id];
           return (
-            <Card key={item.id} className="p-4">
+            <Card key={item.id} className="p-4" data-testid={`incoming-item-${item.id}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="mb-1 flex items-center gap-2 text-xs text-ink-faint">

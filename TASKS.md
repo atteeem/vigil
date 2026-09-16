@@ -55,7 +55,7 @@ Full spec: see [[Map Requirements]] / [[Globe Requirements]] / [[Profile and Acc
 | 34a | Known gap: published events can't be linked to a `Conflict` from the admin UI yet — the `conflicts` table has no seed data or admin CRUD, so `conflictId` stays null. Not blocking; flagged rather than silently skipped. | TODO |
 | 35 | Local-development account system: `AuthProvider`/`AccountProfile` abstraction (`lib/auth/`), localStorage-backed, SHA-256 password digest (explicitly documented as not secure production auth), profile picture accepted as JPEG/PNG/WebP and downscaled client-side to a small data URI | DONE |
 | 36 | Profile page upgrade: logged-out header (Create Account / Sign In) + authenticated header (avatar/name/email, Edit Profile, Sign Out), all existing device preferences kept intact, new "Default map mode" card added alongside the existing "Default globe view" card | DONE |
-| 37 | Full responsive/testing pass (Playwright) | TODO |
+| 37 | Full responsive/testing pass: `playwright.config.ts` + `tests/` (map, filters, admin Source Manager, admin Incoming Reports publish/reject, profile/account, responsive nav smoke test) across Desktop + Mobile projects. `npm run test`. Scope note: true multi-touch pinch-zoom gesture simulation isn't covered (Playwright's touch emulation doesn't model it well) — mobile viewport rendering/interaction is | DONE |
 
 ## Beyond the Phase 1 floor (built ahead of schedule)
 
