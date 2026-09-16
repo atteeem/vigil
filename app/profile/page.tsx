@@ -1,10 +1,28 @@
 "use client";
 
-import { UserRound, Lock, Bell, RefreshCw, Laptop2 } from "lucide-react";
+import { useRef, useState } from "react";
+import {
+  UserRound,
+  Lock,
+  Bell,
+  RefreshCw,
+  Laptop2,
+  LogIn,
+  UserPlus,
+  LogOut,
+  Pencil,
+  Camera,
+  ShieldAlert,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { CountrySelector } from "@/components/home/country-selector";
 import { useAppStore } from "@/hooks/use-app-store";
+import { useAuthSession } from "@/hooks/use-auth-session";
+import { authProvider } from "@/lib/auth/local-auth-provider";
+import { isAcceptedImageType, resizeImageToDataUrl } from "@/lib/utils/image";
+import { MAP_BASEMAP_MODES, MAP_BASEMAP_MODE_LABEL } from "@/lib/map/style";
 import { REGIONS, TIME_RANGES } from "@/lib/types";
 import type { Region, TimeRange } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -30,13 +48,24 @@ const TIMEZONES: { value: string; label: string }[] = [
   { value: "Australia/Sydney", label: "Sydney (AEST/AEDT)" },
 ];
 
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  return (parts[0]![0]! + (parts[1]?.[0] ?? "")).toUpperCase();
+}
+
 export default function ProfilePage() {
+  const account = useAuthSession();
+  const setAccount = useAppStore((s) => s.setAccount);
+
   const timezone = useAppStore((s) => s.timezone);
   const setTimezone = useAppStore((s) => s.setTimezone);
   const preferredRegions = useAppStore((s) => s.preferredRegions);
   const setPreferredRegions = useAppStore((s) => s.setPreferredRegions);
   const globeViewMode = useAppStore((s) => s.globeViewMode);
   const setGlobeViewMode = useAppStore((s) => s.setGlobeViewMode);
+  const mapBasemapMode = useAppStore((s) => s.mapBasemapMode);
+  const setMapBasemapMode = useAppStore((s) => s.setMapBasemapMode);
   const timeRange = useAppStore((s) => s.timeRange);
   const setTimeRange = useAppStore((s) => s.setTimeRange);
   const contentSensitivity = useAppStore((s) => s.contentSensitivity);
@@ -52,17 +81,7 @@ export default function ProfilePage() {
 
   return (
     <main className="mx-auto max-w-2xl px-4 pb-28 pt-24 sm:px-6 sm:pt-32">
-      <div className="flex items-center gap-3">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border-strong bg-surface">
-          <UserRound className="h-6 w-6 text-ink-faint" />
-        </div>
-        <div>
-          <h1 className="text-xl font-semibold text-ink">Preferences</h1>
-          <p className="text-sm text-ink-dim">
-            No account needed yet — these are saved to this browser.
-          </p>
-        </div>
-      </div>
+      {account ? <AuthenticatedHeader account={account} onSignOut={() => setAccount(null)} /> : <LoggedOutHeader onAuthed={setAccount} />}
 
       <div className="mt-6 space-y-4">
         <Card className="p-5">
@@ -138,6 +157,19 @@ export default function ProfilePage() {
         </Card>
 
         <Card className="p-5">
+          <SectionLabel>Default map mode</SectionLabel>
+          <p className="mb-3 text-xs text-ink-faint">
+            Which basemap the Live Map (<code>/world</code>) opens in by default.
+          </p>
+          <SegmentedControl
+            aria-label="Default map mode"
+            options={MAP_BASEMAP_MODES.map((m) => ({ value: m, label: MAP_BASEMAP_MODE_LABEL[m] }))}
+            value={mapBasemapMode}
+            onChange={setMapBasemapMode}
+          />
+        </Card>
+
+        <Card className="p-5">
           <SectionLabel>Default time range</SectionLabel>
           <p className="mb-3 text-xs text-ink-faint">
             The time window selected by default on the homepage and
@@ -182,10 +214,11 @@ export default function ProfilePage() {
         </Card>
 
         <Card className="p-5">
-          <SectionLabel>Requires an account (coming later)</SectionLabel>
+          <SectionLabel>Requires a synced account (coming later)</SectionLabel>
           <p className="mb-3 text-xs text-ink-faint">
-            These preferences are saved to this browser only. Signing in
-            (a later phase) will let them follow you anywhere.
+            {account
+              ? "Your local account keeps these preferences on this device only. A real synced account (Supabase Auth, a later phase) will follow you anywhere."
+              : "These preferences are saved to this browser only. Creating a local account above doesn't change that yet — a real synced account (a later phase) will."}
           </p>
           <ul className="space-y-2.5">
             <FutureFeature
@@ -196,7 +229,7 @@ export default function ProfilePage() {
             <FutureFeature
               icon={Laptop2}
               label="Multi-device preferences"
-              description="These settings currently live only in this browser, not your account."
+              description="These settings currently live only in this browser, not a synced account."
             />
             <FutureFeature
               icon={Bell}
@@ -242,5 +275,315 @@ function FutureFeature({
         <p className="mt-0.5 text-xs text-ink-faint">{description}</p>
       </div>
     </li>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Logged-out: header + Create Account / Sign In
+// ---------------------------------------------------------------------
+
+type AccountLike = ReturnType<typeof authProvider.getSession>;
+
+function LoggedOutHeader({ onAuthed }: { onAuthed: (a: AccountLike) => void }) {
+  const [mode, setMode] = useState<"none" | "create" | "signin">("none");
+
+  return (
+    <div>
+      <div className="flex items-center gap-3">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border-strong bg-surface">
+          <UserRound className="h-6 w-6 text-ink-faint" />
+        </div>
+        <div>
+          <h1 className="text-xl font-semibold text-ink">Vigil Profile</h1>
+          <p className="text-sm text-ink-dim">Preferences are currently stored on this device.</p>
+        </div>
+      </div>
+
+      <div className="mt-4 flex gap-2">
+        <Button variant="primary" size="sm" onClick={() => setMode(mode === "create" ? "none" : "create")}>
+          <UserPlus className="h-3.5 w-3.5" /> Create Account
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setMode(mode === "signin" ? "none" : "signin")}>
+          <LogIn className="h-3.5 w-3.5" /> Sign In
+        </Button>
+      </div>
+
+      {mode === "create" && <CreateAccountForm onAuthed={onAuthed} onClose={() => setMode("none")} />}
+      {mode === "signin" && <SignInForm onAuthed={onAuthed} onClose={() => setMode("none")} />}
+    </div>
+  );
+}
+
+function LocalDevNotice() {
+  return (
+    <p className="mb-3 flex items-start gap-1.5 rounded-lg border border-border bg-surface/50 p-2.5 text-[11px] text-ink-faint">
+      <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      Local-development account: stored only in this browser, not secure production authentication. Clearing site
+      data deletes it permanently.
+    </p>
+  );
+}
+
+function CreateAccountForm({ onAuthed, onClose }: { onAuthed: (a: AccountLike) => void; onClose: () => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit() {
+    setError(null);
+    if (password !== confirm) {
+      setError("Passwords don't match.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const account = await authProvider.createAccount({ email, password, displayName });
+      onAuthed(account);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create account.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="mt-3 p-4">
+      <LocalDevNotice />
+      <div className="space-y-2.5">
+        <input
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+          placeholder="Display name"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+        />
+        <input
+          type="email"
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <input
+          type="password"
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <input
+          type="password"
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+          placeholder="Confirm password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+        />
+        {error && <p className="text-xs text-high">{error}</p>}
+        <Button variant="primary" size="sm" onClick={submit} disabled={busy}>
+          {busy ? "Creating…" : "Create Account"}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function SignInForm({ onAuthed, onClose }: { onAuthed: (a: AccountLike) => void; onClose: () => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit() {
+    setError(null);
+    setBusy(true);
+    try {
+      const account = await authProvider.signIn({ email, password });
+      onAuthed(account);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not sign in.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="mt-3 p-4">
+      <LocalDevNotice />
+      <div className="space-y-2.5">
+        <input
+          type="email"
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <input
+          type="password"
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        {error && <p className="text-xs text-high">{error}</p>}
+        <Button variant="primary" size="sm" onClick={submit} disabled={busy}>
+          {busy ? "Signing in…" : "Sign In"}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Authenticated header + Edit Profile
+// ---------------------------------------------------------------------
+
+function AuthenticatedHeader({
+  account,
+  onSignOut,
+}: {
+  account: NonNullable<AccountLike>;
+  onSignOut: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const setAccount = useAppStore((s) => s.setAccount);
+
+  function handleSignOut() {
+    authProvider.signOut();
+    onSignOut();
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-3">
+        <Avatar name={account.displayName} picture={account.profilePicture} />
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-xl font-semibold text-ink">{account.displayName}</h1>
+          <p className="truncate text-sm text-ink-dim">{account.email}</p>
+        </div>
+      </div>
+      <div className="mt-4 flex gap-2">
+        <Button variant="outline" size="sm" onClick={() => setEditing((v) => !v)}>
+          <Pencil className="h-3.5 w-3.5" /> {editing ? "Close" : "Edit Profile"}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={handleSignOut}>
+          <LogOut className="h-3.5 w-3.5" /> Sign Out
+        </Button>
+      </div>
+      {editing && (
+        <EditProfileForm
+          account={account}
+          onSaved={(updated) => {
+            setAccount(updated);
+            setEditing(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function Avatar({ name, picture, size = 48 }: { name: string; picture: string | null; size?: number }) {
+  if (picture) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- local-dev data URI, not an optimizable remote/static asset
+      <img
+        src={picture}
+        alt={name}
+        style={{ width: size, height: size }}
+        className="shrink-0 rounded-full border border-border-strong object-cover"
+      />
+    );
+  }
+  return (
+    <div
+      style={{ width: size, height: size }}
+      className="flex shrink-0 items-center justify-center rounded-full border border-border-strong bg-surface text-sm font-semibold text-ink-faint"
+    >
+      {initials(name)}
+    </div>
+  );
+}
+
+function EditProfileForm({
+  account,
+  onSaved,
+}: {
+  account: NonNullable<AccountLike>;
+  onSaved: (a: AccountLike) => void;
+}) {
+  const [displayName, setDisplayName] = useState(account.displayName);
+  const [picture, setPicture] = useState(account.profilePicture);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFile(file: File) {
+    setError(null);
+    if (!isAcceptedImageType(file)) {
+      setError("Please choose a JPEG, PNG, or WebP image.");
+      return;
+    }
+    try {
+      setPicture(await resizeImageToDataUrl(file));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not process that image.");
+    }
+  }
+
+  function save() {
+    const updated = authProvider.updateProfile({ displayName: displayName.trim() || account.displayName, profilePicture: picture });
+    onSaved(updated);
+  }
+
+  return (
+    <Card className="mt-3 p-4">
+      <div className="flex items-center gap-3">
+        <Avatar name={displayName} picture={picture} size={56} />
+        <div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Camera className="h-3.5 w-3.5" /> Change picture
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleFile(file);
+            }}
+          />
+        </div>
+      </div>
+      <div className="mt-3 space-y-2.5">
+        <label className="block text-xs text-ink-faint">
+          Display name
+          <input
+            className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+          />
+        </label>
+        <p className="text-[11px] text-ink-faint">
+          Home country, timezone, preferred regions, default map, default time range, and content sensitivity are
+          edited directly in the cards below.
+        </p>
+        {error && <p className="text-xs text-high">{error}</p>}
+        <Button size="sm" variant="primary" onClick={save}>
+          Save Changes
+        </Button>
+      </div>
+    </Card>
   );
 }

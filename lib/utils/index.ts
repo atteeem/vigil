@@ -5,3 +5,4 @@ export * from "./geo";
 export * from "./seed";
 export * from "./exposure";
 export * from "./time-range";
+export * from "./image";

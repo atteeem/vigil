@@ -53,8 +53,8 @@ Full spec: see [[Map Requirements]] / [[Globe Requirements]] / [[Profile and Acc
 | 33 | Admin Incoming Reports queue (`/admin/incoming`) — Publish/Edit/Merge/Reject, no auto-publish | DONE |
 | 34 | Event publishing workflow → live `/world` map, via `/api/events` polling (`hooks/use-live-events.ts`) merged with mock data | DONE |
 | 34a | Known gap: published events can't be linked to a `Conflict` from the admin UI yet — the `conflicts` table has no seed data or admin CRUD, so `conflictId` stays null. Not blocking; flagged rather than silently skipped. | TODO |
-| 35 | Local-development account system (`AccountRepository`/`AuthProvider` abstraction) | TODO |
-| 36 | Profile UI upgrade (create/sign-in, edit profile, picture, preferences affecting live UI) | TODO |
+| 35 | Local-development account system: `AuthProvider`/`AccountProfile` abstraction (`lib/auth/`), localStorage-backed, SHA-256 password digest (explicitly documented as not secure production auth), profile picture accepted as JPEG/PNG/WebP and downscaled client-side to a small data URI | DONE |
+| 36 | Profile page upgrade: logged-out header (Create Account / Sign In) + authenticated header (avatar/name/email, Edit Profile, Sign Out), all existing device preferences kept intact, new "Default map mode" card added alongside the existing "Default globe view" card | DONE |
 | 37 | Full responsive/testing pass (Playwright) | TODO |
 
 ## Beyond the Phase 1 floor (built ahead of schedule)

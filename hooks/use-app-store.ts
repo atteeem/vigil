@@ -5,6 +5,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { DEFAULT_BASE_COUNTRY } from "@/lib/data/constants";
 import type { TimeRange, MapLayer, Region } from "@/lib/types";
 import type { MapBasemapMode } from "@/lib/map/style";
+import type { AccountProfile } from "@/lib/auth/types";
 
 export type { TimeRange, MapLayer };
 export type { MapBasemapMode };
@@ -58,6 +59,13 @@ interface AppState {
   contentSensitivity: ContentSensitivity;
   setContentSensitivity: (v: ContentSensitivity) => void;
   theme: "dark";
+
+  // Reactive mirror of lib/auth/local-auth-provider.ts's own localStorage
+  // session — NOT persisted by this store itself (see partialize below),
+  // so there's exactly one source of truth for "who's signed in." Populated
+  // on mount via hooks/use-auth-session.ts.
+  account: AccountProfile | null;
+  setAccount: (a: AccountProfile | null) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -86,6 +94,9 @@ export const useAppStore = create<AppState>()(
       contentSensitivity: "standard",
       setContentSensitivity: (v) => set({ contentSensitivity: v }),
       theme: "dark",
+
+      account: null,
+      setAccount: (a) => set({ account: a }),
     }),
     {
       name: "vigil-preferences",
