@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/client";
 import type { Source } from "@prisma/client";
-import type { PermissionStatus, SourceType } from "@/lib/types/db";
+import type { PermissionStatus, SourceType, SourceRole } from "@/lib/types/db";
 
 // Repository abstraction over the Source table. UI/route-handler code
 // should import from here, never from `@prisma/client` directly — that's
@@ -18,10 +18,12 @@ export interface SourceInput {
   language?: string | null;
   sourceCategory?: string | null;
   reliabilityTier?: string | null;
+  sourceRole?: SourceRole | null;
   permissionStatus?: PermissionStatus;
   enabled?: boolean;
   autoIngest?: boolean;
   autoProcessing?: boolean;
+  pollIntervalMinutes?: number;
 }
 
 export function listSources(): Promise<Source[]> {
@@ -51,10 +53,24 @@ export function deleteSource(id: string): Promise<Source> {
 export function recordIngestionSuccess(id: string): Promise<Source> {
   return prisma.source.update({
     where: { id },
-    data: { lastSuccessfulIngestion: new Date(), lastError: null },
+    data: { lastSuccessfulIngestion: new Date(), lastError: null, consecutiveFailures: 0 },
   });
 }
 
 export function recordIngestionError(id: string, error: string): Promise<Source> {
-  return prisma.source.update({ where: { id }, data: { lastError: error } });
+  return prisma.source.update({
+    where: { id },
+    data: { lastError: error, consecutiveFailures: { increment: 1 } },
+  });
+}
+
+/** Always called at the start of a poll attempt (scheduled or manual "Fetch
+ * Now") — this is the one place `lastAttemptedAt` is set, independent of
+ * whether the attempt goes on to succeed or fail. */
+export function recordAttemptStarted(id: string): Promise<Source> {
+  return prisma.source.update({ where: { id }, data: { lastAttemptedAt: new Date() } });
+}
+
+export function scheduleNextPoll(id: string, nextPollAt: Date): Promise<Source> {
+  return prisma.source.update({ where: { id }, data: { nextPollAt } });
 }

@@ -38,6 +38,31 @@ const FEEDS: Record<string, string> = {
 </item>
 </channel>
 </rss>`,
+
+  // A second, independent feed (distinct guids/content from feed-a) for
+  // multi-source ingestion tests — polling two sources in the same
+  // scheduler tick, confirming they don't cross-contaminate each other's
+  // dedup or item counts.
+  "feed-b": `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+<title>Vigil Test Fixture Feed B</title>
+<item>
+<title>Naval incident reported near Odesa port</title>
+<link>https://fixture.test/feed-b/odesa-naval</link>
+<guid>fixture-feed-b-odesa-naval</guid>
+<pubDate>Wed, 01 Jan 2026 10:00:00 GMT</pubDate>
+<description>Maritime authorities reported a naval incident near Odesa port this morning.</description>
+</item>
+<item>
+<title>Diplomatic talks scheduled in Geneva</title>
+<link>https://fixture.test/feed-b/geneva-talks</link>
+<guid>fixture-feed-b-geneva-talks</guid>
+<pubDate>Wed, 01 Jan 2026 11:00:00 GMT</pubDate>
+<description>Officials announced a new round of diplomatic talks scheduled to take place in Geneva.</description>
+</item>
+</channel>
+</rss>`,
 };
 
 export function getRssFixture(name: string): string | null {

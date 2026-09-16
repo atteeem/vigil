@@ -40,10 +40,20 @@ function parseRss(xml: string): RssItem[] {
   }));
 }
 
+// Some real feeds (found seeding this project's ReliefWeb source) do
+// content negotiation and reject a request with no explicit Accept header
+// (406 Not Acceptable) even though the identical request with one
+// succeeds — an explicit Accept header is the correct fix, not a
+// per-host special case, since it's what any real RSS reader sends.
+const RSS_REQUEST_HEADERS = {
+  "User-Agent": "VigilLocalDev/1.0",
+  Accept: "application/rss+xml, application/xml, text/xml, */*",
+};
+
 export const RSSAdapter: SourceAdapter = {
   async fetchLatest(source: Source): Promise<unknown[]> {
     if (!source.url) return [];
-    const res = await fetch(source.url, { headers: { "User-Agent": "VigilLocalDev/1.0" } });
+    const res = await fetch(source.url, { headers: RSS_REQUEST_HEADERS });
     if (!res.ok) throw new Error(`RSS fetch failed: ${res.status} ${res.statusText}`);
     const xml = await res.text();
     return parseRss(xml);
@@ -65,7 +75,7 @@ export const RSSAdapter: SourceAdapter = {
   async healthCheck(source: Source): Promise<HealthCheckResult> {
     if (!source.url) return { ok: false, message: "No feed URL configured." };
     try {
-      const res = await fetch(source.url, { method: "GET", headers: { "User-Agent": "VigilLocalDev/1.0" } });
+      const res = await fetch(source.url, { method: "GET", headers: RSS_REQUEST_HEADERS });
       if (!res.ok) return { ok: false, message: `HTTP ${res.status}` };
       return { ok: true };
     } catch (err) {

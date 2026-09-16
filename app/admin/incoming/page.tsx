@@ -2,21 +2,78 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, X, GitMerge, Pencil, ExternalLink, Sparkles, Eye, RefreshCw } from "lucide-react";
+import { Check, X, GitMerge, Pencil, ExternalLink, Sparkles, Eye, RefreshCw, AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LocationPicker } from "@/components/admin/location-picker";
-import { EVENT_TYPES, SEVERITY_LEVELS } from "@/lib/types";
+import { EVENT_TYPES, SEVERITY_LEVELS, REGIONS } from "@/lib/types";
 import { EVENT_TYPE_LABEL } from "@/components/events/event-type-icon";
 import {
   DB_VERIFICATION_STATUSES,
+  PROCESSING_STATUSES,
+  DUPLICATE_LIKELIHOODS,
+  INCOMING_SORTS,
   type RawIngestionItemWithSourceDTO,
   type ConflictDTO,
+  type SourceDTO,
   type DraftSuggestionDTO,
   type DuplicateCandidateDTO,
+  type ProcessingStatus,
+  type DuplicateLikelihood,
+  type IncomingSort,
 } from "@/lib/types/db";
 import { timeAgo } from "@/lib/utils";
 import type { ConflictEvent } from "@/lib/types";
+
+interface IncomingFilters {
+  status: ProcessingStatus;
+  sourceId: string;
+  conflictId: string;
+  region: string;
+  eventType: string;
+  duplicateLikelihood: DuplicateLikelihood | "";
+  maxAgeHours: string;
+  sort: IncomingSort;
+}
+
+const DEFAULT_FILTERS: IncomingFilters = {
+  status: "pending",
+  sourceId: "",
+  conflictId: "",
+  region: "",
+  eventType: "",
+  duplicateLikelihood: "",
+  maxAgeHours: "",
+  sort: "newest",
+};
+
+const AGE_OPTIONS: { label: string; value: string }[] = [
+  { label: "Any age", value: "" },
+  { label: "Last hour", value: "1" },
+  { label: "Last 6 hours", value: "6" },
+  { label: "Last 24 hours", value: "24" },
+  { label: "Last 7 days", value: "168" },
+];
+
+const SORT_LABEL: Record<IncomingSort, string> = {
+  newest: "Newest",
+  oldest: "Oldest",
+  importance: "Highest importance",
+  duplicate: "Highest duplicate probability",
+};
+
+function buildIncomingQuery(filters: IncomingFilters): string {
+  const params = new URLSearchParams();
+  if (filters.status) params.set("status", filters.status);
+  if (filters.sourceId) params.set("sourceId", filters.sourceId);
+  if (filters.conflictId) params.set("conflictId", filters.conflictId);
+  if (filters.region) params.set("region", filters.region);
+  if (filters.eventType) params.set("eventType", filters.eventType);
+  if (filters.duplicateLikelihood) params.set("duplicateLikelihood", filters.duplicateLikelihood);
+  if (filters.maxAgeHours) params.set("maxAgeHours", filters.maxAgeHours);
+  if (filters.sort) params.set("sort", filters.sort);
+  return params.toString();
+}
 
 interface PublishDraft {
   title: string;
@@ -74,10 +131,12 @@ function draftFromSuggestion(item: RawIngestionItemWithSourceDTO, s: DraftSugges
 
 export default function AdminIncomingPage() {
   const queryClient = useQueryClient();
+  const [filters, setFilters] = useState<IncomingFilters>(DEFAULT_FILTERS);
+  const incomingQuery = buildIncomingQuery(filters);
   const { data: items = [], isLoading: loading } = useQuery({
-    queryKey: ["admin", "incoming", "pending"],
+    queryKey: ["admin", "incoming", filters],
     queryFn: async (): Promise<RawIngestionItemWithSourceDTO[]> =>
-      (await fetch("/api/admin/incoming?status=pending")).json(),
+      (await fetch(`/api/admin/incoming?${incomingQuery}`)).json(),
   });
   const { data: publishedEvents = [] } = useQuery({
     queryKey: ["events", "published"],
@@ -86,6 +145,10 @@ export default function AdminIncomingPage() {
   const { data: conflicts = [] } = useQuery({
     queryKey: ["admin", "conflicts", "selectable"],
     queryFn: async (): Promise<ConflictDTO[]> => (await fetch("/api/admin/conflicts?selectable=true")).json(),
+  });
+  const { data: sources = [] } = useQuery({
+    queryKey: ["admin", "sources"],
+    queryFn: async (): Promise<SourceDTO[]> => (await fetch("/api/admin/sources")).json(),
   });
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, PublishDraft>>({});
@@ -222,14 +285,139 @@ export default function AdminIncomingPage() {
     <div>
       <h1 className="mb-4 text-lg font-semibold text-ink">Incoming Reports</h1>
       <p className="mb-4 text-xs text-ink-faint">
-        {items.length} pending item{items.length === 1 ? "" : "s"}. Nothing here auto-publishes.
+        {items.length} item{items.length === 1 ? "" : "s"} matching filters. Nothing here auto-publishes.
       </p>
+
+      <Card className="mb-4 flex flex-wrap items-end gap-3 p-3" data-testid="incoming-filters">
+        <label className="text-xs text-ink-faint">
+          Source
+          <select
+            className="mt-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-ink"
+            value={filters.sourceId}
+            onChange={(e) => setFilters((f) => ({ ...f, sourceId: e.target.value }))}
+          >
+            <option value="">All sources</option>
+            {sources.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs text-ink-faint">
+          Conflict
+          <select
+            className="mt-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-ink"
+            value={filters.conflictId}
+            onChange={(e) => setFilters((f) => ({ ...f, conflictId: e.target.value }))}
+          >
+            <option value="">All conflicts</option>
+            {conflicts.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs text-ink-faint">
+          Region
+          <select
+            className="mt-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-ink"
+            value={filters.region}
+            onChange={(e) => setFilters((f) => ({ ...f, region: e.target.value }))}
+          >
+            <option value="">All regions</option>
+            {REGIONS.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs text-ink-faint">
+          Event type
+          <select
+            className="mt-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-ink"
+            value={filters.eventType}
+            onChange={(e) => setFilters((f) => ({ ...f, eventType: e.target.value }))}
+          >
+            <option value="">All types</option>
+            {EVENT_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {EVENT_TYPE_LABEL[t]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs text-ink-faint">
+          Status
+          <select
+            className="mt-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-ink"
+            value={filters.status}
+            onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value as ProcessingStatus }))}
+          >
+            {PROCESSING_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs text-ink-faint">
+          Duplicate likelihood
+          <select
+            className="mt-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-ink"
+            value={filters.duplicateLikelihood}
+            onChange={(e) => setFilters((f) => ({ ...f, duplicateLikelihood: e.target.value as DuplicateLikelihood | "" }))}
+          >
+            <option value="">Any</option>
+            {DUPLICATE_LIKELIHOODS.map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs text-ink-faint">
+          Age
+          <select
+            className="mt-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-ink"
+            value={filters.maxAgeHours}
+            onChange={(e) => setFilters((f) => ({ ...f, maxAgeHours: e.target.value }))}
+          >
+            {AGE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs text-ink-faint">
+          Sort
+          <select
+            className="mt-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-ink"
+            value={filters.sort}
+            onChange={(e) => setFilters((f) => ({ ...f, sort: e.target.value as IncomingSort }))}
+          >
+            {INCOMING_SORTS.map((s) => (
+              <option key={s} value={s}>
+                {SORT_LABEL[s]}
+              </option>
+            ))}
+          </select>
+        </label>
+        {JSON.stringify(filters) !== JSON.stringify(DEFAULT_FILTERS) && (
+          <Button size="sm" variant="ghost" onClick={() => setFilters(DEFAULT_FILTERS)}>
+            Reset filters
+          </Button>
+        )}
+      </Card>
 
       {loading && <p className="text-sm text-ink-faint">Loading…</p>}
       {!loading && items.length === 0 && (
         <Card className="p-8 text-center text-sm text-ink-faint">
-          No pending reports. Enable an RSS source with auto-ingest in Source Manager, or submit a manual report via
-          the API to populate this queue.
+          No reports match these filters. Enable an RSS source with auto-ingest in Source Manager, or submit a manual
+          report via the API to populate this queue.
         </Card>
       )}
 
@@ -239,20 +427,31 @@ export default function AdminIncomingPage() {
           const expanded = expandedId === item.id;
           const isEditing = editing[item.id];
           const suggestion = suggestions[item.id];
-          const itemDuplicates = (duplicates[item.id] ?? []).filter((d) => !ignoredDuplicates[item.id]?.has(d.eventId));
+          const itemDuplicates = (
+            duplicates[item.id] ?? (item.topDuplicate ? [item.topDuplicate] : [])
+          ).filter((d) => !ignoredDuplicates[item.id]?.has(d.eventId));
+          const showDuplicateBadge = item.duplicateLikelihood !== "none" && itemDuplicates.length > 0;
 
           return (
             <Card key={item.id} className="p-4" data-testid={`incoming-item-${item.id}`}>
               {/* ---------- SOURCE DATA (always shown, never auto-generated) ---------- */}
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <div className="mb-1 flex items-center gap-2 text-xs text-ink-faint">
+                  <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-ink-faint">
                     <span className="rounded bg-white/5 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-ink-faint">
                       Source Data
                     </span>
                     <span className="font-medium text-ink-dim">{item.source.name}</span>
                     <span>·</span>
                     <span>{timeAgo(item.receivedAt)}</span>
+                    {showDuplicateBadge && (
+                      <span
+                        data-testid={`duplicate-badge-${item.id}`}
+                        className="inline-flex items-center gap-1 rounded-full bg-high/10 px-2 py-0.5 text-[10px] font-medium text-high"
+                      >
+                        <AlertTriangle className="h-3 w-3" /> Possible duplicate — {itemDuplicates[0]!.score}%
+                      </span>
+                    )}
                     {item.source.type === "telegram" && item.source.permissionStatus !== "authorized" && (
                       <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-ink-faint">
                         relay — not independent confirmation

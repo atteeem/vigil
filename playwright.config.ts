@@ -23,9 +23,15 @@ export default defineConfig({
     url: "http://localhost:3000",
     reuseExistingServer: true,
     timeout: 60_000,
-    // Forces the gazetteer-only geocoding provider (no live Nominatim
-    // calls) so /api/admin/geocode is deterministic too — see
-    // lib/geocoding/provider.ts.
-    env: { GEOCODING_PROVIDER: "fixture" },
+    env: {
+      // Forces the gazetteer-only geocoding provider (no live Nominatim
+      // calls) so /api/admin/geocode is deterministic too — see
+      // lib/geocoding/provider.ts.
+      GEOCODING_PROVIDER: "fixture",
+      // Keeps the real background scheduler out of the test process — see
+      // instrumentation.ts's comment. Tests drive polling explicitly via
+      // POST /api/admin/scheduler/tick instead.
+      DISABLE_BACKGROUND_SCHEDULER: "true",
+    },
   },
 });

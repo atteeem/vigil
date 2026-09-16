@@ -15,6 +15,20 @@ export type SourceType = (typeof SOURCE_TYPES)[number];
 export const PERMISSION_STATUSES = ["authorized", "unauthorized", "pending"] as const;
 export type PermissionStatus = (typeof PERMISSION_STATUSES)[number];
 
+// Source trust model (spec "Source Trust Model" — deliberately not a
+// trusted/untrusted boolean). Complements the free-text sourceCategory
+// (e.g. "News") and reliabilityTier (e.g. "A") fields with a controlled
+// vocabulary describing what KIND of source this is.
+export const SOURCE_ROLES = [
+  "originating",
+  "relay",
+  "official",
+  "local_media",
+  "eyewitness_community",
+  "aggregator",
+] as const;
+export type SourceRole = (typeof SOURCE_ROLES)[number];
+
 export const PROCESSING_STATUSES = ["pending", "published", "rejected", "merged"] as const;
 export type ProcessingStatus = (typeof PROCESSING_STATUSES)[number];
 
@@ -49,16 +63,29 @@ export interface SourceDTO {
   language: string | null;
   sourceCategory: string | null;
   reliabilityTier: string | null;
+  sourceRole: SourceRole | null;
   permissionStatus: PermissionStatus;
   enabled: boolean;
   autoIngest: boolean;
   autoProcessing: boolean;
+  pollIntervalMinutes: number;
+  nextPollAt: string | null;
+  lastAttemptedAt: string | null;
+  consecutiveFailures: number;
   lastSuccessfulIngestion: string | null;
   lastError: string | null;
   createdAt: string;
   updatedAt: string;
   /** Raw items received today — only present on the /admin/sources list response. */
   itemsToday?: number;
+  /** Sum of IngestionLog.newCount for today's attempts — distinct from
+   * itemsToday when a feed re-serves already-known items on most polls. */
+  newItemsToday?: number;
+  /** Count of failed IngestionLog rows today. */
+  errorsToday?: number;
+  /** "live" (healthy, recent or no attempts yet) | "error" (lastError set)
+   * | "disabled" (enabled: false) — computed by the API, not stored. */
+  health?: "live" | "error" | "disabled";
 }
 
 export const CONFLICT_STATUSES = ["active", "dormant", "resolved", "archived"] as const;
@@ -127,6 +154,12 @@ export interface DraftSuggestionDTO {
   duplicates: DuplicateCandidateDTO[];
 }
 
+export const DUPLICATE_LIKELIHOODS = ["none", "low", "medium", "high"] as const;
+export type DuplicateLikelihood = (typeof DUPLICATE_LIKELIHOODS)[number];
+
+export const INCOMING_SORTS = ["newest", "oldest", "importance", "duplicate"] as const;
+export type IncomingSort = (typeof INCOMING_SORTS)[number];
+
 export interface RawIngestionItemWithSourceDTO {
   id: string;
   sourceId: string;
@@ -141,4 +174,27 @@ export interface RawIngestionItemWithSourceDTO {
   processingStatus: ProcessingStatus;
   rawMetadata: Record<string, unknown> | null;
   source: SourceDTO;
+  /** Suggestion SNAPSHOT taken once at ingestion time (spec "Processing")
+   * — for queue filtering/sorting/preview only. The review screen's own
+   * `GET .../draft` call always recomputes fresh; never trust this snapshot
+   * as the thing a human actually reviewed. Absent (all null) when the
+   * source has autoProcessing: false, or not yet processed. */
+  suggestedEventType: string | null;
+  suggestedConflictId: string | null;
+  suggestedRegion: string | null;
+  suggestedCountryCode: string | null;
+  suggestedLocationName: string | null;
+  suggestedLat: number | null;
+  suggestedLng: number | null;
+  suggestedSeverity: string | null;
+  suggestedImportance: number | null;
+  locationSource: "resolved" | "ambiguous" | "none" | null;
+  processedAt: string | null;
+  /** Computed fresh at list-read time (never snapshotted — see
+   * prisma/schema.prisma's comment on why), only for pending items with a
+   * resolved suggested location. Powers the "prominent" duplicate badge and
+   * the duplicate-likelihood filter/sort (spec §7/§8) without requiring
+   * Review to be clicked first. */
+  topDuplicate: DuplicateCandidateDTO | null;
+  duplicateLikelihood: DuplicateLikelihood;
 }

@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, Pencil, Radio, Loader2, Download } from "lucide-react";
+import { Plus, Trash2, Pencil, Radio, Loader2, Download, RefreshCw } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { SOURCE_TYPES, type SourceDTO, type SourceType } from "@/lib/types/db";
+import { SOURCE_TYPES, SOURCE_ROLES, type SourceDTO, type SourceType, type SourceRole } from "@/lib/types/db";
 import type { FetchResult } from "@/lib/ingestion/poll";
-import { timeAgo, cn } from "@/lib/utils";
+import { timeAgo, timeUntil, cn } from "@/lib/utils";
 
 interface SourceFormState {
   name: string;
@@ -19,6 +19,8 @@ interface SourceFormState {
   language: string;
   sourceCategory: string;
   reliabilityTier: string;
+  sourceRole: SourceRole | "";
+  pollIntervalMinutes: string;
   autoIngest: boolean;
   autoProcessing: boolean;
 }
@@ -33,8 +35,19 @@ const EMPTY_FORM: SourceFormState = {
   language: "",
   sourceCategory: "",
   reliabilityTier: "",
+  sourceRole: "",
+  pollIntervalMinutes: "5",
   autoIngest: false,
   autoProcessing: true,
+};
+
+const SOURCE_ROLE_LABEL: Record<SourceRole, string> = {
+  originating: "Originating",
+  relay: "Relay",
+  official: "Official",
+  local_media: "Local media",
+  eyewitness_community: "Eyewitness / community",
+  aggregator: "Aggregator",
 };
 
 function toPayload(form: SourceFormState) {
@@ -48,6 +61,8 @@ function toPayload(form: SourceFormState) {
     language: form.language || null,
     sourceCategory: form.sourceCategory || null,
     reliabilityTier: form.reliabilityTier || null,
+    sourceRole: form.sourceRole || null,
+    pollIntervalMinutes: Number(form.pollIntervalMinutes) || 5,
     autoIngest: form.autoIngest,
     autoProcessing: form.autoProcessing,
   };
@@ -58,6 +73,7 @@ export default function AdminSourcesPage() {
   const { data: sources = [], isLoading: loading } = useQuery({
     queryKey: ["admin", "sources"],
     queryFn: async (): Promise<SourceDTO[]> => (await fetch("/api/admin/sources")).json(),
+    refetchInterval: 15_000, // keeps health/next-poll columns current without a manual reload
   });
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -66,6 +82,8 @@ export default function AdminSourcesPage() {
   const [testingId, setTestingId] = useState<string | null>(null);
   const [fetchResults, setFetchResults] = useState<Record<string, FetchResult>>({});
   const [fetchingId, setFetchingId] = useState<string | null>(null);
+  const [runningScheduler, setRunningScheduler] = useState(false);
+  const [schedulerResult, setSchedulerResult] = useState<{ due: number; polled: number } | null>(null);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin", "sources"] });
 
@@ -102,6 +120,8 @@ export default function AdminSourcesPage() {
       language: source.language ?? "",
       sourceCategory: source.sourceCategory ?? "",
       reliabilityTier: source.reliabilityTier ?? "",
+      sourceRole: source.sourceRole ?? "",
+      pollIntervalMinutes: String(source.pollIntervalMinutes),
       autoIngest: source.autoIngest,
       autoProcessing: source.autoProcessing,
     });
@@ -136,6 +156,16 @@ export default function AdminSourcesPage() {
     queryClient.invalidateQueries({ queryKey: ["admin", "incoming"] });
   }
 
+  async function runSchedulerNow() {
+    setRunningScheduler(true);
+    const res = await fetch("/api/admin/scheduler/tick", { method: "POST" });
+    const result = await res.json();
+    setSchedulerResult({ due: result.due, polled: result.polled });
+    setRunningScheduler(false);
+    refresh();
+    queryClient.invalidateQueries({ queryKey: ["admin", "incoming"] });
+  }
+
   async function removeSource(id: string) {
     if (!confirm("Delete this source? Its raw ingestion history will be deleted too.")) return;
     await fetch(`/api/admin/sources/${id}`, { method: "DELETE" });
@@ -146,18 +176,30 @@ export default function AdminSourcesPage() {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-ink">Source Manager</h1>
-        <Button
-          size="sm"
-          variant="accent"
-          onClick={() => {
-            setForm(EMPTY_FORM);
-            setEditingId(null);
-            setShowForm((v) => !v);
-          }}
-        >
-          <Plus className="h-3.5 w-3.5" /> Add Source
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={runSchedulerNow} disabled={runningScheduler}>
+            {runningScheduler ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Run scheduler now
+          </Button>
+          <Button
+            size="sm"
+            variant="accent"
+            onClick={() => {
+              setForm(EMPTY_FORM);
+              setEditingId(null);
+              setShowForm((v) => !v);
+            }}
+          >
+            <Plus className="h-3.5 w-3.5" /> Add Source
+          </Button>
+        </div>
       </div>
+
+      {schedulerResult && (
+        <p className="mb-3 text-xs text-ink-faint">
+          Scheduler ran: {schedulerResult.polled} of {schedulerResult.due} due source(s) polled.
+        </p>
+      )}
 
       {showForm && (
         <Card className="mb-4 p-4">
@@ -231,7 +273,32 @@ export default function AdminSourcesPage() {
                 className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
                 value={form.reliabilityTier}
                 onChange={(e) => setForm({ ...form, reliabilityTier: e.target.value })}
-                placeholder="e.g. wire, relay, community"
+                placeholder="e.g. A, B, community"
+              />
+            </label>
+            <label className="text-xs text-ink-faint">
+              Source role (trust model)
+              <select
+                className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+                value={form.sourceRole}
+                onChange={(e) => setForm({ ...form, sourceRole: e.target.value as SourceRole | "" })}
+              >
+                <option value="">Unspecified</option>
+                {SOURCE_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {SOURCE_ROLE_LABEL[r]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs text-ink-faint">
+              Poll interval (minutes)
+              <input
+                type="number"
+                min={1}
+                className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+                value={form.pollIntervalMinutes}
+                onChange={(e) => setForm({ ...form, pollIntervalMinutes: e.target.value })}
               />
             </label>
             <label className="flex items-center gap-2 text-xs text-ink-faint">
@@ -240,7 +307,7 @@ export default function AdminSourcesPage() {
                 checked={form.autoIngest}
                 onChange={(e) => setForm({ ...form, autoIngest: e.target.checked })}
               />
-              Auto-ingest (poll automatically every ~60s)
+              Auto-ingest (poll automatically on the interval above)
             </label>
             <label className="flex items-center gap-2 text-xs text-ink-faint">
               <input
@@ -263,18 +330,20 @@ export default function AdminSourcesPage() {
       )}
 
       <Card className="overflow-x-auto">
-        <table className="w-full min-w-[900px] text-left text-sm">
+        <table className="w-full min-w-[1300px] text-left text-sm">
           <thead>
             <tr className="border-b border-border text-xs uppercase tracking-wide text-ink-faint">
               <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Type</th>
+              <th className="px-4 py-3">Type / Role</th>
               <th className="px-4 py-3">Region</th>
               <th className="px-4 py-3">Reliability</th>
               <th className="px-4 py-3">Permission</th>
               <th className="px-4 py-3">Enabled</th>
               <th className="px-4 py-3">Auto</th>
-              <th className="px-4 py-3">Last update</th>
-              <th className="px-4 py-3">Items today</th>
+              <th className="px-4 py-3">Last success</th>
+              <th className="px-4 py-3">Last attempt</th>
+              <th className="px-4 py-3">Next poll</th>
+              <th className="px-4 py-3">Today</th>
               <th className="px-4 py-3">Health</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
@@ -282,14 +351,14 @@ export default function AdminSourcesPage() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={11} className="px-4 py-8 text-center text-ink-faint">
+                <td colSpan={13} className="px-4 py-8 text-center text-ink-faint">
                   Loading…
                 </td>
               </tr>
             )}
             {!loading && sources.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-4 py-8 text-center text-ink-faint">
+                <td colSpan={13} className="px-4 py-8 text-center text-ink-faint">
                   No sources yet. Add one to get started.
                 </td>
               </tr>
@@ -297,16 +366,21 @@ export default function AdminSourcesPage() {
             {sources.map((source) => {
               const test = testResults[source.id];
               const fetchResult = fetchResults[source.id];
-              const healthy = test ? test.ok : !source.lastError;
+              const health = source.health ?? (source.enabled ? (source.lastError ? "error" : "live") : "disabled");
               return (
-                <tr key={source.id} className="border-b border-border/60 align-top">
+                <tr key={source.id} data-testid={`source-row-${source.id}`} className="border-b border-border/60 align-top">
                   <td className="px-4 py-3">
                     <div className="font-medium text-ink">{source.name}</div>
                     {source.telegramHandle && (
                       <div className="text-xs text-ink-faint">{source.telegramHandle}</div>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-ink-dim">{source.type}</td>
+                  <td className="px-4 py-3 text-ink-dim">
+                    <div>{source.type}</div>
+                    {source.sourceRole && (
+                      <div className="text-xs text-ink-faint">{SOURCE_ROLE_LABEL[source.sourceRole]}</div>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-ink-dim">{source.region ?? "—"}</td>
                   <td className="px-4 py-3 text-ink-dim">{source.reliabilityTier ?? "—"}</td>
                   <td className="px-4 py-3">
@@ -332,15 +406,38 @@ export default function AdminSourcesPage() {
                       {source.enabled ? "On" : "Off"}
                     </button>
                   </td>
-                  <td className="px-4 py-3 text-ink-dim">{source.autoIngest ? "Yes" : "No"}</td>
+                  <td className="px-4 py-3 text-ink-dim">
+                    {source.autoIngest ? `${source.pollIntervalMinutes}min` : "No"}
+                  </td>
                   <td className="px-4 py-3 text-xs text-ink-faint">
                     {source.lastSuccessfulIngestion ? timeAgo(source.lastSuccessfulIngestion) : "Never"}
                   </td>
-                  <td className="px-4 py-3 text-ink-dim">{source.itemsToday ?? 0}</td>
+                  <td className="px-4 py-3 text-xs text-ink-faint">
+                    {source.lastAttemptedAt ? timeAgo(source.lastAttemptedAt) : "Never"}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-ink-faint">
+                    {source.enabled && source.autoIngest
+                      ? source.nextPollAt
+                        ? timeUntil(source.nextPollAt)
+                        : "pending first tick"
+                      : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-ink-dim">
+                    <div>{source.itemsToday ?? 0} received</div>
+                    <div className="text-ink-faint">{source.newItemsToday ?? 0} new</div>
+                    {(source.errorsToday ?? 0) > 0 && (
+                      <div className="text-high">{source.errorsToday} error{source.errorsToday === 1 ? "" : "s"}</div>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
-                    <span className={cn("flex items-center gap-1 text-xs", healthy ? "text-elevated" : "text-high")}>
+                    <span
+                      className={cn(
+                        "flex items-center gap-1 text-xs",
+                        health === "live" ? "text-elevated" : health === "error" ? "text-high" : "text-ink-faint",
+                      )}
+                    >
                       <Radio className="h-3 w-3" />
-                      {healthy ? "OK" : "Error"}
+                      {health === "live" ? "Live" : health === "error" ? "Error" : "Disabled"}
                     </span>
                     {(test?.message || source.lastError) && (
                       <div className="mt-1 max-w-[180px] text-[11px] text-ink-faint">
@@ -357,22 +454,20 @@ export default function AdminSourcesPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1.5">
-                      {source.type === "rss" && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => fetchNow(source.id)}
-                          disabled={fetchingId === source.id}
-                        >
-                          {fetchingId === source.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <>
-                              <Download className="h-3.5 w-3.5" /> Fetch Now
-                            </>
-                          )}
-                        </Button>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => fetchNow(source.id)}
+                        disabled={fetchingId === source.id}
+                      >
+                        {fetchingId === source.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <>
+                            <Download className="h-3.5 w-3.5" /> Fetch Now
+                          </>
+                        )}
+                      </Button>
                       <Button size="sm" variant="ghost" onClick={() => testSource(source.id)} disabled={testingId === source.id}>
                         {testingId === source.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Test"}
                       </Button>

@@ -14,6 +14,23 @@ export function timeAgo(iso: string, nowIso?: string): string {
   return `${months}mo ago`;
 }
 
+/** Inverse of timeAgo — for a future timestamp (e.g. a source's next
+ * scheduled poll). A past/now timestamp reads as "due now" rather than a
+ * negative duration. */
+export function timeUntil(iso: string, nowIso?: string): string {
+  const then = new Date(iso).getTime();
+  const now = nowIso ? new Date(nowIso).getTime() : Date.now();
+  const diffMs = then - now;
+  if (diffMs <= 0) return "due now";
+  const minutes = Math.round(diffMs / 60000);
+  if (minutes < 1) return "due now";
+  if (minutes < 60) return `in ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `in ${hours}h`;
+  const days = Math.round(hours / 24);
+  return `in ${days}d`;
+}
+
 export function formatSigned(n: number, digits = 1): string {
   const sign = n > 0 ? "+" : "";
   return `${sign}${n.toFixed(digits)}`;

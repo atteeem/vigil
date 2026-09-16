@@ -118,12 +118,15 @@ migration described later in this file.
 - **Adapters** (`lib/ingestion/`): a `SourceAdapter` interface
   (`fetchLatest`, `normalize`, `healthCheck`), implemented for `rss` (a
   dependency-free regex-based RSS 2.0 parser — no XML library needed for
-  typical feeds), `manual` (never auto-fetches; human-submitted items go
+  typical feeds; sends an explicit `Accept` header, since at least one
+  real feed — ReliefWeb — does content negotiation and 406s a request
+  without one), `manual` (never auto-fetches; human-submitted items go
   through the same normalize→dedupe path via `POST
-  /api/admin/incoming/manual`), and `telegram` (placeholder only —
-  `fetchLatest`/`healthCheck` always report disabled; real Telegram
-  ingestion is explicitly out of scope until authorized credentials
-  exist).
+  /api/admin/incoming/manual`), and `telegram` (a real MTProto
+  integration via `teleproto`, entirely credential-gated — see "Telegram
+  architecture" below; `fetchLatest`/`healthCheck` report disabled until
+  `TELEGRAM_API_ID`/`TELEGRAM_API_HASH`/`TELEGRAM_SESSION` are all set,
+  never falling back to scraping or any other unauthorized method).
 - **Deduplication**: `raw_ingestion_items` has a unique constraint on
   `(sourceId, externalId)` (`prisma/schema.prisma`). The RSS adapter sets
   `externalId` to the feed item's GUID, falling back to its link URL, then
@@ -133,16 +136,95 @@ migration described later in this file.
   against that constraint and returns whether it actually inserted, so a
   re-fetch of an already-seen feed is a guaranteed no-op, not just an
   unlikely collision.
-- **Two ways to trigger ingestion**: (1) a background poll loop
-  (`lib/ingestion/poll.ts`'s `runIngestionPass`, started once per server
-  process from `instrumentation.ts`, default 60s /
-  `INGESTION_POLL_INTERVAL_MS`) that polls every `enabled && autoIngest`
-  source; (2) an explicit admin "Fetch Now" button per RSS source
-  (`POST /api/admin/sources/[id]/fetch`) that polls that one source
-  immediately regardless of its auto-ingest flag. Both call the same
-  `pollSource()` function, so they behave identically — same dedup, same
-  health-tracking (`lastSuccessfulIngestion`/`lastError`), same "never
-  publishes."
+- **Source scheduler** (`lib/ingestion/scheduler.ts`, spec "Source
+  Scheduler"): each enabled+auto-ingest source polls on its own
+  `pollIntervalMinutes` (default 5 for RSS, editable per source in
+  `/admin/sources`), not one blanket interval shared by every source. A
+  source is "due" once its `nextPollAt` has passed (or was never set —
+  a brand-new source). `schedulerTick()` runs far more often than any
+  source's own interval (`SCHEDULER_TICK_INTERVAL_MS`, default 30s,
+  started once per server process from `instrumentation.ts`) — the tick
+  itself is cheap (one indexed query when nothing is due); it's what
+  lets each source's own interval take effect promptly. An in-memory
+  `Set` of currently-polling source ids stops the same source being
+  polled twice if a tick fires again before a slow fetch finishes (no
+  cross-process locking needed — this is a single-process local-dev
+  server per Decisions.md). Due sources within one tick are polled
+  concurrently via `Promise.allSettled`, so one source's failure or hang
+  (bounded by `pollSource`'s own 20s fetch timeout) never blocks another
+  (spec "A failed source must not break other sources"). Repeated
+  failures back off exponentially (capped at 8x the normal interval),
+  reset to normal on the next success.
+- **Two ways to trigger a poll**: (1) the scheduler above, for due
+  sources; (2) an explicit admin "Fetch Now" button per source (any
+  type, not just RSS — `POST /api/admin/sources/[id]/fetch`) that polls
+  that one source immediately regardless of due status. Both call the
+  same `pollSource()` function (`lib/ingestion/poll.ts`), so they behave
+  identically — same dedup, same health-tracking
+  (`lastSuccessfulIngestion`/`lastError`/`lastAttemptedAt`/
+  `nextPollAt`/an `IngestionLog` row), same automated-processing
+  trigger, same "never publishes."
+- **Source health** (`/admin/sources`, spec "Source Health"): Live /
+  Error / Disabled status, last successful fetch, last attempted fetch,
+  next scheduled fetch (all read straight off the `Source` row), plus
+  items received / new items / errors "today" — the latter two need
+  aggregation across the day's individual poll attempts (not just a
+  dedup-guaranteed-unique raw-items count, which can't tell "seen again"
+  from "genuinely new" or see failed attempts at all), so they're
+  computed from `IngestionLog`, an append-only row per attempt
+  (`lib/db/repositories/ingestion-logs.ts`).
+- **Source trust model** (spec "Source Trust Model" — deliberately not a
+  trusted/untrusted boolean): `Source.sourceRole` is a controlled
+  vocabulary — `originating` / `relay` / `official` / `local_media` /
+  `eyewitness_community` / `aggregator` (`lib/types/db.ts`
+  `SOURCE_ROLES`) — alongside the existing free-text `sourceCategory`
+  (e.g. "News") and `reliabilityTier` (e.g. "A") fields. Per-event
+  verification (`Event.verificationStatus`) stays separate and
+  event-specific, unaffected by a source's role.
+- **Telegram architecture** (spec "Telegram architecture"):
+  `TelegramAuthorizedSourceAdapter` (`lib/ingestion/telegram-adapter.ts`)
+  is a real MTProto integration via `teleproto` (an actively-maintained
+  fork of GramJS — `npm install telegram` resolves to the archived,
+  vulnerability-flagged original package, which its own deprecation
+  notice points at teleproto as the replacement), entirely gated behind
+  `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` / `TELEGRAM_SESSION` env vars
+  (never committed — `.env.local` only). Until all three are set,
+  `fetchLatest()` returns `[]` and `healthCheck()` reports disabled,
+  exactly like the old placeholder — there is still no generic
+  unauthorized scraping path. Once credentials exist, `fetchLatest()`
+  calls `client.getMessages(handle, {limit: 20})` and preserves, per
+  message: channel + message id (the dedup `externalId`), a
+  `https://t.me/<channel>/<id>` message URL, timestamp, and original
+  text. The three pre-registered channels (`@lumsrc`, `@dnipro_now`,
+  `@huyovy_kharkiv`, `prisma/seed.mjs`) are unchanged and still
+  `enabled: false` — this integration is **not verified against live
+  Telegram** in this environment (no credentials available); validating
+  it is the first thing to do once real credentials are configured.
+- **Duplicate handling in the incoming queue** (spec §7/§8): a
+  "Possible duplicate — N%" badge renders directly on each collapsed
+  report card in `/admin/incoming`, not only after clicking Review — the
+  list endpoint (`GET /api/admin/incoming`) computes each pending item's
+  top duplicate candidate live (via `findDuplicateCandidates()`, reusing
+  its persisted suggested-location snapshot), never snapshotting the
+  score itself (an event published after an item arrived could newly
+  duplicate it — a stale "no duplicate" reading would be actively
+  unsafe, unlike the other snapshot fields below). The queue also
+  supports filtering by Source / Conflict / Region / Event type /
+  Processing status / Duplicate likelihood / Age, and sorting by
+  Newest / Oldest / Highest importance / Highest duplicate probability
+  — the first group filters at the DB level against the suggestion
+  snapshot below; duplicate likelihood/sort apply in memory after the
+  live per-item computation.
+- **Automated processing at ingestion time** (spec "Processing"): for
+  sources with `autoProcessing: true`, `pollSource()` calls
+  `extractDraft()` once for every newly created item and persists the
+  result as `RawIngestionItem`'s `suggested*`/`locationSource`/
+  `processedAt` columns — a snapshot purely so the queue above can
+  filter/sort by conflict/region/event type/importance without
+  recomputing a full draft for every pending item on every list request.
+  The review screen's own `GET .../draft` call is untouched and still
+  always recomputes fresh from current data (see the next bullet) —
+  nothing a human actually reviews is ever served from this snapshot.
 - **Review & publish** (`/admin/incoming`, `app/api/admin/incoming/`):
   every field (event type, conflict, country/region/location name,
   lat/lng, occurred-at, title, summary, severity, importance,
@@ -178,10 +260,14 @@ migration described later in this file.
   → `findConflictByCountryCode()`), title, a starting-point summary,
   severity/importance, and duplicate candidates (only once a location is
   resolved) — computed fresh on every `GET
-  /api/admin/incoming/[id]/draft` call, never persisted, never
-  auto-published. It's a deterministic rule-based heuristic (keyword
-  matching + gazetteer lookup), not an AI/LLM call — no external
-  processing provider is configured for this project. `/admin/incoming`'s
+  /api/admin/incoming/[id]/draft` call (what the review screen actually
+  shows), never auto-published. A separate, best-effort snapshot of the
+  non-duplicate fields is also persisted once at ingestion time purely
+  for queue filtering — see "Automated processing at ingestion time"
+  above; the review screen never reads that snapshot. It's a
+  deterministic rule-based heuristic (keyword matching + gazetteer
+  lookup), not an AI/LLM call — no external processing provider is
+  configured for this project. `/admin/incoming`'s
   review card renders this in a visually distinct "Automated Suggestion —
   not source data, review before publishing" panel, separate from the
   "Source Data" section above it; every field in it maps 1:1 to an
@@ -341,3 +427,20 @@ id directly from the publish/duplicate-check response (`kyivEventId`,
 `duplicate-candidate-${eventId}` test ids) rather than searching
 `/api/events` by title — titles alone aren't unique once a run has
 happened more than once against the same database.
+
+**`tests/multi-source-ingestion.spec.ts`** is the deterministic suite for
+the scheduler, source health, per-source failure isolation, automated
+processing-at-ingestion, and the scheduler-driven variant of source
+independence — same fixture-feed pattern as `classification.spec.ts`
+(never touches a real external source), plus a second fixture feed and a
+`?delayMs=` param on the fixture route for the overlap-prevention test.
+Two additions specifically for this suite:
+`playwright.config.ts`'s `webServer.env` also sets
+`DISABLE_BACKGROUND_SCHEDULER=true` (checked in `instrumentation.ts`) so
+the real always-on scheduler never fires mid-test and races the suite's
+own explicit, deterministic `POST /api/admin/scheduler/tick` calls; and
+that endpoint accepts an optional `sourceIds` array so a test-scoped tick
+never touches this project's real live sources (BBC World, Al Jazeera,
+etc.) as a side effect of running the suite. Real sources are exercised
+manually — see the milestone's final report for their live-tested status,
+not something the automated suite asserts on.

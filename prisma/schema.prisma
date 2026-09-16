@@ -41,6 +41,13 @@ model Source {
   language    String?
   sourceCategory String? @map("source_category")
   reliabilityTier String? @map("reliability_tier")
+  // Trust-model classification (spec "Source Trust Model") — a coarser,
+  // controlled-vocabulary sibling of the free-text sourceCategory/
+  // reliabilityTier fields above: "originating" | "relay" | "official" |
+  // "local_media" | "eyewitness_community" | "aggregator". See
+  // lib/types/db.ts SOURCE_ROLES. Nullable — existing sources predate this
+  // field.
+  sourceRole  String?  @map("source_role")
   permissionStatus String @default("unauthorized") @map("permission_status")
   enabled     Boolean  @default(true)
   autoIngest  Boolean  @default(false) @map("auto_ingest")
@@ -49,14 +56,43 @@ model Source {
   // from autoIngest (fetching); a source can fetch without draft
   // suggestions being generated, or vice versa.
   autoProcessing Boolean @default(true) @map("auto_processing")
+  // Scheduler fields (spec "Source Scheduler") — see lib/ingestion/scheduler.ts.
+  pollIntervalMinutes Int @default(5) @map("poll_interval_minutes")
+  nextPollAt  DateTime? @map("next_poll_at")
+  lastAttemptedAt DateTime? @map("last_attempted_at")
+  // Consecutive failed polls, reset to 0 on success — drives the
+  // scheduler's exponential backoff (capped), not shown directly in the UI.
+  consecutiveFailures Int @default(0) @map("consecutive_failures")
   lastSuccessfulIngestion DateTime? @map("last_successful_ingestion")
   lastError   String?  @map("last_error")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   rawItems    RawIngestionItem[]
+  ingestionLogs IngestionLog[]
 
   @@map("sources")
+}
+
+// Append-only per-poll-attempt log (spec "Source Health": last attempted
+// fetch, errors today, new items today) — Source's own lastAttemptedAt/
+// lastSuccessfulIngestion/lastError fields stay as fast denormalized
+// "current state" reads; this table is what lets the admin UI show
+// today's aggregate counts without re-deriving them from raw_ingestion_items
+// (which only records successes, never failed attempts).
+model IngestionLog {
+  id           String   @id @default(cuid())
+  sourceId     String   @map("source_id")
+  source       Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  attemptedAt  DateTime @default(now()) @map("attempted_at")
+  fetched      Int      @default(0)
+  newCount     Int      @default(0) @map("new_count")
+  alreadyKnown Int      @default(0) @map("already_known")
+  success      Boolean  @default(true)
+  errorMessage String?  @map("error_message")
+
+  @@index([sourceId, attemptedAt])
+  @@map("ingestion_logs")
 }
 
 model RawIngestionItem {
@@ -73,6 +109,31 @@ model RawIngestionItem {
   mediaUrls       String?  @map("media_urls") // JSON-encoded string[]
   processingStatus String  @default("pending") @map("processing_status")
   rawMetadata     String?  @map("raw_metadata") // JSON-encoded
+
+  // Automated-suggestion SNAPSHOT (spec "Processing": "all new eligible
+  // incoming items should automatically run through the existing
+  // draft-processing system when source.autoProcessing = true") — computed
+  // once by lib/ingestion/poll.ts right after ingestion, purely to make the
+  // /admin/incoming queue filterable/sortable by conflict/region/event
+  // type/importance without an N-way live recompute on every list request.
+  // The review screen (GET /api/admin/incoming/[id]/draft) still always
+  // recomputes fresh from lib/ingestion/draft.ts — this snapshot is never
+  // the source of truth a human reviews, only a fast index. Duplicate
+  // likelihood is deliberately NOT snapshotted here (see
+  // ARCHITECTURE.md) — it's recomputed at list-read time instead, since a
+  // duplicate can newly appear from an event published after this item
+  // arrived, and a stale "no duplicate" snapshot would be actively unsafe.
+  suggestedEventType String? @map("suggested_event_type")
+  suggestedConflictId String? @map("suggested_conflict_id")
+  suggestedRegion String? @map("suggested_region")
+  suggestedCountryCode String? @map("suggested_country_code")
+  suggestedLocationName String? @map("suggested_location_name")
+  suggestedLat    Float?   @map("suggested_lat")
+  suggestedLng    Float?   @map("suggested_lng")
+  suggestedSeverity String? @map("suggested_severity")
+  suggestedImportance Int?  @map("suggested_importance")
+  locationSource  String?  @map("location_source") // "resolved" | "ambiguous" | "none"
+  processedAt     DateTime? @map("processed_at")
 
   eventLinks      EventSource[]
 

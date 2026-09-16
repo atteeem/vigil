@@ -96,6 +96,33 @@ no auto-publishing, no Telegram, no Supabase.
 | 54 | Deterministic local RSS fixtures + core test suite: `app/api/test-fixtures/rss/[name]/route.ts` + `lib/testing/rss-fixtures.ts` serve a static feed with fixed guids/titles/pubDates so ingestion tests never depend on the live BBC feed or network state; `tests/classification.spec.ts` (34 tests × 2 projects) covers conflict CRUD, conflict assignment, duplicate suggestion, merge, source-count-after-merge (both relay and corroborating), ambiguous-location handling, automated draft creation, human overrides, no-auto-publish, rejection, and deterministic RSS ingestion+dedup; `tests/rss-ingestion.spec.ts` kept as-is, now documented as a manual/smoke test against the live feed, not part of the deterministic gate | DONE |
 | 55 | Full re-verification: typecheck / lint / production build clean; 88/88 Playwright checks pass across 3 consecutive full runs (Desktop + Mobile), aside from pre-existing live-BBC-feed flakiness in the smoke test unrelated to this milestone's code | DONE |
 
+### Phase 2d — Real multi-source live ingestion
+
+Full spec: milestone message "REAL MULTI-SOURCE LIVE INGESTION." See
+ARCHITECTURE.md's "Source scheduler" / "Source health" / "Telegram
+architecture" / "Source trust model" / "Duplicate handling in the
+incoming queue" entries and DATA_MODEL.md's `sources` (scheduler +
+trust-model fields) / `ingestion_logs` / `raw_ingestion_items` (suggestion
+snapshot) entries. Explicit constraints honored: no UI redesign beyond
+what this milestone itself asks for, no auto-publishing, no Supabase
+migration.
+
+| # | Task | Status |
+|---|---|---|
+| 56 | Per-source polling scheduler (`lib/ingestion/scheduler.ts`): each enabled+auto-ingest source polls on its own `pollIntervalMinutes` (default 5 for RSS) via `nextPollAt`, not one blanket interval; in-memory in-flight guard prevents overlapping polls of the same source; exponential backoff (capped 8x) on repeated failures, reset on success; `POST /api/admin/scheduler/tick` (optionally scoped to specific source ids) runs one pass on demand — used by both the admin "Run scheduler now" action and the deterministic test suite | DONE |
+| 57 | Source Health upgrade (`/admin/sources`): Live/Error/Disabled badge, last successful fetch, last attempted fetch, next scheduled fetch, items received today, new items today, errors today (new `IngestionLog` append-only table for the latter two, since a dedup-only raw-items count can't distinguish "seen again" from "new" or capture failed attempts); Fetch Now works for every source type, not just RSS | DONE |
+| 58 | 9 new real RSS sources seeded alongside BBC World — every URL verified to be a real, currently-live, publicly reachable RSS 2.0 feed before seeding (no scraping): Al Jazeera English, The Guardian World, UN News, ReliefWeb Updates, WHO News, GDACS Disaster Alerts (emergency/government), Times of Israel, Middle East Eye, Africanews (regional) — covering the spec's international-news/official-authority/emergency/regional-news categories | DONE |
+| 59 | Real ingestion reliability fixes found and fixed via live testing (not caught by fixtures): (a) Node's `fetch()` tried an IPv6 address first for several dual-stack hosts (who.int, gdacs.org), reliably hitting a 10s connect timeout while curl against the identical URL at the identical time succeeded in under a second — fixed with `dns.setDefaultResultOrder("ipv4first")` in `instrumentation.ts`, a documented Node API for exactly this failure mode; (b) ReliefWeb's feed does content negotiation and 406s a request with no explicit `Accept` header — fixed by sending one from `lib/ingestion/rss-adapter.ts` | DONE |
+| 60 | `TelegramAuthorizedSourceAdapter` completed as a real MTProto integration (`teleproto`, an actively-maintained GramJS fork) behind `TELEGRAM_API_ID`/`TELEGRAM_API_HASH`/`TELEGRAM_SESSION` env vars — `fetchLatest`/`healthCheck` stay fully disabled (never scrape, never fall back to an unauthorized method) until all three are set. The three pre-registered channels (`@lumsrc`, `@dnipro_now`, `@huyovy_kharkiv`) are unchanged/kept, still `enabled: false`. **Not verified against live Telegram** — no credentials are available in this environment; this is the expected state per the spec's own framing ("so it can later operate when valid credentials... are supplied") | DONE (integration code); credentials still needed for live verification |
+| 61 | Processing snapshot at ingestion time: `RawIngestionItem` gained `suggested*`/`locationSource`/`processedAt` columns, populated once by `lib/ingestion/poll.ts` right after a new item is created (when `autoProcessing: true`) by calling the existing `extractDraft()` heuristic — powers queue filtering/sorting without an N-way live recompute per list request. The review screen's own `GET .../draft` call is untouched and still always recomputes fresh, so nothing a human actually reviews is ever served from this snapshot | DONE |
+| 62 | Source Trust Model: new `Source.sourceRole` controlled vocabulary (`originating` / `relay` / `official` / `local_media` / `eyewitness_community` / `aggregator`, `lib/types/db.ts` `SOURCE_ROLES`) alongside the existing free-text `sourceCategory`/`reliabilityTier` fields — not a trusted/untrusted boolean, per spec. Applied to every seeded source (e.g. UN News/WHO/GDACS → `official`, the two Ukrainian Telegram channels → `eyewitness_community`) | DONE |
+| 63 | Incoming Queue filters + sorting (`/admin/incoming`): Source / Conflict / Region / Event type / Processing status / Duplicate likelihood / Age filters, Newest / Oldest / Highest importance / Highest duplicate probability sort — DB-level for the snapshot-backed fields, computed at list-read time for duplicate likelihood (never snapshotted — see ARCHITECTURE.md for why) | DONE |
+| 64 | Duplicate handling shown prominently: a "Possible duplicate — N%" badge now renders directly on each collapsed incoming-report card (not just after clicking Review), computed from a live per-item duplicate check against the item's suggested location | DONE |
+| 65 | Live map refresh reconfirmed unchanged: `/world` still merges published/merged events via `hooks/use-live-events.ts`'s existing 20s `/api/events` poll — no full-reload dependency, verified end-to-end through the new scheduler → ingest → publish path | DONE |
+| 66 | Rate limiting / failure handling: per-fetch 20s timeout (`lib/ingestion/poll.ts`), exponential backoff on repeated failures, every attempt (success or failure) logged to `IngestionLog`, one source's failure/timeout never blocks another in the same scheduler tick (`Promise.allSettled`) | DONE |
+| 67 | Deterministic tests: `tests/multi-source-ingestion.spec.ts` (10 tests × 2 projects) covers scheduled polling (due/not-due), multiple independent sources in one tick, per-source failure isolation, overlap prevention (a slow fixture + staggered concurrent ticks), processing-after-ingestion (with and without `autoProcessing`), source health reporting, source independence via the scheduler path (relay merge), no-auto-publishing, and live map refresh after publish — all against local fixture feeds (`lib/testing/rss-fixtures.ts` gained a second feed, and a `?delayMs=` param for the overlap test), scoped away from this project's real live sources via an optional `sourceIds` filter on the scheduler-tick test endpoint so running the suite never hammers external feeds | DONE |
+| 68 | Full re-verification: typecheck / lint / production build clean; `multi-source-ingestion.spec.ts` passes 20/20 reliably standalone and as the lead file in a combined run. A combined 108-test run showed occasional transient failures only after several minutes of continuous execution against an ever-growing local SQLite DB on this sandbox's flagged "slow filesystem" — root-caused to environment I/O contention, not application logic (the specific failing call was independently reproduced as succeeding via a direct HTTP request, and isolated reruns of the affected spec pass consistently) | DONE |
+
 ## Beyond the Phase 1 floor (built ahead of schedule)
 
 The spec listed these as later-phase, but they were straightforward
@@ -241,3 +268,48 @@ rather than left as stubs:
   Publish) rather than re-querying by title, so it stays correct even
   when the shared SQLite DB accumulates near-identical fixture data
   across repeated local runs or the Desktop/Mobile Playwright projects.
+
+### Phase 2d decisions
+
+- **A suggestion snapshot is persisted at ingestion time, deliberately
+  breaking with Phase 2c's "never persist a draft" rule — but only for
+  filtering, never for review.** Queue-wide filtering/sorting by conflict/
+  region/event type/importance needs that data to exist on every pending
+  item without recomputing it per request; the review screen's own `GET
+  .../draft` call is untouched and still always recomputes fresh, so nothing
+  a human actually reviews is ever served from a stale snapshot. Duplicate
+  likelihood is the one field deliberately NOT snapshotted, because an
+  event published after an item arrived can make it newly duplicate
+  something — a stale "no duplicate" snapshot would be actively unsafe,
+  so it's recomputed live at list-read time instead.
+- **The scheduler tick is a separate concept from a source's poll
+  interval.** The tick (default 30s, `SCHEDULER_TICK_INTERVAL_MS`) is just
+  "how often to check what's due" — cheap, and unrelated to how often any
+  given source actually gets polled (`Source.pollIntervalMinutes`, default
+  5min for RSS, editable per source). Conflating the two would mean every
+  source shares one interval, which the spec explicitly asked to move away
+  from.
+- **`teleproto` over `telegram` (GramJS) for the Telegram adapter.**
+  `npm install telegram` resolved to the actual GramJS package, which npm
+  flagged as archived/deprecated (4 high-severity transitive
+  vulnerabilities) with an explicit migration notice pointing at
+  `teleproto`, a largely-compatible actively-maintained fork. Swapped
+  before writing any adapter code against it, not after.
+- **`dns.setDefaultResultOrder("ipv4first")` over per-host workarounds.**
+  Multiple real, working feeds (who.int, gdacs.org) failed reliably with
+  Node's `fetch()` and only Node's `fetch()` — curl against the identical
+  URL at the identical time succeeded — because Node's default DNS
+  ordering tried an IPv6 address first on a network where it's
+  unreachable. This is a documented Node-level fix for exactly that
+  failure class, applied once in `instrumentation.ts`, rather than special
+  -casing affected hostnames.
+- **Scheduler ticks triggered by tests are scoped to test-created source
+  ids (`POST /api/admin/scheduler/tick`'s optional `sourceIds`).** An
+  unscoped tick call also polls every real enabled+auto-ingest source —
+  fine for the real "Run scheduler now" admin action, but a test suite
+  that did this would both be nondeterministic (racing the real
+  always-on background scheduler for the same sources) and would hammer
+  this project's live RSS feeds on every test run. The background
+  scheduler itself is disabled entirely for the Playwright process
+  (`DISABLE_BACKGROUND_SCHEDULER=true`, `playwright.config.ts`) for the
+  same reason.

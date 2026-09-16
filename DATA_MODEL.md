@@ -81,13 +81,39 @@ mechanical.
 | language | text, nullable | e.g. `en` |
 | source_category | text, nullable | e.g. "News" — shown as the source's displayed type on event detail pages, preferred over a generic per-`type` label |
 | reliability_tier | text, nullable | e.g. `A` |
+| source_role | text, nullable | trust-model classification (spec "Source Trust Model") — `originating` \| `relay` \| `official` \| `local_media` \| `eyewitness_community` \| `aggregator`. Complements, doesn't replace, `source_category`/`reliability_tier` |
 | permission_status | text | `authorized` \| `unauthorized` \| `pending` — Telegram sources default `unauthorized` until real credentials exist |
 | enabled | boolean | |
-| auto_ingest | boolean | polled by the background loop when true; "Fetch Now" works regardless |
+| auto_ingest | boolean | polled by the scheduler when true; "Fetch Now" works regardless |
 | auto_processing | boolean, default true | gates automated draft extraction (spec "Automated Draft Extraction") per source — independent of `auto_ingest`, which only gates *fetching*. `false` means the review screen shows source data only, no automated-suggestion panel |
+| poll_interval_minutes | integer, default 5 | per-source scheduler interval (spec "Source Scheduler") — not a single interval shared by every source |
+| next_poll_at | timestamp, nullable | when the scheduler will next consider this source due; advanced after every attempt (`lib/ingestion/poll.ts`), with exponential backoff (capped) on failure |
+| last_attempted_at | timestamp, nullable | set at the start of every poll attempt, success or failure — distinct from `last_successful_ingestion` below |
+| consecutive_failures | integer, default 0 | drives the backoff multiplier; reset to 0 on success |
 | last_successful_ingestion | timestamp, nullable | |
 | last_error | text, nullable | |
 | created_at / updated_at | timestamp | |
+
+### `ingestion_logs`
+Append-only, one row per poll attempt (spec "Source Health": last
+attempted fetch, errors today, new items today) —
+`lib/db/repositories/ingestion-logs.ts`. `sources`' own
+`last_attempted_at`/`last_successful_ingestion`/`last_error` stay as fast
+denormalized "current state" reads; this table is what lets the admin UI
+show today's aggregate counts (a dedup-guaranteed-unique raw-items count
+alone can't distinguish "seen again" from "genuinely new," and never
+records a failed attempt at all).
+
+| field | type | notes |
+|---|---|---|
+| id | text (PK, cuid) | |
+| source_id | text (FK → sources) | |
+| attempted_at | timestamp, default now | |
+| fetched | integer | items the adapter returned this attempt |
+| new_count | integer | of those, how many were actually new (not already known) |
+| already_known | integer | `fetched - new_count` |
+| success | boolean | |
+| error_message | text, nullable | |
 
 ### `raw_ingestion_items`
 | field | type | notes |
@@ -101,7 +127,9 @@ mechanical.
 | received_at | timestamp | |
 | media_urls | text, nullable | JSON-encoded `string[]` (SQLite has no array type) |
 | processing_status | text | `pending` \| `published` \| `rejected` \| `merged` |
-| raw_metadata | text, nullable | JSON-encoded, adapter-specific passthrough |
+| raw_metadata | text, nullable | JSON-encoded, adapter-specific passthrough — Telegram items store `{channel, messageId}` here |
+| suggested_event_type / suggested_conflict_id / suggested_region / suggested_country_code / suggested_location_name / suggested_lat / suggested_lng / suggested_severity / suggested_importance / location_source | various, all nullable | automated-suggestion SNAPSHOT (spec "Processing") — computed once at ingestion time when the source has `auto_processing: true`, for queue filtering/sorting only. **Not** what the review screen shows: `GET /api/admin/incoming/[id]/draft` always recomputes fresh from current data. Duplicate likelihood is deliberately not part of this snapshot — see ARCHITECTURE.md's "Duplicate handling in the incoming queue" |
+| processed_at | timestamp, nullable | when the snapshot above was computed; null if never (source has `auto_processing: false`, or not yet processed) |
 
 Unique constraint: `(source_id, external_id)` — the deduplication rule; see ARCHITECTURE.md.
 
