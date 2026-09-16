@@ -13,6 +13,7 @@ import { isWithinRange } from "@/lib/utils/time-range";
 import type { ConflictEvent, TimeRange } from "@/lib/types";
 import { GlobeLoading } from "@/components/globe/globe-loading";
 import { useAppStore } from "@/hooks/use-app-store";
+import { useLiveEvents } from "@/hooks/use-live-events";
 
 const WorldMap = dynamic(() => import("@/components/map/world-map").then((m) => m.WorldMap), {
   ssr: false,
@@ -27,15 +28,22 @@ export default function WorldPage() {
   const [selected, setSelected] = useState<ConflictEvent | null>(null);
   const basemapMode = useAppStore((s) => s.mapBasemapMode);
   const setBasemapMode = useAppStore((s) => s.setMapBasemapMode);
+  const liveEvents = useLiveEvents();
+
+  // Published admin events are merged in alongside the mock-data set, so
+  // /world keeps working exactly as before with zero live events (e.g. a
+  // fresh DB) and grows automatically as reports get published — see
+  // Implementation Order #13 / spec §15.
+  const allEvents = useMemo(() => [...MOCK_EVENTS, ...liveEvents], [liveEvents]);
 
   const filteredEvents = useMemo(() => {
-    return MOCK_EVENTS.filter((e) => {
+    return allEvents.filter((e) => {
       if (typeFilter !== "all" && e.eventType !== typeFilter) return false;
       if (region !== "Global" && e.region !== region) return false;
       if (!isWithinRange(e.occurredAt, timeRange, MOCK_NOW)) return false;
       return true;
     });
-  }, [typeFilter, region, timeRange]);
+  }, [allEvents, typeFilter, region, timeRange]);
 
   return (
     <main className="relative h-screen w-full overflow-hidden pt-16 sm:pt-0">

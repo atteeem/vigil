@@ -47,11 +47,12 @@ Full spec: see [[Map Requirements]] / [[Globe Requirements]] / [[Profile and Acc
 | 27 | Fixed latent bug: CARTO's free anonymous raster tiles now require their own key and were rendering "API KEY REQUIRED" watermarks; no-key fallback is now a clean solid background | DONE |
 | 28 | Map label/zoom hierarchy (continents → buildings) | TODO — relies on MapTiler's built-in style cartography once a real key is added; not hand-tuned per-layer yet |
 | 29 | Original Vigil event icon system: 21-category canvas-drawn SDF icon set, severity-tinted, zoom-tiered (clusters → simplified dots → full icons at zoom 11+) | DONE |
-| 30 | SQLite + Prisma repository layer (sources, raw_ingestion_items, events, event_sources, conflicts) | TODO |
-| 31 | Source ingestion adapters (RSS, manual, Telegram-authorized placeholder) | TODO |
-| 32 | Admin Source Manager (`/admin/sources`) | TODO |
-| 33 | Admin Incoming Reports queue (`/admin/incoming`) | TODO |
-| 34 | Event publishing workflow → live `/world` map | TODO |
+| 30 | SQLite + Prisma repository layer (sources, raw_ingestion_items, events, event_sources, conflicts). Prisma 7's driver-adapter model required `@prisma/adapter-better-sqlite3` + `prisma.config.ts` rather than the older schema-embedded `url` — see prisma.config.ts / lib/db/client.ts comments | DONE |
+| 31 | Source ingestion adapters (RSS — dependency-free regex parser; Manual; Telegram-authorized placeholder, verified disabled end-to-end via admin "Test") | DONE |
+| 32 | Admin Source Manager (`/admin/sources`) | DONE |
+| 33 | Admin Incoming Reports queue (`/admin/incoming`) — Publish/Edit/Merge/Reject, no auto-publish | DONE |
+| 34 | Event publishing workflow → live `/world` map, via `/api/events` polling (`hooks/use-live-events.ts`) merged with mock data | DONE |
+| 34a | Known gap: published events can't be linked to a `Conflict` from the admin UI yet — the `conflicts` table has no seed data or admin CRUD, so `conflictId` stays null. Not blocking; flagged rather than silently skipped. | TODO |
 | 35 | Local-development account system (`AccountRepository`/`AuthProvider` abstraction) | TODO |
 | 36 | Profile UI upgrade (create/sign-in, edit profile, picture, preferences affecting live UI) | TODO |
 | 37 | Full responsive/testing pass (Playwright) | TODO |

@@ -7,3 +7,8 @@ build
 .env*.local
 .DS_Store
 next-env.d.ts
+
+# Local-development SQLite database — regenerate with:
+# npm run db:migrate && npm run db:seed
+prisma/dev.db
+prisma/dev.db-journal

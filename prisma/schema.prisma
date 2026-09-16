@@ -1,0 +1,137 @@
+// Vigil — local-development database schema.
+//
+// SQLite/Prisma is TEMPORARY local-development infrastructure (see
+// Decisions.md in the Obsidian vault, "Current backend strategy"). This
+// schema is a separate, parallel layer for the source-ingestion pipeline
+// and admin review workflow — it does not replace the existing mock-data
+// layer (lib/data/*) that the globe/map/conflict pages already read from.
+// "Published" events from here are merged into the live event feed
+// alongside mock data (see lib/data/world-events.ts).
+//
+// SQLite has no native enum type, so every enum-shaped field below is a
+// plain String, validated/typed at the TypeScript boundary instead (see
+// lib/types/db.ts) — the same "validate at the boundary" pattern
+// ARCHITECTURE.md already uses for the mock-data Zod schemas.
+//
+// Field names intentionally mirror DATA_MODEL.md's target Postgres schema
+// where the shapes overlap, so a future Supabase migration stays close to
+// mechanical; where this schema is richer (source management fields for
+// the admin UI), that's noted inline.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// The connection URL lives in prisma.config.ts (Prisma 7 no longer reads
+// `url` from this file) and the runtime PrismaClient connects via a driver
+// adapter (see lib/db/client.ts), not this block — `provider` here only
+// tells Prisma which SQL dialect to generate for.
+datasource db {
+  provider = "sqlite"
+}
+
+model Source {
+  id          String   @id @default(cuid())
+  name        String
+  type        String // e.g. "rss" | "telegram" | "manual" — see lib/types/db.ts SourceType
+  url         String?
+  telegramHandle String? @map("telegram_handle")
+  country     String?
+  region      String?
+  language    String?
+  sourceCategory String? @map("source_category")
+  reliabilityTier String? @map("reliability_tier")
+  permissionStatus String @default("unauthorized") @map("permission_status")
+  enabled     Boolean  @default(true)
+  autoIngest  Boolean  @default(false) @map("auto_ingest")
+  lastSuccessfulIngestion DateTime? @map("last_successful_ingestion")
+  lastError   String?  @map("last_error")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  rawItems    RawIngestionItem[]
+
+  @@map("sources")
+}
+
+model RawIngestionItem {
+  id              String   @id @default(cuid())
+  sourceId        String   @map("source_id")
+  source          Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  externalId      String   @map("external_id")
+  originalUrl     String?  @map("original_url")
+  originalTitle   String?  @map("original_title")
+  originalText    String?  @map("original_text")
+  language        String?
+  publishedAt     DateTime? @map("published_at")
+  receivedAt      DateTime @default(now()) @map("received_at")
+  mediaUrls       String?  @map("media_urls") // JSON-encoded string[]
+  processingStatus String  @default("pending") @map("processing_status")
+  rawMetadata     String?  @map("raw_metadata") // JSON-encoded
+
+  eventLinks      EventSource[]
+
+  @@unique([sourceId, externalId])
+  @@map("raw_ingestion_items")
+}
+
+model Conflict {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  region      String
+  status      String   @default("active")
+  severity    String
+  intensity   Int
+  intensityChange24h Int @default(0) @map("intensity_change_24h")
+  startedAt   DateTime? @map("started_at")
+  lat         Float?
+  lng         Float?
+  primaryEffects String? @map("primary_effects") // JSON-encoded string[]
+  summary     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  events      Event[]
+
+  @@map("conflicts")
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  summary     String
+  eventType   String   @map("event_type")
+  locationName String? @map("location_name")
+  latitude    Float
+  longitude   Float
+  countryCode String?  @map("country_code")
+  region      String?
+  conflictId  String?  @map("conflict_id")
+  conflict    Conflict? @relation(fields: [conflictId], references: [id])
+  occurredAt  DateTime @map("occurred_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  severity    String
+  importance  Int      @default(50)
+  verificationStatus String @default("unverified") @map("verification_status")
+  published   Boolean  @default(false)
+
+  sources     EventSource[]
+
+  @@map("events")
+}
+
+model EventSource {
+  id                 String   @id @default(cuid())
+  eventId            String   @map("event_id")
+  event              Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  rawIngestionItemId String   @map("raw_ingestion_item_id")
+  rawIngestionItem   RawIngestionItem @relation(fields: [rawIngestionItemId], references: [id], onDelete: Cascade)
+  relationship       String   @default("originating") // "originating" | "relay" | "corroborating"
+  isOriginatingSource Boolean @default(true) @map("is_originating_source")
+
+  @@unique([eventId, rawIngestionItemId])
+  @@map("event_sources")
+}
