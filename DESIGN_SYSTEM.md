@@ -210,6 +210,19 @@ data inside the project's own `three-globe` npm dependency — not fetched
 from, or derived from, Google Earth or any other third-party mapping
 product.
 
+**Mobile texture variant**: `earth-blue-marble-mobile.jpg` /
+`earth-topology-mobile.jpg` are the same source images downscaled 2x
+(4096×2048 → 2048×1024 color, 2048×1024 → 1024×512 bump; color JPEG
+1.46MB → 0.29MB). `conflict-globe.tsx` picks the pair matching the
+container's measured width (`isMobile = size.width < 640`) via
+`globeImageUrl`/`bumpImageUrl`. Both textures for the *current* device
+size are preloaded (`new Image()`) shortly after the homepage's own first
+paint — via `requestIdleCallback`, never blocking it — so switching to
+Satellite is instant the first time too; a module-level flag prevents a
+Fast Refresh remount from re-firing the preload. This is a texture-prop
+swap on the existing `react-globe.gl` instance, not a scene rebuild —
+consistent with "no globe library was replaced or added" above.
+
 **Performance**: Borders/Labels pull in a real ~490KB Natural Earth
 dataset, so it's lazy-loaded via dynamic `import()` only when one of those
 two layers is actually switched on — Intel-only sessions, and every first

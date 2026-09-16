@@ -35,8 +35,40 @@ const RESUME_DELAY_MS = 4000;
 // Self-hosted (copied from our own three-globe dependency's bundled example
 // assets — NASA "Blue Marble" imagery, public domain; not a Google Earth or
 // other third-party product asset). See ARCHITECTURE.md.
+//
+// Mobile variants are the same source images downscaled 2x (4096x2048 →
+// 2048x1024 color, 2048x1024 → 1024x512 bump) — a mobile GPU/connection
+// doesn't benefit from the full-resolution version and it meaningfully
+// cuts texture memory + initial fetch size (color: 1.46MB → 0.29MB).
 const SATELLITE_IMAGE_URL = "/globe/earth-blue-marble.jpg";
 const SATELLITE_BUMP_URL = "/globe/earth-topology.png";
+const SATELLITE_IMAGE_URL_MOBILE = "/globe/earth-blue-marble-mobile.jpg";
+const SATELLITE_BUMP_URL_MOBILE = "/globe/earth-topology-mobile.jpg";
+
+// Module-level (not per-component-instance) guard: the homepage only ever
+// mounts one globe, but this keeps a remount (e.g. fast refresh) from
+// re-triggering the preload fetches — the browser's own HTTP cache would
+// dedupe the network request either way, but this also skips the redundant
+// Image() construction.
+let satelliteTexturesPreloaded = false;
+
+/** Warms the browser cache for the Satellite-mode texture pair matching
+ * this device (mobile vs. desktop size) so switching to Satellite mode is
+ * instant even the first time — called once, shortly after the homepage's
+ * own first paint (never blocking it), regardless of which mode is
+ * currently active. Deliberately fetches only the one size a mobile
+ * device would ever render, not the heavier desktop pair too. */
+function preloadSatelliteTextures(isMobile: boolean) {
+  if (satelliteTexturesPreloaded || typeof window === "undefined") return;
+  satelliteTexturesPreloaded = true;
+  const sources = isMobile
+    ? [SATELLITE_IMAGE_URL_MOBILE, SATELLITE_BUMP_URL_MOBILE]
+    : [SATELLITE_IMAGE_URL, SATELLITE_BUMP_URL];
+  sources.forEach((src) => {
+    const img = new Image();
+    img.src = src;
+  });
+}
 
 export interface ConflictGlobeProps {
   conflicts: Conflict[];
@@ -77,6 +109,27 @@ export function ConflictGlobe({
     setWebglOk(detectWebGL());
   }, []);
   const landFeatures = useMemo(() => getLandFeatures(), []);
+
+  useEffect(() => {
+    // Deferred, not blocking: the homepage's own first paint (globe
+    // included) always finishes first, then the browser idles before
+    // fetching Satellite's textures — regardless of which mode is active,
+    // so switching to Satellite later never waits on a cold fetch.
+    // preloadSatelliteTextures() is idempotent (module-level guard), so
+    // there's nothing meaningful to cancel if this unmounts first.
+    //
+    // Reads window.innerWidth directly rather than closing over the
+    // component's `isMobile` (derived from ResizeObserver-reported
+    // `size`, which still holds its 800px default this early — this
+    // effect fires before that observer's first callback, so the closure
+    // would always see the pre-measurement default, not the real size).
+    const preload = () => preloadSatelliteTextures(window.innerWidth < 640);
+    if (typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(preload, { timeout: 3000 });
+    } else {
+      window.setTimeout(preload, 1200);
+    }
+  }, []);
 
   const isMobile = size.width < 640;
 
@@ -183,8 +236,8 @@ export function ConflictGlobe({
           atmosphereAltitude={0.18}
           showGlobe
           onGlobeReady={() => setReady(true)}
-          globeImageUrl={isSatellite ? SATELLITE_IMAGE_URL : null}
-          bumpImageUrl={isSatellite ? SATELLITE_BUMP_URL : null}
+          globeImageUrl={isSatellite ? (isMobile ? SATELLITE_IMAGE_URL_MOBILE : SATELLITE_IMAGE_URL) : null}
+          bumpImageUrl={isSatellite ? (isMobile ? SATELLITE_BUMP_URL_MOBILE : SATELLITE_BUMP_URL) : null}
           // Continental landmass fill is Intel mode's own stylized
           // rendering; Satellite mode's photographic texture already shows
           // land, so the fill layer is switched off there (political
