@@ -40,6 +40,7 @@ const TABS: { value: TabValue; label: string }[] = [
 export function ConflictDetailClient({ conflict }: { conflict: Conflict }) {
   const [tab, setTab] = useState<TabValue>("overview");
   const baseCountryCode = useAppStore((s) => s.baseCountryCode);
+  const basemapMode = useAppStore((s) => s.mapBasemapMode);
   const country = getCountryByCode(baseCountryCode);
   const events = useMemo(() => getEventsForConflict(conflict.id), [conflict.id]);
   const impact = country ? computeImpact(country, conflict) : null;
@@ -164,6 +165,7 @@ export function ConflictDetailClient({ conflict }: { conflict: Conflict }) {
             <WorldMap
               events={events}
               viewMode="markers"
+              basemapMode={basemapMode}
               onSelectEvent={() => {}}
               className="h-full w-full"
             />

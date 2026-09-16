@@ -4,6 +4,7 @@ import { LayoutGrid, Flame } from "lucide-react";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { EVENT_TYPE_LABEL } from "@/components/events/event-type-icon";
 import { EVENT_TYPES, REGIONS, type EventType, type Region, type TimeRange } from "@/lib/types";
+import { MAP_BASEMAP_MODES, MAP_BASEMAP_MODE_LABEL, type MapBasemapMode } from "@/lib/map/style";
 import { cn } from "@/lib/utils";
 
 export type TypeFilter = "all" | EventType;
@@ -26,6 +27,8 @@ export function MapFilters({
   onTimeRange,
   viewMode,
   onViewMode,
+  basemapMode,
+  onBasemapMode,
   className,
 }: {
   typeFilter: TypeFilter;
@@ -36,6 +39,8 @@ export function MapFilters({
   onTimeRange: (v: TimeRange) => void;
   viewMode: ViewMode;
   onViewMode: (v: ViewMode) => void;
+  basemapMode: MapBasemapMode;
+  onBasemapMode: (v: MapBasemapMode) => void;
   className?: string;
 }) {
   return (
@@ -58,6 +63,12 @@ export function MapFilters({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        <SegmentedControl
+          aria-label="Basemap"
+          options={MAP_BASEMAP_MODES.map((m) => ({ value: m, label: MAP_BASEMAP_MODE_LABEL[m] }))}
+          value={basemapMode}
+          onChange={onBasemapMode}
+        />
         <SegmentedControl aria-label="Time" options={WORLD_TIME_OPTIONS} value={timeRange} onChange={onTimeRange} />
         <SegmentedControl
           aria-label="Region"

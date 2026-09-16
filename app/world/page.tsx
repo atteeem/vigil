@@ -12,6 +12,7 @@ import { MOCK_NOW } from "@/lib/data/constants";
 import { isWithinRange } from "@/lib/utils/time-range";
 import type { ConflictEvent, TimeRange } from "@/lib/types";
 import { GlobeLoading } from "@/components/globe/globe-loading";
+import { useAppStore } from "@/hooks/use-app-store";
 
 const WorldMap = dynamic(() => import("@/components/map/world-map").then((m) => m.WorldMap), {
   ssr: false,
@@ -24,6 +25,8 @@ export default function WorldPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>("24H");
   const [viewMode, setViewMode] = useState<ViewMode>("markers");
   const [selected, setSelected] = useState<ConflictEvent | null>(null);
+  const basemapMode = useAppStore((s) => s.mapBasemapMode);
+  const setBasemapMode = useAppStore((s) => s.setMapBasemapMode);
 
   const filteredEvents = useMemo(() => {
     return MOCK_EVENTS.filter((e) => {
@@ -60,6 +63,7 @@ export default function WorldPage() {
           <WorldMap
             events={filteredEvents}
             viewMode={viewMode}
+            basemapMode={basemapMode}
             onSelectEvent={setSelected}
             className="absolute inset-0 h-full w-full"
           />
@@ -74,6 +78,8 @@ export default function WorldPage() {
                 onTimeRange={setTimeRange}
                 viewMode={viewMode}
                 onViewMode={setViewMode}
+                basemapMode={basemapMode}
+                onBasemapMode={setBasemapMode}
               />
             </div>
           </div>

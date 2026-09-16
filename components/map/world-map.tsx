@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Map as MapLibreMap,
   NavigationControl,
@@ -9,7 +9,7 @@ import {
   type MapLayerMouseEvent,
 } from "maplibre-gl";
 import type { ConflictEvent } from "@/lib/types";
-import { DARK_MAP_STYLE } from "@/lib/map/style";
+import { getMapStyle, getMapTilerKey, type MapBasemapMode } from "@/lib/map/style";
 import { eventsToGeoJSON, type EventFeatureProps } from "@/lib/map/events-to-geojson";
 import { SEVERITY_HEX } from "@/lib/utils/severity";
 
@@ -30,32 +30,148 @@ if (typeof window !== "undefined") {
 export interface WorldMapProps {
   events: ConflictEvent[];
   viewMode: "markers" | "heatmap";
+  basemapMode: MapBasemapMode;
   onSelectEvent: (event: ConflictEvent) => void;
   className?: string;
 }
 
-export function WorldMap({ events, viewMode, onSelectEvent, className }: WorldMapProps) {
+function addEventLayers(map: MapLibreMap, initialData: GeoJSON.FeatureCollection) {
+  // A basemap-mode switch calls setStyle(), which discards every source and
+  // layer added imperatively (they aren't part of the new style document),
+  // so this whole setup must be safely re-runnable, not just mount-once.
+  if (map.getSource("events")) return;
+
+  map.addSource("events", {
+    type: "geojson",
+    data: initialData,
+    cluster: true,
+    clusterMaxZoom: 7,
+    clusterRadius: 46,
+  });
+
+  map.addLayer({
+    id: "clusters",
+    type: "circle",
+    source: "events",
+    filter: ["has", "point_count"],
+    paint: {
+      "circle-color": "#4CC2FF",
+      "circle-opacity": 0.22,
+      "circle-stroke-width": 1.5,
+      "circle-stroke-color": "#4CC2FF",
+      "circle-radius": ["step", ["get", "point_count"], 16, 8, 22, 24, 30],
+    },
+  });
+  map.addLayer({
+    id: "cluster-count",
+    type: "symbol",
+    source: "events",
+    filter: ["has", "point_count"],
+    layout: {
+      "text-field": "{point_count_abbreviated}",
+      "text-font": ["Noto Sans Regular"],
+      "text-size": 12,
+    },
+    paint: { "text-color": "#F3F5F7" },
+  });
+  map.addLayer({
+    id: "unclustered-point",
+    type: "circle",
+    source: "events",
+    filter: ["!", ["has", "point_count"]],
+    paint: {
+      "circle-radius": ["interpolate", ["linear"], ["get", "importance"], 40, 5, 100, 9],
+      "circle-color": [
+        "match",
+        ["get", "severity"],
+        "stable",
+        SEVERITY_HEX.stable,
+        "guarded",
+        SEVERITY_HEX.guarded,
+        "elevated",
+        SEVERITY_HEX.elevated,
+        "high",
+        SEVERITY_HEX.high,
+        "severe",
+        SEVERITY_HEX.severe,
+        "extreme",
+        SEVERITY_HEX.extreme,
+        "#8D96A5",
+      ],
+      "circle-stroke-width": 1.5,
+      "circle-stroke-color": "rgba(8,10,13,0.85)",
+    },
+  });
+  map.addLayer({
+    id: "events-heatmap",
+    type: "heatmap",
+    source: "events",
+    layout: { visibility: "none" },
+    paint: {
+      "heatmap-weight": ["interpolate", ["linear"], ["get", "importance"], 0, 0, 100, 1],
+      "heatmap-intensity": 1.1,
+      "heatmap-radius": 26,
+      "heatmap-color": [
+        "interpolate",
+        ["linear"],
+        ["heatmap-density"],
+        0,
+        "rgba(76,194,255,0)",
+        0.3,
+        "rgba(228,196,65,0.5)",
+        0.6,
+        "rgba(240,146,59,0.7)",
+        1,
+        "rgba(179,18,43,0.9)",
+      ],
+    },
+  });
+}
+
+export function WorldMap({ events, viewMode, basemapMode, onSelectEvent, className }: WorldMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const eventsRef = useRef(events);
   const onSelectRef = useRef(onSelectEvent);
+  const viewModeRef = useRef(viewMode);
+  const appliedModeRef = useRef<MapBasemapMode | null>(null);
+  const apiKey = getMapTilerKey();
+  const [missingKeyNotice, setMissingKeyNotice] = useState(false);
 
   useEffect(() => {
     eventsRef.current = events;
     onSelectRef.current = onSelectEvent;
+    viewModeRef.current = viewMode;
   });
+
+  const applyViewModeVisibility = (map: MapLibreMap) => {
+    const markerVis = viewModeRef.current === "markers" ? "visible" : "none";
+    const heatVis = viewModeRef.current === "heatmap" ? "visible" : "none";
+    ["clusters", "cluster-count", "unclustered-point"].forEach((id) => {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", markerVis);
+    });
+    if (map.getLayer("events-heatmap")) {
+      map.setLayoutProperty("events-heatmap", "visibility", heatVis);
+    }
+  };
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
     const map = new MapLibreMap({
       container: containerRef.current,
-      style: DARK_MAP_STYLE,
+      style: getMapStyle(basemapMode, apiKey),
       center: [20, 25],
       zoom: 1.6,
+      minZoom: 1,
+      maxZoom: 22,
       attributionControl: { compact: true },
     });
     mapRef.current = map;
+    appliedModeRef.current = basemapMode;
+    // NavigationControl provides the +/- zoom buttons; mouse-wheel zoom,
+    // double-click zoom, and touch pinch-zoom are all enabled by default on
+    // MapLibre's interaction handlers and are never disabled here.
     map.addControl(new NavigationControl({ showCompass: false }), "top-right");
 
     // Basemap tiles are a progressive enhancement: if the tile provider is
@@ -68,92 +184,13 @@ export function WorldMap({ events, viewMode, onSelectEvent, className }: WorldMa
       console.error("MapLibre error:", e.error);
     });
 
-    map.on("load", () => {
-      map.addSource("events", {
-        type: "geojson",
-        data: eventsToGeoJSON(eventsRef.current),
-        cluster: true,
-        clusterMaxZoom: 7,
-        clusterRadius: 46,
-      });
-
-      map.addLayer({
-        id: "clusters",
-        type: "circle",
-        source: "events",
-        filter: ["has", "point_count"],
-        paint: {
-          "circle-color": "#4CC2FF",
-          "circle-opacity": 0.22,
-          "circle-stroke-width": 1.5,
-          "circle-stroke-color": "#4CC2FF",
-          "circle-radius": ["step", ["get", "point_count"], 16, 8, 22, 24, 30],
-        },
-      });
-      map.addLayer({
-        id: "cluster-count",
-        type: "symbol",
-        source: "events",
-        filter: ["has", "point_count"],
-        layout: {
-          "text-field": "{point_count_abbreviated}",
-          "text-font": ["Noto Sans Regular"],
-          "text-size": 12,
-        },
-        paint: { "text-color": "#F3F5F7" },
-      });
-      map.addLayer({
-        id: "unclustered-point",
-        type: "circle",
-        source: "events",
-        filter: ["!", ["has", "point_count"]],
-        paint: {
-          "circle-radius": ["interpolate", ["linear"], ["get", "importance"], 40, 5, 100, 9],
-          "circle-color": [
-            "match",
-            ["get", "severity"],
-            "stable",
-            SEVERITY_HEX.stable,
-            "guarded",
-            SEVERITY_HEX.guarded,
-            "elevated",
-            SEVERITY_HEX.elevated,
-            "high",
-            SEVERITY_HEX.high,
-            "severe",
-            SEVERITY_HEX.severe,
-            "extreme",
-            SEVERITY_HEX.extreme,
-            "#8D96A5",
-          ],
-          "circle-stroke-width": 1.5,
-          "circle-stroke-color": "rgba(8,10,13,0.85)",
-        },
-      });
-      map.addLayer({
-        id: "events-heatmap",
-        type: "heatmap",
-        source: "events",
-        layout: { visibility: "none" },
-        paint: {
-          "heatmap-weight": ["interpolate", ["linear"], ["get", "importance"], 0, 0, 100, 1],
-          "heatmap-intensity": 1.1,
-          "heatmap-radius": 26,
-          "heatmap-color": [
-            "interpolate",
-            ["linear"],
-            ["heatmap-density"],
-            0,
-            "rgba(76,194,255,0)",
-            0.3,
-            "rgba(228,196,65,0.5)",
-            0.6,
-            "rgba(240,146,59,0.7)",
-            1,
-            "rgba(179,18,43,0.9)",
-          ],
-        },
-      });
+    // style.load fires on the initial style load AND after every
+    // setStyle() call (basemap-mode switch), so this is the one place that
+    // (re)wires source/layers/interactions — it must stay idempotent-safe
+    // per addEventLayers' own getSource() guard.
+    map.on("style.load", () => {
+      addEventLayers(map, eventsToGeoJSON(eventsRef.current));
+      applyViewModeVisibility(map);
 
       map.on("click", "clusters", (e: MapLayerMouseEvent) => {
         const features = map.queryRenderedFeatures(e.point, { layers: ["clusters"] });
@@ -182,7 +219,23 @@ export function WorldMap({ events, viewMode, onSelectEvent, className }: WorldMa
       map.remove();
       mapRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initial mount only; basemapMode changes are handled by the effect below via setStyle so the map is never re-created.
   }, []);
+
+  // Switching basemap mode calls setStyle() rather than re-creating the map,
+  // which is what preserves center/zoom/bearing/pitch/selection across
+  // Intel/Street/Satellite switches (setStyle never touches the camera).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    setMissingKeyNotice(basemapMode !== "intel" && !apiKey);
+    // Skip the render that mounts the map — its initial style already
+    // matches basemapMode via the constructor above.
+    if (appliedModeRef.current === basemapMode) return;
+    appliedModeRef.current = basemapMode;
+    map.setStyle(getMapStyle(basemapMode, apiKey));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [basemapMode]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -194,15 +247,18 @@ export function WorldMap({ events, viewMode, onSelectEvent, className }: WorldMa
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
-    const markerVis = viewMode === "markers" ? "visible" : "none";
-    const heatVis = viewMode === "heatmap" ? "visible" : "none";
-    ["clusters", "cluster-count", "unclustered-point"].forEach((id) => {
-      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", markerVis);
-    });
-    if (map.getLayer("events-heatmap")) {
-      map.setLayoutProperty("events-heatmap", "visibility", heatVis);
-    }
+    applyViewModeVisibility(map);
   }, [viewMode]);
 
-  return <div ref={containerRef} className={className} role="application" aria-label="Operational conflict map" />;
+  return (
+    <div className={className} style={{ position: "relative" }}>
+      <div ref={containerRef} className="h-full w-full" role="application" aria-label="Operational conflict map" />
+      {missingKeyNotice && (
+        <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-xs rounded-lg border border-border bg-surface/90 px-3 py-2 text-xs text-ink-faint backdrop-blur">
+          Street/Satellite need a MapTiler key. Add <code className="text-ink-dim">NEXT_PUBLIC_MAPTILER_KEY</code> to{" "}
+          <code className="text-ink-dim">.env.local</code> — showing the Intel fallback basemap for now.
+        </div>
+      )}
+    </div>
+  );
 }

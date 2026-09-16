@@ -37,6 +37,25 @@ Status legend: `TODO` / `IN PROGRESS` / `DONE`
 | 24 | Update DESIGN_SYSTEM.md / PROJECT.md / TASKS.md for all Phase 1.5 changes | DONE |
 | 25 | Package and deliver Phase 1.5 build | DONE |
 
+## Phase 2 — Local-Development Functional Build
+
+Full spec: see [[Map Requirements]] / [[Globe Requirements]] / [[Profile and Accounts]] / [[Decisions]] in the Obsidian vault (`D:\GLOBAL CONFLICT CLAUDE`).
+
+| # | Task | Status |
+|---|---|---|
+| 26 | `/world` map: MapTiler-backed Intel/Street/Satellite basemap modes, camera-preserving switch, zoom 1–22, `NEXT_PUBLIC_MAPTILER_KEY` env wiring with graceful no-key fallback | DONE |
+| 27 | Fixed latent bug: CARTO's free anonymous raster tiles now require their own key and were rendering "API KEY REQUIRED" watermarks; no-key fallback is now a clean solid background | DONE |
+| 28 | Map label/zoom hierarchy (continents → buildings) | TODO — relies on MapTiler's built-in style cartography once a real key is added; not hand-tuned per-layer yet |
+| 29 | Liveuamap-style original event icon system (category icons, zoom-based clustering → simplified → full detail) | TODO |
+| 30 | SQLite + Prisma repository layer (sources, raw_ingestion_items, events, event_sources, conflicts) | TODO |
+| 31 | Source ingestion adapters (RSS, manual, Telegram-authorized placeholder) | TODO |
+| 32 | Admin Source Manager (`/admin/sources`) | TODO |
+| 33 | Admin Incoming Reports queue (`/admin/incoming`) | TODO |
+| 34 | Event publishing workflow → live `/world` map | TODO |
+| 35 | Local-development account system (`AccountRepository`/`AuthProvider` abstraction) | TODO |
+| 36 | Profile UI upgrade (create/sign-in, edit profile, picture, preferences affecting live UI) | TODO |
+| 37 | Full responsive/testing pass (Playwright) | TODO |
+
 ## Beyond the Phase 1 floor (built ahead of schedule)
 
 The spec listed these as later-phase, but they were straightforward
@@ -92,6 +111,11 @@ rather than left as stubs:
   intentional dark surface, and MapLibre's vector layers (clusters, point
   markers, heatmap) never depend on tile network access, so the map stays
   fully interactive with zero tiles loaded.
+  **Superseded** — see `D:\GLOBAL CONFLICT CLAUDE\Decisions.md` §
+  Basemap provider. MapTiler is now the basemap provider decision for the
+  map upgrade (high-detail vector mapping, deep zoom, dynamic labels,
+  buildings, multiple styles); this entry is kept for historical context
+  only.
 - MapLibre's own GeoJSON/vector-tile source processing runs in a dedicated
   module Worker whose script URL it derives from `import.meta.url` at
   runtime; that derivation does not resolve to a usable URL under Next.js

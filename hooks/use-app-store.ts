@@ -4,8 +4,10 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { DEFAULT_BASE_COUNTRY } from "@/lib/data/constants";
 import type { TimeRange, MapLayer, Region } from "@/lib/types";
+import type { MapBasemapMode } from "@/lib/map/style";
 
 export type { TimeRange, MapLayer };
+export type { MapBasemapMode };
 
 export type GlobeViewMode = "intel" | "satellite";
 export type ContentSensitivity = "standard" | "reduced";
@@ -51,6 +53,8 @@ interface AppState {
   setGlobeViewMode: (m: GlobeViewMode) => void;
   globeLayers: GlobeLayerVisibility;
   setGlobeLayer: (key: keyof GlobeLayerVisibility, value: boolean) => void;
+  mapBasemapMode: MapBasemapMode;
+  setMapBasemapMode: (m: MapBasemapMode) => void;
   contentSensitivity: ContentSensitivity;
   setContentSensitivity: (v: ContentSensitivity) => void;
   theme: "dark";
@@ -77,6 +81,8 @@ export const useAppStore = create<AppState>()(
       globeLayers: DEFAULT_GLOBE_LAYERS,
       setGlobeLayer: (key, value) =>
         set((s) => ({ globeLayers: { ...s.globeLayers, [key]: value } })),
+      mapBasemapMode: "intel",
+      setMapBasemapMode: (m) => set({ mapBasemapMode: m }),
       contentSensitivity: "standard",
       setContentSensitivity: (v) => set({ contentSensitivity: v }),
       theme: "dark",
@@ -94,6 +100,7 @@ export const useAppStore = create<AppState>()(
         preferredRegions: s.preferredRegions,
         globeViewMode: s.globeViewMode,
         globeLayers: s.globeLayers,
+        mapBasemapMode: s.mapBasemapMode,
         contentSensitivity: s.contentSensitivity,
       }),
       skipHydration: typeof window === "undefined",
