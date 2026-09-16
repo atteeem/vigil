@@ -7,11 +7,45 @@ import {
   config as maplibreConfig,
   type GeoJSONSource,
   type MapLayerMouseEvent,
+  type DataDrivenPropertyValueSpecification,
 } from "maplibre-gl";
 import type { ConflictEvent } from "@/lib/types";
+import { EVENT_TYPES } from "@/lib/types";
 import { getMapStyle, getMapTilerKey, type MapBasemapMode } from "@/lib/map/style";
 import { eventsToGeoJSON, type EventFeatureProps } from "@/lib/map/events-to-geojson";
+import { createEventIconImageData } from "@/lib/map/event-icons";
 import { SEVERITY_HEX } from "@/lib/utils/severity";
+
+// Simplified colored-dot markers ("medium zoom") give way to full
+// category icons ("high zoom") at this threshold — see Map Requirements.md
+// in the Obsidian vault for the intended zoom hierarchy.
+const ICON_DETAIL_ZOOM = 11;
+
+const SEVERITY_COLOR_MATCH: DataDrivenPropertyValueSpecification<string> = [
+  "match",
+  ["get", "severity"],
+  "stable",
+  SEVERITY_HEX.stable,
+  "guarded",
+  SEVERITY_HEX.guarded,
+  "elevated",
+  SEVERITY_HEX.elevated,
+  "high",
+  SEVERITY_HEX.high,
+  "severe",
+  SEVERITY_HEX.severe,
+  "extreme",
+  SEVERITY_HEX.extreme,
+  "#8D96A5",
+];
+
+function registerEventIcons(map: MapLibreMap) {
+  for (const type of EVENT_TYPES) {
+    const id = `event-icon-${type}`;
+    if (map.hasImage(id)) continue;
+    map.addImage(id, createEventIconImageData(type), { sdf: true });
+  }
+}
 
 // MapLibre GL loads its GeoJSON/vector-tile processing in a dedicated
 // module Worker, whose script URL it derives from `import.meta.url` at
@@ -79,27 +113,36 @@ function addEventLayers(map: MapLibreMap, initialData: GeoJSON.FeatureCollection
     type: "circle",
     source: "events",
     filter: ["!", ["has", "point_count"]],
+    // "Medium zoom: simplified category markers" — a plain severity-colored
+    // dot, ceding to the full icon layer once zoomed in past ICON_DETAIL_ZOOM.
+    maxzoom: ICON_DETAIL_ZOOM,
     paint: {
       "circle-radius": ["interpolate", ["linear"], ["get", "importance"], 40, 5, 100, 9],
-      "circle-color": [
-        "match",
-        ["get", "severity"],
-        "stable",
-        SEVERITY_HEX.stable,
-        "guarded",
-        SEVERITY_HEX.guarded,
-        "elevated",
-        SEVERITY_HEX.elevated,
-        "high",
-        SEVERITY_HEX.high,
-        "severe",
-        SEVERITY_HEX.severe,
-        "extreme",
-        SEVERITY_HEX.extreme,
-        "#8D96A5",
-      ],
+      "circle-color": SEVERITY_COLOR_MATCH,
       "circle-stroke-width": 1.5,
       "circle-stroke-color": "rgba(8,10,13,0.85)",
+    },
+  });
+  registerEventIcons(map);
+  map.addLayer({
+    id: "unclustered-point-icon",
+    type: "symbol",
+    source: "events",
+    filter: ["!", ["has", "point_count"]],
+    // "High zoom: full category-specific icons".
+    minzoom: ICON_DETAIL_ZOOM,
+    layout: {
+      // Every value EVENT_TYPES can hold has a matching image registered by
+      // registerEventIcons(), so a plain concat (no match/fallback) is safe.
+      "icon-image": ["concat", "event-icon-", ["get", "eventType"]],
+      "icon-size": ["interpolate", ["linear"], ["get", "importance"], 40, 0.32, 100, 0.5],
+      "icon-allow-overlap": true,
+      "icon-ignore-placement": true,
+    },
+    paint: {
+      "icon-color": SEVERITY_COLOR_MATCH,
+      "icon-halo-color": "rgba(8,10,13,0.85)",
+      "icon-halo-width": 1.2,
     },
   });
   map.addLayer({
@@ -147,7 +190,7 @@ export function WorldMap({ events, viewMode, basemapMode, onSelectEvent, classNa
   const applyViewModeVisibility = (map: MapLibreMap) => {
     const markerVis = viewModeRef.current === "markers" ? "visible" : "none";
     const heatVis = viewModeRef.current === "heatmap" ? "visible" : "none";
-    ["clusters", "cluster-count", "unclustered-point"].forEach((id) => {
+    ["clusters", "cluster-count", "unclustered-point", "unclustered-point-icon"].forEach((id) => {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", markerVis);
     });
     if (map.getLayer("events-heatmap")) {
@@ -198,14 +241,16 @@ export function WorldMap({ events, viewMode, basemapMode, onSelectEvent, classNa
         if (!feature || feature.geometry.type !== "Point") return;
         map.easeTo({ center: feature.geometry.coordinates as [number, number], zoom: map.getZoom() + 2 });
       });
-      map.on("click", "unclustered-point", (e: MapLayerMouseEvent) => {
+      const selectFromFeature = (e: MapLayerMouseEvent) => {
         const feature = e.features?.[0];
         if (!feature) return;
         const props = feature.properties as EventFeatureProps;
         const match = eventsRef.current.find((ev) => ev.id === props.id);
         if (match) onSelectRef.current(match);
-      });
-      ["clusters", "unclustered-point"].forEach((layer) => {
+      };
+      map.on("click", "unclustered-point", selectFromFeature);
+      map.on("click", "unclustered-point-icon", selectFromFeature);
+      ["clusters", "unclustered-point", "unclustered-point-icon"].forEach((layer) => {
         map.on("mouseenter", layer, () => {
           map.getCanvas().style.cursor = "pointer";
         });

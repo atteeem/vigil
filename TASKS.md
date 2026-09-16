@@ -46,7 +46,7 @@ Full spec: see [[Map Requirements]] / [[Globe Requirements]] / [[Profile and Acc
 | 26 | `/world` map: MapTiler-backed Intel/Street/Satellite basemap modes, camera-preserving switch, zoom 1–22, `NEXT_PUBLIC_MAPTILER_KEY` env wiring with graceful no-key fallback | DONE |
 | 27 | Fixed latent bug: CARTO's free anonymous raster tiles now require their own key and were rendering "API KEY REQUIRED" watermarks; no-key fallback is now a clean solid background | DONE |
 | 28 | Map label/zoom hierarchy (continents → buildings) | TODO — relies on MapTiler's built-in style cartography once a real key is added; not hand-tuned per-layer yet |
-| 29 | Liveuamap-style original event icon system (category icons, zoom-based clustering → simplified → full detail) | TODO |
+| 29 | Original Vigil event icon system: 21-category canvas-drawn SDF icon set, severity-tinted, zoom-tiered (clusters → simplified dots → full icons at zoom 11+) | DONE |
 | 30 | SQLite + Prisma repository layer (sources, raw_ingestion_items, events, event_sources, conflicts) | TODO |
 | 31 | Source ingestion adapters (RSS, manual, Telegram-authorized placeholder) | TODO |
 | 32 | Admin Source Manager (`/admin/sources`) | TODO |

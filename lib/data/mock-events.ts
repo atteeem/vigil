@@ -130,7 +130,12 @@ const PROFILES: Record<string, ConflictProfile> = {
   },
 };
 
-const TITLE_TEMPLATES: Record<EventType, string[]> = {
+// Partial: only covers the legacy event types PROFILES[*].eventTypes above
+// actually draws from. The map-upgrade spec's fuller EventType union (see
+// lib/types/severity.ts) adds categories for the icon system and future
+// ingestion, but mock-data generation doesn't emit them (yet), so no
+// templates are needed for them here.
+const TITLE_TEMPLATES: Partial<Record<EventType, string[]>> = {
   airstrike: [
     "Airstrike reported near {loc}",
     "Series of airstrikes reported over {loc}",
@@ -173,7 +178,7 @@ const TITLE_TEMPLATES: Record<EventType, string[]> = {
   ],
 };
 
-const SUMMARY_TEMPLATES: Record<EventType, string> = {
+const SUMMARY_TEMPLATES: Partial<Record<EventType, string>> = {
   airstrike: "Local and regional sources describe strikes affecting the area; the scale and target of the strikes has not been independently confirmed.",
   drone: "Observers reported drone activity in the area. The origin and intended target have not been independently confirmed.",
   ground: "Sources describe an exchange of fire or renewed movement along the contact line; territorial control has not been independently confirmed to have changed.",
@@ -268,7 +273,7 @@ function generateEventsForConflict(conflictId: string, count: number): ConflictE
   for (let i = 0; i < count; i++) {
     const loc = profile.locations[i % profile.locations.length]!;
     const type = profile.eventTypes[Math.floor(rand() * profile.eventTypes.length)]!;
-    const templates = TITLE_TEMPLATES[type];
+    const templates = TITLE_TEMPLATES[type]!;
     const title = templates[i % templates.length]!.replace("{loc}", loc.name);
 
     // more events cluster in the recent past, tail out to 30 days
@@ -294,7 +299,7 @@ function generateEventsForConflict(conflictId: string, count: number): ConflictE
       id: `evt-${conflict.slug}-${i}`,
       slug: `${conflict.slug}-${i}`,
       title,
-      summary: SUMMARY_TEMPLATES[type],
+      summary: SUMMARY_TEMPLATES[type]!,
       eventType: type,
       lat: conflict.lat + jitterLat,
       lng: conflict.lng + jitterLng,
