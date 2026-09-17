@@ -22,7 +22,7 @@ export function RelevantToYouCard({
   const top = getTopConflictsForCountry(country, 3);
 
   return (
-    <GlassCard className={cn("w-full max-w-[300px] p-5", className)}>
+    <GlassCard className={cn("w-full max-w-[300px] p-5", className)} data-testid="relevant-to-you-card">
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-faint">
           Most Relevant To You
@@ -36,6 +36,7 @@ export function RelevantToYouCard({
             <button
               onClick={() => onSelectConflict?.(conflict.slug)}
               className="flex w-full items-center gap-3 rounded-xl px-1.5 py-1 text-left hover:bg-white/5"
+              data-testid={`conflict-quick-select-${conflict.slug}`}
             >
               <span className="text-xs font-semibold text-ink-faint">{i + 1}</span>
               <span className="flex-1 truncate text-sm text-ink">{conflict.shortName}</span>

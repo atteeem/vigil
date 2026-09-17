@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/client";
-import type { Event } from "@prisma/client";
+import type { Event, EventSource, RawIngestionItem, Source } from "@prisma/client";
 import type { DbVerificationStatus } from "@/lib/types/db";
 import type { EventType, Severity } from "@/lib/types";
 
@@ -19,6 +19,23 @@ export interface EventInput {
   importance?: number;
   verificationStatus?: DbVerificationStatus;
   published?: boolean;
+  publishedAt?: Date | null;
+}
+
+export type EventWithSources = Event & {
+  sources: (EventSource & { rawIngestionItem: RawIngestionItem & { source: Source } })[];
+};
+
+const WITH_SOURCES = { sources: { include: { rawIngestionItem: { include: { source: true } } } } } as const;
+
+/** Every event regardless of lifecycle status — the admin list needs
+ * drafts/unpublished events too, unlike the public GET /api/events. */
+export function listAllEventsWithSources(): Promise<EventWithSources[]> {
+  return prisma.event.findMany({ include: WITH_SOURCES, orderBy: { occurredAt: "desc" } });
+}
+
+export function getEventWithSources(id: string): Promise<EventWithSources | null> {
+  return prisma.event.findUnique({ where: { id }, include: WITH_SOURCES });
 }
 
 export function listEvents(filter?: { published?: boolean }): Promise<Event[]> {
@@ -40,10 +57,43 @@ export function updateEvent(id: string, input: Partial<EventInput>): Promise<Eve
   return prisma.event.update({ where: { id }, data: input });
 }
 
-export function setEventPublished(id: string, published: boolean): Promise<Event> {
-  return prisma.event.update({ where: { id }, data: { published } });
+/** Publish sets publishedAt only the first time (never overwritten by a
+ * later republish) — see EVENT_STATUSES' draft-vs-unpublished distinction.
+ * Unpublish preserves publishedAt. For published rows predating this
+ * column, createdAt supplies a legacy history marker on unpublish. */
+export async function setEventPublished(id: string, published: boolean): Promise<Event> {
+  if (published) {
+    const current = await prisma.event.findUnique({ where: { id }, select: { publishedAt: true } });
+    return prisma.event.update({
+      where: { id },
+      data: { published: true, publishedAt: current?.publishedAt ?? new Date() },
+    });
+  }
+  const current = await prisma.event.findUnique({ where: { id } });
+  return prisma.event.update({
+    where: { id },
+    data: {
+      published: false,
+      publishedAt: current?.publishedAt ?? (current?.published ? current.createdAt : null),
+    },
+  });
 }
 
-export function deleteEvent(id: string): Promise<Event> {
-  return prisma.event.delete({ where: { id } });
+/** Deletes an event and, in the same transaction, returns any raw
+ * ingestion items that were ONLY attached to this event back to "pending"
+ * — deleting an Event cascades away its EventSource link rows (see
+ * prisma/schema.prisma), but the underlying reports must not be silently
+ * lost: they go back to the incoming queue for re-review rather than
+ * being left dangling in a "published" state that points at nothing. */
+export async function deleteEventCleanly(id: string): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const links = await tx.eventSource.findMany({ where: { eventId: id }, select: { rawIngestionItemId: true } });
+    await tx.event.delete({ where: { id } });
+    if (links.length > 0) {
+      await tx.rawIngestionItem.updateMany({
+        where: { id: { in: links.map((l) => l.rawIngestionItemId) }, eventLinks: { none: {} } },
+        data: { processingStatus: "pending" },
+      });
+    }
+  });
 }

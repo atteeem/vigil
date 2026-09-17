@@ -108,6 +108,49 @@ test.describe.serial("Stage 1: end-to-end pipeline integrity", () => {
     expect(errors).toEqual([]);
   });
 
+  test("3b. The rendered source link — on both the public event page and the admin event page — uses the exact original fixture article URL, never a placeholder", async ({
+    page,
+    request,
+  }) => {
+    // Re-derive the expected URL from the API rather than trusting a
+    // variable carried over from test 2 — this test's whole point is to
+    // prove the URL survives all the way to a rendered <a href>, so it
+    // re-fetches it fresh from the one source of truth (the published
+    // event's own sources[]) rather than assuming test 2's read was
+    // final.
+    const events = await request.get("/api/events").then((r) => r.json());
+    const found = events.find((e: { id: string }) => e.id === publishedEventId);
+    const expectedUrl = found.sources[0].url;
+    // The fixture RSS item's own <link> (lib/testing/rss-fixtures.ts) —
+    // distinct from the fixture-serving route's URL (the Source.url this
+    // test's source was created with, http://localhost:3000/api/test-
+    // fixtures/rss/feed-a) — this is the "real article URL" the pipeline
+    // must preserve end to end.
+    expect(expectedUrl).toBe("https://fixture.test/feed-a/kyiv-drone");
+    expect(expectedUrl).not.toContain("example.com");
+
+    await page.goto(`/event/${publishedSlug}`);
+    const publicLink = page.getByRole("link", { name: /Original source/ });
+    await expect(publicLink).toHaveAttribute("href", expectedUrl);
+
+    await page.goto(`/admin/events/${publishedEventId}`);
+    await expect(page.getByTestId("admin-event-detail")).toBeVisible();
+    // The admin event view doesn't render a Sources list of its own (see
+    // ARCHITECTURE.md — corroboration is admin-only for now, sources stay
+    // on the public page), so the admin-side leg of this proof is the
+    // /admin/incoming review screen's "Original source" link instead,
+    // which points at the exact same raw item this event was published
+    // from.
+    const items = await request.get(`/api/admin/incoming?sourceId=${sourceId}&status=published`).then((r) => r.json());
+    const publishedItem = items.find((i: { originalTitle: string }) => i.originalTitle.includes("Kyiv"));
+    expect(publishedItem.originalUrl).toBe(expectedUrl);
+
+    await page.goto("/admin/incoming");
+    await page.getByLabel("Status").selectOption("published");
+    const adminLink = page.getByTestId(`incoming-item-${publishedItem.id}`).getByRole("link", { name: /Original source/ });
+    await expect(adminLink).toHaveAttribute("href", expectedUrl);
+  });
+
   test("4. An unrecognized/legacy event type never renders a blank icon or crashes the event detail page — falls back to 'Other'", async ({
     request,
     page,

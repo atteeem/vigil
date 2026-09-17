@@ -49,6 +49,14 @@ export type DbVerificationStatus = (typeof DB_VERIFICATION_STATUSES)[number];
 export const EVENT_SOURCE_RELATIONSHIPS = ["originating", "relay", "corroborating"] as const;
 export type EventSourceRelationship = (typeof EVENT_SOURCE_RELATIONSHIPS)[number];
 
+// Event lifecycle status (admin event management). Derived, not a stored
+// enum column — see lib/data/event-status.ts. "draft" and "unpublished"
+// both mean Event.published === false; they're distinguished by whether
+// publishedAt has ever been set (Event.publishedAt is set once on first
+// publish and is never cleared by Unpublish).
+export const EVENT_STATUSES = ["draft", "published", "unpublished"] as const;
+export type EventStatus = (typeof EVENT_STATUSES)[number];
+
 // Plain JSON-response shapes for the admin UI (client components fetch
 // these from app/api/admin/*, never import @prisma/client directly — the
 // UI layer only ever depends on this file, not on Prisma's generated types).
@@ -204,6 +212,30 @@ export interface EventCorroborationDTO {
   /** ISO timestamp of the most recent linked report — "last corroborated
    * N minutes/hours ago". */
   latestCorroborationAt: string;
+}
+
+/** Admin-only view of an event: the same shape the public UI uses
+ * (title/type/location/sources/etc., via dbEventToConflictEvent), plus
+ * lifecycle fields the public /world and /event/[slug] pages never need.
+ * Deliberately NOT merged into ConflictEvent (lib/types/event.ts) — that
+ * type is shared by public-facing components and has no business knowing
+ * about draft/unpublished state. */
+export interface EventAdminDTO {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  eventType: string;
+  countryCode: string;
+  region: string;
+  occurredAt: string;
+  status: EventStatus;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  conflictId: string | null;
+  sourceCount: number;
+  supportingReportCount: number;
 }
 
 export interface RawIngestionItemWithSourceDTO {

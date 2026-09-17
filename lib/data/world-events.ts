@@ -1,8 +1,9 @@
-import type { Event as DbEvent, EventSource, RawIngestionItem, Source } from "@prisma/client";
 import type { ConflictEvent, SourceRef } from "@/lib/types";
 import type { EventType, Severity } from "@/lib/types";
-import type { DbVerificationStatus } from "@/lib/types/db";
+import type { DbVerificationStatus, EventAdminDTO } from "@/lib/types/db";
 import { prisma } from "@/lib/db/client";
+import type { EventWithSources } from "@/lib/db/repositories/events";
+import { eventStatus } from "@/lib/data/event-status";
 
 const SOURCE_TYPE_LABEL: Record<string, SourceRef["sourceType"]> = {
   rss: "Wire",
@@ -18,10 +19,6 @@ function toUiVerification(status: DbVerificationStatus): { verificationStatus: C
   if (status === "disputed") return { verificationStatus: "reported", disputed: true };
   return { verificationStatus: status, disputed: false };
 }
-
-type EventWithSources = DbEvent & {
-  sources: (EventSource & { rawIngestionItem: RawIngestionItem & { source: Source } })[];
-};
 
 /** Converts a published DB event (+ its linked sources) into the exact
  * shape the existing mock-data-driven UI (WorldMap, EventCard,
@@ -74,6 +71,30 @@ export function dbEventToConflictEvent(event: EventWithSources): ConflictEvent {
         description: event.summary,
       },
     ],
+  };
+}
+
+/** Admin-only view (spec "event management"): includes lifecycle status
+ * and works for draft/unpublished events too, unlike dbEventToConflictEvent
+ * (which is written to feed the public UI — status is irrelevant there
+ * since GET /api/events already filters to published: true). */
+export function toEventAdminDTO(event: EventWithSources): EventAdminDTO {
+  return {
+    id: event.id,
+    slug: event.slug,
+    title: event.title,
+    summary: event.summary,
+    eventType: event.eventType,
+    countryCode: event.countryCode ?? "XX",
+    region: event.region ?? "Global",
+    occurredAt: event.occurredAt.toISOString(),
+    status: eventStatus(event),
+    publishedAt: event.publishedAt ? event.publishedAt.toISOString() : null,
+    createdAt: event.createdAt.toISOString(),
+    updatedAt: event.updatedAt.toISOString(),
+    conflictId: event.conflictId,
+    sourceCount: event.sources.filter((link) => link.isOriginatingSource).length,
+    supportingReportCount: event.sources.length,
   };
 }
 

@@ -65,7 +65,15 @@ export default function HomePage() {
               {MOCK_EVENTS.length} tracked events · {MOCK_CONFLICTS.length} active conflicts
             </p>
           </div>
-          <div className="pointer-events-auto absolute inset-x-0 bottom-8 flex justify-center">
+          <div
+            className={
+              "absolute inset-x-0 bottom-8 flex justify-center transition-opacity duration-200 " +
+              (selectedSlug ? "pointer-events-none opacity-0" : "pointer-events-auto opacity-100")
+            }
+            aria-hidden={Boolean(selectedSlug)}
+            inert={Boolean(selectedSlug)}
+            data-testid="globe-layer-controls"
+          >
             <TimeLayerControls />
           </div>
         </div>

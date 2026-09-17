@@ -143,7 +143,11 @@ test.describe.serial("Event corroboration metadata", () => {
     const row = page.getByTestId(`admin-event-row-${eventId}`);
     await expect(row).toBeVisible();
     await expect(row).toContainText("2"); // independent sourceCount column
-    await row.getByRole("link", { name: /Warehouse fire/ }).click();
+    // Exact match: the row also has "View"/"Edit" icon-link actions
+    // (added by the event-lifecycle-management work) whose accessible
+    // names also contain "Warehouse fire", so a loose substring match is
+    // now ambiguous — only the title link's name is the bare title.
+    await row.getByRole("link", { name: "Warehouse fire reported in Lagos industrial district", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/admin/events/${eventId}$`));
     await expect(page.getByTestId("admin-event-detail")).toBeVisible();
   });

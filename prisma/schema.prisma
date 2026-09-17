@@ -190,6 +190,12 @@ model Event {
   importance  Int      @default(50)
   verificationStatus String @default("unverified") @map("verification_status")
   published   Boolean  @default(false)
+  // Set once, the first time this event is published, and never cleared by
+  // an Unpublish — distinguishes "Draft" (never published: publishedAt is
+  // null) from "Unpublished" (was live, now hidden: publishedAt is set but
+  // published is false) even though both share published: false. See
+  // lib/data/event-status.ts.
+  publishedAt DateTime? @map("published_at")
 
   sources     EventSource[]
 

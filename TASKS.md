@@ -194,6 +194,31 @@ decisions).
 | 94 | `tests/event-corroboration.spec.ts` (4 tests × 2 projects + setup): publishes an event with an originating report, merges a genuinely independent corroborating report from a differently-categorized source, and merges a relay of the same originating source — verifies the admin view shows 2 independent sources / 3 supporting reports / both categories / correct earliest+latest timestamps, that the disclaimer text is present, that the events list links through correctly, and a boundary case (exactly one source) uses singular "source"/"report" wording, not plural | DONE |
 | 95 | Full re-verification on a reset DB: typecheck / lint / production build all clean; full Playwright suite (168 tests) run together — 165 passed, 3 skipped (pre-existing, intentional mobile-viewport skips unrelated to this stage), 0 failed | DONE |
 
+### Phase 2j — Event lifecycle management
+
+| # | Task | Status |
+|---|---|---|
+| 96 | Add nullable `Event.publishedAt` and derived Draft / Published / Unpublished statuses; include all lifecycle states in the admin list | DONE |
+| 97 | Manual event creation with source attribution, editing, publish/unpublish, and confirmed deletion; retain supporting reports and return only reports with no remaining event links to the incoming queue | DONE |
+| 98 | Validate create/edit inputs; preserve exact timestamps, disputed status, location names, and source attribution during editing; show lifecycle request failures | DONE |
+| 99 | Fix repeated-outlet React keys without deduplicating reports; assert no duplicate-key errors through incoming review and public source rendering; verify original article URLs | DONE |
+| 100 | Hide and disable homepage layer controls while a conflict preview is open; restore them on close | DONE |
+| 101 | Verify lifecycle UI/API, corroboration, matching, pipeline integrity, classification, multi-source ingestion, and overlay behavior on desktop/mobile | DONE |
+
+Verification: 128 distinct checks passed across targeted runs, with two
+intentional mobile overlay skips. Tests used a separate SQLite database
+under the ignored `playwright/.cache` directory, seeded for classification
+coverage, with background polling disabled and browser external DNS blocked.
+The live BBC ingestion suite was not run. Desktop/mobile create forms were
+also inspected visually. Production build, typecheck, and lint passed (downloaded browser and
+test artifacts excluded from lint).
+
+The additive migration leaves historical timestamps null. When an older
+published event is unpublished, its creation time becomes a legacy history
+marker so it cannot be mislabeled Draft; it is not an independently known
+first-publication timestamp. New manual and incoming publications record
+their publication time explicitly.
+
 ## Beyond the Phase 1 floor (built ahead of schedule)
 
 The spec listed these as later-phase, but they were straightforward

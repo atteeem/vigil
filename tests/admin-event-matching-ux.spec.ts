@@ -118,6 +118,10 @@ test.describe.serial("Admin event-matching UX", () => {
     page,
     request,
   }) => {
+    const errors: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error") errors.push(msg.text());
+    });
     const items = await request.get(`/api/admin/incoming?sourceId=${feedSourceId}&status=pending`).then((r) => r.json());
     const candidateItem = items.find((i: { originalTitle: string }) => i.originalTitle.includes("Second drone strike"));
 
@@ -152,9 +156,17 @@ test.describe.serial("Admin event-matching UX", () => {
     expect(merged.originalTitle).toBe(candidateItem.originalTitle);
 
     // Available as supporting-evidence source attribution on the event detail page.
+    // Regression coverage: this event now has TWO sources links from the
+    // SAME underlying Source (feedSourceId) — the originating Kyiv report
+    // and this attached one — which previously triggered a React
+    // "duplicate key" console error in the Sources list (it was keyed by
+    // the Source's own id, not something unique per link; see
+    // components/events/event-detail-panel.tsx).
     await page.goto(`/event/${after.slug}`);
     const sourcesSection = page.locator("li", { hasText: candidateItem.source.name });
+    await expect(sourcesSection).toHaveCount(2);
     await expect(sourcesSection.filter({ hasText: candidateItem.originalUrl })).toBeVisible();
+    expect(errors.filter((e) => e.includes("same key"))).toEqual([]);
   });
 
   test("3. 'Create new event' (Publish) remains available as the alternative to attaching, for a report that is not a duplicate", async ({

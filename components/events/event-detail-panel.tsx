@@ -99,7 +99,13 @@ export function EventDetailPanel({
         </p>
         <ul className="mt-2 space-y-2">
           {event.sources.map((s, i) => (
-            <li key={s.id} className="rounded-lg border border-border px-3 py-2 text-xs">
+            // s.id is the underlying Source (outlet)'s id, not this
+            // particular link's — the SAME outlet can legitimately supply
+            // more than one report to one event (e.g. a follow-up
+            // submission via the same feed, or a relay), so two entries
+            // here can share s.id even though they're different reports.
+            // Index-qualifying the key is what actually makes it unique.
+            <li key={`${s.id}-${i}`} className="rounded-lg border border-border px-3 py-2 text-xs">
               <div className="flex items-center justify-between gap-2">
                 <p className="flex items-center gap-1.5 font-medium text-ink">
                   <SourceRoleIcon sourceRole={s.sourceRole} className="h-3.5 w-3.5 shrink-0 text-ink-faint" />

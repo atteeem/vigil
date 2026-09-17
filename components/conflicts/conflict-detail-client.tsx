@@ -190,8 +190,13 @@ export function ConflictDetailClient({ conflict }: { conflict: Conflict }) {
               Phase 1 sources are development/mock data — links are safe
               placeholders (example.com), not live articles.
             </p>
-            {events.flatMap((e) => e.sources.map((s) => ({ ...s, eventTitle: e.title }))).slice(0, 20).map((s) => (
-              <div key={s.id} className="rounded-xl border border-border bg-card/70 p-3.5">
+            {events.flatMap((e) => e.sources.map((s) => ({ ...s, eventTitle: e.title }))).slice(0, 20).map((s, i) => (
+              // s.id is the underlying Source (outlet)'s id — the same
+              // outlet can legitimately appear more than once across this
+              // flattened multi-event list (or even twice on one event),
+              // so the key needs the index too (see event-detail-panel.tsx
+              // for the same fix and full reasoning).
+              <div key={`${s.id}-${i}`} className="rounded-xl border border-border bg-card/70 p-3.5">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-medium text-ink">{s.name}</p>
                   <span className="shrink-0 text-xs text-ink-faint">{timeAgo(s.publishedAt, MOCK_NOW)}</span>

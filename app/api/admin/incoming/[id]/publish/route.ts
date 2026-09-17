@@ -64,6 +64,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         importance: body.importance ?? 50,
         verificationStatus: body.verificationStatus ?? "reported",
         published: true,
+        publishedAt: new Date(),
       },
     });
     await tx.eventSource.create({
