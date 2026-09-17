@@ -180,63 +180,117 @@ function addEventLayers(
   // by event count, so this can never become a wrongly-red area purely
   // from report volume. Recency-independent — an active conflict's base
   // presence persists through reporting gaps (spec #6), so no age input.
-  map.addLayer({
-    id: "conflict-base-heat",
-    type: "circle",
-    source: "conflict-bases",
-    layout: { visibility: "none" },
-    paint: {
-      // spreadKm is the conflict's own events' geographic extent; the
-      // floor (110px even for a tight/single-point cluster) is what makes
-      // a sustained conflict read as a broad AREA rather than a dot the
-      // moment it has 2+ events, and the interpolation scales up sharply
-      // for genuinely regional conflicts (spec's West Bank example).
-      "circle-radius": [
-        "interpolate",
-        ["linear"],
-        ["get", "spreadKm"],
-        0,
-        110,
-        50,
-        160,
-        200,
-        260,
-        600,
-        380,
-      ],
-      "circle-color": SEVERITY_COLOR_MATCH,
-      "circle-opacity": ["interpolate", ["linear"], ["get", "eventCount"], 1, 0.22, 6, 0.42],
-      "circle-blur": 1,
-    },
-  });
-  map.addLayer({
-    id: "events-heat",
-    type: "circle",
-    source: "events-heat",
-    layout: { visibility: "none" },
-    paint: {
-      // Scope (spec #3): importance is the existing "how significant is
-      // this incident" scalar (already drives marker size in markers
-      // mode) — reused here, scaled far wider than the old fixed 26px
-      // heatmap-radius, so a major event visibly dominates its area while
-      // a minor one stays modest.
-      "circle-radius": ["interpolate", ["linear"], ["get", "importance"], 20, 46, 55, 85, 100, 150],
-      // Color = severity, per event, never touched by nearby report
-      // volume (spec #1/#7) — same match expression the marker layers use.
-      "circle-color": SEVERITY_COLOR_MATCH,
-      // Opacity = corroboration x recency (spec #5/#6), multiplied rather
-      // than added so neither factor alone can force full strength: a
-      // single-source report stays modest even if brand new, and a
-      // heavily-corroborated report still fades once old.
-      "circle-opacity": [
-        "*",
-        ["interpolate", ["linear"], ["get", "sourceCount"], 1, 0.4, 3, 0.75, 8, 1],
-        ["interpolate", ["linear"], ["get", "ageHours"], 0, 1, 24, 0.65, 168, 0.25, 720, 0.08],
-      ],
-      "circle-blur": 0.85,
-    },
-  });
+  //
+  // spreadKm is the conflict's own events' geographic extent; the floor
+  // (110px even for a tight/single-point cluster) is what makes a
+  // sustained conflict read as a broad AREA rather than a dot the moment
+  // it has 2+ events, and the interpolation scales up sharply for
+  // genuinely regional conflicts (spec's West Bank example).
+  const conflictBaseRadius: DataDrivenPropertyValueSpecification<number> = [
+    "interpolate",
+    ["linear"],
+    ["get", "spreadKm"],
+    0,
+    110,
+    50,
+    160,
+    200,
+    260,
+    600,
+    380,
+  ];
+  const conflictBaseOpacity: DataDrivenPropertyValueSpecification<number> = [
+    "interpolate",
+    ["linear"],
+    ["get", "eventCount"],
+    1,
+    0.22,
+    6,
+    0.42,
+  ];
+  // Each "heat glow" (conflict base and individual event alike) is three
+  // concentric circles sharing one center rather than one blurred disc —
+  // MapLibre's circle-blur alone fades a single circle's own edge, but
+  // many overlapping same-severity blobs in a dense area still composite
+  // toward a fairly solid-looking core with only the outermost boundary
+  // visibly soft. Stacking a wide/faint outer ring, a medium ring, and a
+  // small/denser core (same shape, just radius/opacity scaled down and
+  // blur reduced toward the center) reads unambiguously as "transparent
+  // at the edges, strongest at the center" — spec #1's smooth radial
+  // gradient requirement — regardless of how many neighboring glows
+  // overlap it.
+  const GRADIENT_RINGS = [
+    { suffix: "outer", radiusScale: 1, opacityScale: 0.32, blur: 1 },
+    { suffix: "mid", radiusScale: 0.62, opacityScale: 0.62, blur: 0.9 },
+    { suffix: "core", radiusScale: 0.3, opacityScale: 1, blur: 0.75 },
+  ] as const;
+  for (const ring of GRADIENT_RINGS) {
+    map.addLayer({
+      id: `conflict-base-heat-${ring.suffix}`,
+      type: "circle",
+      source: "conflict-bases",
+      layout: { visibility: "none" },
+      paint: {
+        "circle-radius": ring.radiusScale === 1 ? conflictBaseRadius : ["*", conflictBaseRadius, ring.radiusScale],
+        "circle-color": SEVERITY_COLOR_MATCH,
+        "circle-opacity":
+          ring.opacityScale === 1 ? conflictBaseOpacity : ["*", conflictBaseOpacity, ring.opacityScale],
+        "circle-blur": ring.blur,
+      },
+    });
+  }
+
+  // Scope (spec #3): importance is the existing "how significant is this
+  // incident" scalar (already drives marker size in markers mode) —
+  // reused here, scaled far wider than the old fixed 26px heatmap-radius,
+  // so a major event visibly dominates its area while a minor one stays
+  // modest.
+  const eventHeatRadius: DataDrivenPropertyValueSpecification<number> = [
+    "interpolate",
+    ["linear"],
+    ["get", "importance"],
+    20,
+    46,
+    55,
+    85,
+    100,
+    150,
+  ];
+  // Opacity = corroboration x recency (spec #5/#6), multiplied rather than
+  // added so neither factor alone can force full strength: a single-source
+  // report stays modest even if brand new, and a heavily-corroborated
+  // report still fades once old.
+  const eventHeatOpacity: DataDrivenPropertyValueSpecification<number> = [
+    "*",
+    ["interpolate", ["linear"], ["get", "sourceCount"], 1, 0.4, 3, 0.75, 8, 1],
+    ["interpolate", ["linear"], ["get", "ageHours"], 0, 1, 24, 0.65, 168, 0.25, 720, 0.08],
+  ];
+  for (const ring of GRADIENT_RINGS) {
+    map.addLayer({
+      id: `events-heat-${ring.suffix}`,
+      type: "circle",
+      source: "events-heat",
+      layout: { visibility: "none" },
+      paint: {
+        "circle-radius": ring.radiusScale === 1 ? eventHeatRadius : ["*", eventHeatRadius, ring.radiusScale],
+        // Color = severity, per event, never touched by nearby report
+        // volume (spec #1/#7) — same match expression the marker layers use.
+        "circle-color": SEVERITY_COLOR_MATCH,
+        "circle-opacity": ring.opacityScale === 1 ? eventHeatOpacity : ["*", eventHeatOpacity, ring.opacityScale],
+        "circle-blur": ring.blur,
+      },
+    });
+  }
 }
+
+const HEAT_LAYER_IDS = [
+  "conflict-base-heat-outer",
+  "conflict-base-heat-mid",
+  "conflict-base-heat-core",
+  "events-heat-outer",
+  "events-heat-mid",
+  "events-heat-core",
+];
 
 export function WorldMap({ events, viewMode, basemapMode, onSelectEvent, className }: WorldMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -260,7 +314,7 @@ export function WorldMap({ events, viewMode, basemapMode, onSelectEvent, classNa
     ["clusters", "cluster-count", "unclustered-point", "unclustered-point-icon"].forEach((id) => {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", markerVis);
     });
-    ["conflict-base-heat", "events-heat"].forEach((id) => {
+    HEAT_LAYER_IDS.forEach((id) => {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", heatVis);
     });
   };

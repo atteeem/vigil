@@ -82,6 +82,23 @@ export function severityFromScore(score: number): Severity {
   return "stable";
 }
 
+/** 0 (stable) to 5 (extreme) — the single place anything needing "which of
+ * these two severities is worse" (e.g. a conflict base layer or a map
+ * cluster taking the worst severity among its events, never an average or
+ * a count) should resolve that comparison, rather than each caller
+ * re-deriving its own SEVERITY_LEVELS.indexOf. */
+export function severityRank(s: string): number {
+  const i = SEVERITY_LEVELS.indexOf(s as Severity);
+  return i === -1 ? 0 : i;
+}
+
+/** The higher-ranked of two severities — the reduction this project uses
+ * everywhere a group of events collapses to one severity (see
+ * severityRank's own comment for why max, not average or count). */
+export function maxSeverity(a: string, b: string): string {
+  return severityRank(b) > severityRank(a) ? b : a;
+}
+
 export const VERIFICATION_LABEL: Record<VerificationStatus, string> = {
   unverified: "Unverified",
   reported: "Reported",

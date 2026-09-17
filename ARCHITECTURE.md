@@ -63,6 +63,41 @@ Next.js Route Handlers / Server Actions
 - Conflict hotspots are rendered as custom HTML/Canvas points sized and
   colored by severity, with a restrained pulse animation (CSS/Motion-driven,
   not per-frame JS) capped to a handful of concurrently pulsing points.
+- **Event cluster markers** (`lib/globe/event-clusters.ts`, spec "globe
+  cluster counts"): three-globe's `pointsData` layer (`pointsMerge: true`)
+  is a single merged mesh for performance, which is exactly why it can't
+  show a per-point count label — there's no per-point DOM/HTML there to
+  put text on. Individual events are clustered instead (`clusterEvents`,
+  a greedy lat/lng-radius grouping — a display-density heuristic, not a
+  precise geospatial partition) and rendered through the SAME
+  `htmlElementsData` layer conflict hotspots already use (three-globe
+  only exposes one such layer; `conflict-globe.tsx`'s `GlobeMarker` union
+  tags each item so one `htmlElement` factory dispatches to
+  `makeHotspotEl` or the new `makeClusterEl`). A cluster of one event
+  renders as a plain severity-colored dot (matching the old merged-points
+  look); two or more show a count overlay, capped at the display label
+  "99+" (never the real count, which `EventCluster.count` still carries
+  internally). The clustering radius scales with the camera's own
+  altitude (`clusterRadiusForAltitude`, polled every 300ms off
+  `globeRef.current.pointOfView()` rather than a per-frame subscription,
+  bucketed to one decimal so unrelated camera motion — e.g. pure
+  rotation, which doesn't change distance — doesn't trigger a
+  recompute), so zooming out merges a region into fewer/larger clusters
+  and zooming in splits them apart.
+- **Borders** (`lib/globe/country-borders.ts`, spec "normal globe
+  borders"): on by default (`DEFAULT_GLOBE_LAYERS.borders` in
+  `hooks/use-app-store.ts`) on the Intel globe specifically — suppressed
+  in Satellite mode regardless of the toggle state, since photographic
+  imagery doesn't need line-art country outlines overlaid. Still
+  lazy-imported only once a session actually needs it (Intel is the
+  default view mode, so this now happens on first paint rather than only
+  when a user opts in), and still capped to one ~22-point ring per
+  country (pre-existing decimation) — the measured cost is a bounded
+  ~0.5–1s one-time hit, not a per-frame cost, which is what makes
+  defaulting it on compatible with the "keep first paint fast" reasoning
+  that originally justified leaving it off (see Decisions.md). Rendered
+  at a fixed, explicit `pathPointAlt` below the landmass fill and every
+  marker layer, so it always stays beneath them.
 - Auto-rotation runs via `requestAnimationFrame` at a slow fixed angular
   velocity, paused on pointer-down, resumed after ~4s of inactivity via a
   debounced timer.
@@ -96,12 +131,12 @@ Next.js Route Handlers / Server Actions
   `config.WORKER_URL` at `/maplibre-gl-worker.mjs` directly so the worker
   loads regardless of the bundler. Re-copy both files from
   `node_modules/maplibre-gl/dist/` if the `maplibre-gl` version changes.
-- **Heatmap mode** (`lib/map/heat-layers.ts`) is two `circle` layers with
-  heavy `circle-blur`, not MapLibre's native `heatmap` layer type — that
-  type's `heatmap-density` is a spatial sum of nearby weighted points, so
-  color is structurally coupled to how many reports are nearby (more
-  reports in an area pushes it toward red regardless of their individual
-  severity). The two layers separate that out:
+- **Heatmap mode** (`lib/map/heat-layers.ts`) is `circle` layers with heavy
+  `circle-blur`, not MapLibre's native `heatmap` layer type — that type's
+  `heatmap-density` is a spatial sum of nearby weighted points, so color is
+  structurally coupled to how many reports are nearby (more reports in an
+  area pushes it toward red regardless of their individual severity). Two
+  feature groups separate that out:
   - `events-heat` (per event): color = `severity` directly (the same
     `SEVERITY_COLOR_MATCH` match expression the marker layers use), radius
     = `importance` (geographic/significance scope, wider range than the
@@ -123,6 +158,16 @@ Next.js Route Handlers / Server Actions
   GeoJSON sources (`events-heat`, `conflict-bases`) separate from the
   clustered `events` source marker-mode uses, and toggle visibility
   together with the existing Markers/Heatmap control — no new UI.
+  Each feature group renders as **three concentric `circle` layers**
+  (`-outer`/`-mid`/`-core` suffixes, `GRADIENT_RINGS` in
+  `world-map.tsx`) sharing one radius/opacity/color expression scaled by
+  a per-ring multiplier, rather than one blurred circle — a single
+  `circle-blur`'d shape still composites toward a fairly solid-looking
+  disc wherever several same-severity glows overlap (the normal case in
+  a genuinely active area), with only the outermost boundary reading as
+  soft; three rings of decreasing radius/increasing opacity make the
+  transparent-edge-to-strong-center gradient unambiguous regardless of
+  how many neighboring glows overlap it.
 
 ## Data model → see `DATA_MODEL.md`
 

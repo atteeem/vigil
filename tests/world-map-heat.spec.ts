@@ -174,10 +174,7 @@ test.describe("World map heatmap rendering (real published events)", () => {
     await publish("Heat test: old isolated low-severity report", 10.0, 20.0, "guarded", monthAgo);
 
     await page.goto("/world");
-    await page.evaluate(() => {
-      const btn = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("Heatmap"));
-      btn?.click();
-    });
+    await page.getByRole("button", { name: "Heatmap" }).click();
     await page.waitForTimeout(1000);
 
     const canvas = page.locator(".maplibregl-canvas");

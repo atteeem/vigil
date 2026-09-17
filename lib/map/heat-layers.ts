@@ -1,7 +1,7 @@
 import type { FeatureCollection, Point } from "geojson";
-import type { ConflictEvent, Severity } from "@/lib/types";
-import { SEVERITY_LEVELS } from "@/lib/types";
+import type { ConflictEvent } from "@/lib/types";
 import { distanceKm } from "@/lib/utils/geo";
+import { maxSeverity } from "@/lib/utils/severity";
 
 // Heatmap-mode rendering data (world-map.tsx). Deliberately kept separate
 // from events-to-geojson.ts's marker-mode feature shape: the heat
@@ -72,11 +72,6 @@ export interface ConflictBaseFeatureProps {
   eventCount: number;
 }
 
-function severityRank(s: string): number {
-  const i = SEVERITY_LEVELS.indexOf(s as Severity);
-  return i === -1 ? 0 : i;
-}
-
 /** Aggregates events sharing a conflictId into one wide "ongoing conflict"
  * base feature per conflict (spec "conflict base layer" — broader heat
  * underneath individual incident hotspots). Events with no conflictId are
@@ -101,7 +96,7 @@ export function conflictBaseGeoJSON(events: ConflictEvent[]): FeatureCollection<
     const lat = group.reduce((sum, e) => sum + e.lat, 0) / group.length;
     const lng = group.reduce((sum, e) => sum + e.lng, 0) / group.length;
     const spreadKm = group.reduce((max, e) => Math.max(max, distanceKm({ lat, lng }, { lat: e.lat, lng: e.lng })), 0);
-    const worst = group.reduce((w, e) => (severityRank(e.severity) > severityRank(w) ? e.severity : w), group[0]!.severity);
+    const worst = group.reduce((w: string, e) => maxSeverity(w, e.severity), group[0]!.severity);
     features.push({
       type: "Feature",
       id: conflictId,

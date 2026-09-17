@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 import type { Conflict, ConflictEvent } from "@/lib/types";
 import { SEVERITY_HEX } from "@/lib/utils/severity";
 import { getLandFeatures } from "@/lib/globe/land-geo";
+import { clusterEvents, clusterRadiusForAltitude, formatClusterCount, type EventCluster } from "@/lib/globe/event-clusters";
 import { ENERGY_ARCS, TRADE_ARCS, type GlobeArc } from "@/lib/globe/arcs";
 import type { MapLayer, GlobeViewMode, GlobeLayerVisibility, ContentSensitivity } from "@/hooks/use-app-store";
 import type { GlobePath, CountryLabel } from "@/lib/globe/country-borders";
@@ -70,6 +71,10 @@ function preloadSatelliteTextures(isMobile: boolean) {
   });
 }
 
+type GlobeMarker =
+  | { kind: "conflict"; lat: number; lng: number; conflict: Conflict }
+  | { kind: "cluster"; lat: number; lng: number; cluster: EventCluster };
+
 export interface ConflictGlobeProps {
   conflicts: Conflict[];
   events?: ConflictEvent[];
@@ -101,6 +106,7 @@ export function ConflictGlobe({
   const [webglOk, setWebglOk] = useState<boolean | null>(null);
   const [borderPaths, setBorderPaths] = useState<GlobePath[]>([]);
   const [countryLabels, setCountryLabels] = useState<CountryLabel[]>([]);
+  const [cameraAltitude, setCameraAltitude] = useState(2.15);
 
   useEffect(() => {
     // One-time client-only capability probe: must run after mount since
@@ -202,16 +208,50 @@ export function ConflictGlobe({
     globeRef.current.pointOfView({ lat: conflict.lat, lng: conflict.lng, altitude: 1.35 }, 900);
   }, [selectedSlug, conflicts, ready]);
 
+  // Event-cluster grouping (spec "globe cluster counts") re-runs whenever
+  // the camera's distance from the globe changes meaningfully, so a
+  // region's markers merge into fewer, larger counts when zoomed out and
+  // split apart again when zoomed in — a cheap polled read of the camera's
+  // own altitude, not a per-frame subscription, since only the bucketed
+  // (rounded) value ever needs to reach React state.
+  useEffect(() => {
+    if (!ready || !globeRef.current) return;
+    const interval = setInterval(() => {
+      const pov = globeRef.current?.pointOfView();
+      if (!pov) return;
+      const rounded = Math.round(pov.altitude * 10) / 10;
+      setCameraAltitude((prev) => (prev === rounded ? prev : rounded));
+    }, 300);
+    return () => clearInterval(interval);
+  }, [ready]);
+
   const arcs = layer === "energy" ? ENERGY_ARCS : layer === "trade" ? TRADE_ARCS : [];
   const isSatellite = viewMode === "satellite";
 
-  const conflictHotspots = globeLayers.conflicts ? conflicts : [];
+  const conflictHotspots = useMemo(
+    () => (globeLayers.conflicts ? conflicts : []),
+    [conflicts, globeLayers.conflicts],
+  );
   const eventPoints = useMemo(() => {
     if (!globeLayers.events) return [];
     // Most-recent-first (mock data is generated pre-sorted); cap harder on
     // mobile to keep the point mesh cheap for "excellent mobile performance".
     return events.slice(0, isMobile ? 25 : 70);
   }, [events, globeLayers.events, isMobile]);
+  const eventClusters = useMemo(
+    () => clusterEvents(eventPoints, clusterRadiusForAltitude(cameraAltitude)),
+    [eventPoints, cameraAltitude],
+  );
+  // Conflict hotspots and event clusters share one HTML-overlay layer
+  // (three-globe only exposes a single htmlElementsData set) — tagged so
+  // one htmlElement factory can render each its own way.
+  const globeMarkers = useMemo<GlobeMarker[]>(
+    () => [
+      ...conflictHotspots.map((c): GlobeMarker => ({ kind: "conflict", lat: c.lat, lng: c.lng, conflict: c })),
+      ...eventClusters.map((c): GlobeMarker => ({ kind: "cluster", lat: c.lat, lng: c.lng, cluster: c })),
+    ],
+    [conflictHotspots, eventClusters],
+  );
 
   if (webglOk === false) {
     return (
@@ -248,9 +288,20 @@ export function ConflictGlobe({
           polygonStrokeColor={() => "rgba(76, 194, 255, 0.28)"}
           polygonAltitude={0.006}
           polygonsTransitionDuration={0}
-          pathsData={globeLayers.borders ? borderPaths : []}
+          // Spec "normal globe borders": subtle country outlines on the
+          // stylized Intel globe specifically — Satellite mode's
+          // photographic imagery doesn't need line-art borders overlaid,
+          // so they're suppressed there even if the Borders layer toggle
+          // (Layers popover) is checked.
+          pathsData={globeLayers.borders && !isSatellite ? borderPaths : []}
           pathPoints={(d: object) => (d as GlobePath).points}
-          pathColor={() => (isSatellite ? "rgba(255,255,255,0.4)" : "rgba(76,194,255,0.4)")}
+          // Same subtle gray-blue as the landmass fill's own polygonCapColor
+          // just above, for visual consistency between the two layers.
+          pathColor={() => "rgba(141,150,165,0.4)"}
+          // Kept low and explicit (below the landmass fill at 0.006 and
+          // htmlElements/markers at 0.012) so borders always render
+          // beneath every other overlay, never on top.
+          pathPointAlt={() => 0.002}
           // Deliberately NOT setting pathStroke: a numeric stroke switches
           // three-globe to its "fat line" renderer (a Line2 + brand-new
           // LineMaterial + LineGeometry per path, instanced-geometry-backed
@@ -273,21 +324,16 @@ export function ConflictGlobe({
           labelAltitude={0.011}
           labelResolution={2}
           labelsTransitionDuration={0}
-          pointsData={eventPoints}
-          pointLat={(d: object) => (d as ConflictEvent).lat}
-          pointLng={(d: object) => (d as ConflictEvent).lng}
-          pointColor={(d: object) => SEVERITY_HEX[(d as ConflictEvent).severity]}
-          pointAltitude={0.006}
-          pointRadius={0.22}
-          pointResolution={6}
-          pointsMerge
-          htmlElementsData={conflictHotspots}
-          htmlLat={(d: object) => (d as Conflict).lat}
-          htmlLng={(d: object) => (d as Conflict).lng}
+          htmlElementsData={globeMarkers}
+          htmlLat={(d: object) => (d as GlobeMarker).lat}
+          htmlLng={(d: object) => (d as GlobeMarker).lng}
           htmlAltitude={0.012}
-          htmlElement={(d: object) =>
-            makeHotspotEl(d as Conflict, onSelectConflict, layer, contentSensitivity)
-          }
+          htmlElement={(d: object) => {
+            const marker = d as GlobeMarker;
+            return marker.kind === "conflict"
+              ? makeHotspotEl(marker.conflict, onSelectConflict, layer, contentSensitivity)
+              : makeClusterEl(marker.cluster, layer);
+          }}
           arcsData={arcs}
           arcColor={(d: object) => (d as GlobeArc).color}
           arcDashLength={0.4}
@@ -342,6 +388,44 @@ function makeHotspotEl(
     e.stopPropagation();
     onSelect(conflict);
   });
+
+  return wrapper;
+}
+
+/** Spec "globe cluster counts": a single event renders as a plain
+ * severity-colored dot (matching the old merged-points look); a group of
+ * two or more (see clusterEvents) grows the same dot and overlays its
+ * count, capped at "99+" — never the underlying number past that, per
+ * spec. Color is the cluster's worst severity (see EventCluster's own
+ * comment for why max, not an average or the count itself). */
+function makeClusterEl(cluster: EventCluster, layer: MapLayer): HTMLElement {
+  const wrapper = document.createElement("div");
+  const count = cluster.count;
+  wrapper.setAttribute(
+    "aria-label",
+    count === 1
+      ? `1 report, severity ${cluster.severity}`
+      : `${count} reports in this area, worst severity ${cluster.severity}`,
+  );
+  wrapper.style.pointerEvents = "none";
+  wrapper.style.transform = "translate(-50%, -50%)";
+
+  const dimmed = layer === "energy" || layer === "trade";
+  const color = SEVERITY_HEX[cluster.severity];
+  // Grows with count but caps out — a cluster of hundreds shouldn't
+  // dwarf the globe, just read as "a lot".
+  const size = count === 1 ? 10 : 16 + Math.min(count, 30) * 0.55;
+
+  wrapper.innerHTML = `
+    <span style="position:relative;display:flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;opacity:${dimmed ? 0.35 : 1};">
+      <span style="position:absolute;inset:0;border-radius:9999px;background:${color};box-shadow:0 0 0 2px rgba(8,10,13,0.8);"></span>
+      ${
+        count > 1
+          ? `<span style="position:relative;font:600 ${Math.min(11, 8 + size / 10)}px system-ui, sans-serif;color:#F3F5F7;text-shadow:0 1px 2px rgba(8,10,13,0.9);">${formatClusterCount(count)}</span>`
+          : ""
+      }
+    </span>
+  `;
 
   return wrapper;
 }

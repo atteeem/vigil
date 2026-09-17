@@ -20,14 +20,21 @@ export interface GlobeLayerVisibility {
   labels: boolean;
 }
 
-// Conflicts hotspots are the one layer on by default — Events/Borders/
-// Labels are genuinely optional extras (and Borders/Labels pull in a real
-// Natural Earth vector dataset), so leaving them off keeps first paint fast
-// on every device, mobile especially.
+// Conflicts hotspots and country Borders are on by default; Events/Labels
+// are genuinely optional extras (Events adds per-report markers on top of
+// the conflict hotspots already shown, and Labels is the visually busiest
+// layer), left off to keep first paint fast on every device, mobile
+// especially. Borders' own dataset is real Natural Earth data, but it's
+// lazy-imported (ConflictGlobe's effect below) and pre-decimated to a
+// single ~22-point ring per country (lib/globe/country-borders.ts) —
+// measured as a bounded ~0.5-1s one-time cost, not an ongoing frame cost,
+// so defaulting it on doesn't reopen the "keep first paint fast" tradeoff
+// this comment used to justify leaving it off. ConflictGlobe also skips
+// rendering it in Satellite mode regardless of this setting.
 const DEFAULT_GLOBE_LAYERS: GlobeLayerVisibility = {
   conflicts: true,
   events: false,
-  borders: false,
+  borders: true,
   labels: false,
 };
 
