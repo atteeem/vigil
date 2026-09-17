@@ -178,6 +178,34 @@ export type DuplicateLikelihood = (typeof DUPLICATE_LIKELIHOODS)[number];
 export const INCOMING_SORTS = ["newest", "oldest", "importance", "duplicate"] as const;
 export type IncomingSort = (typeof INCOMING_SORTS)[number];
 
+/** Event-level corroboration metadata (spec "Event corroboration
+ * metadata"): purely descriptive of how many reports/sources back an
+ * already-published event, and from what kinds of sources — NOT a
+ * credibility or truth score. Multiple sources corroborating each other
+ * doesn't make an event more true, only more independently reported; the
+ * admin UI must present these fields as "N sources say this happened",
+ * never as a verdict. Computed fresh from Event.sources at read time
+ * (same "derive, don't store" pattern as Event.sourceCount) — no new
+ * schema needed. */
+export interface EventCorroborationDTO {
+  /** Every linked report, including relays of the same originating
+   * source — "how many times has this been reported," not "by how many
+   * independent parties." */
+  supportingReportCount: number;
+  /** Only originating/corroborating links (mirrors ConflictEvent.sourceCount)
+   * — a relay of the same originating report does not add to this. */
+  independentSourceCount: number;
+  /** Distinct SourceRef.sourceType values represented, e.g. ["Wire", "OSINT"]
+   * — powers UI text like "Official + local media". */
+  sourceCategories: string[];
+  /** ISO timestamp of the earliest linked report (first time this was
+   * reported by anyone). */
+  earliestSourceAt: string;
+  /** ISO timestamp of the most recent linked report — "last corroborated
+   * N minutes/hours ago". */
+  latestCorroborationAt: string;
+}
+
 export interface RawIngestionItemWithSourceDTO {
   id: string;
   sourceId: string;

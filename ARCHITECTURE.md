@@ -273,6 +273,24 @@ migration described later in this file.
   item. Rejected items stay in the database (audit/history) but are
   excluded from `/admin/incoming`'s default pending view, never create an
   `Event`, and therefore never appear on the public map.
+- **Event corroboration metadata** (spec "Event corroboration metadata",
+  admin-only for now): `/admin/events` (list) and `/admin/events/[id]`
+  (detail) surface, for each published event, its supporting-report
+  count (every linked `EventSource`, relays included), independent-source
+  count (mirrors `Event.sourceCount` — relays excluded), the distinct
+  source categories represented (e.g. "News + Official"), and the
+  earliest/most-recent linked-report timestamps ("First reported" /
+  "Last corroborated"). All four are computed fresh from `Event.sources`
+  by `getEventCorroboration()` (`lib/data/corroboration.ts`) — no new
+  schema, same "derive, don't store" pattern as `sourceCount` itself.
+  That module has zero server-only dependencies (no Prisma import) so it
+  can run identically in an API route or directly in a client component.
+  The panel states outright that this is descriptive metadata, not a
+  credibility or truth score (spec's explicit requirement) — multiple
+  sources reporting the same thing corroborates that it was reported,
+  not that it happened. Deliberately admin-only: the public `/world`/
+  `/event/[slug]` UI is unchanged, per the spec's "don't redesign the
+  entire public UI yet" scope for this stage.
 - **Conflict management** (`/admin/conflicts`): full CRUD over the
   `Conflict` table — create/edit/enable-disable (status)/archive/
   delete-only-when-safe, plus each row's linked-event count

@@ -180,6 +180,20 @@ the same engine instead of a redundant one.
 | 90 | Fixed a cross-test contamination bug the new suite itself introduced: its "Create new event" test originally published the shared `feed-a` fixture's bakery article under its unmodified original title, which collided with `classification.spec.ts`/`multi-source-ingestion.spec.ts` assertions that that exact title is never published anywhere in the live `/api/events` feed (their own no-auto-publish proof). Fixed by overriding the title before publish, same pattern already used for the Kyiv reference event | DONE |
 | 91 | Full re-verification on a reset DB: typecheck / lint clean; `admin-event-matching-ux.spec.ts` (8/8), `classification.spec.ts` (34/34), `multi-source-ingestion.spec.ts` (20/20), `event-matching.spec.ts` (18/18) all pass together, 80/80, with no cross-test interference | DONE |
 
+### Phase 2i — Stage 5: event corroboration metadata
+
+No schema change needed — every field below is derived at read time from
+data `Event.sources`/`EventSource` already had (same "compute, don't
+store" pattern as `Event.sourceCount`, Phase 1.5's severity/verification
+decisions).
+
+| # | Task | Status |
+|---|---|---|
+| 92 | `EventCorroborationDTO` (`lib/types/db.ts`) + `getEventCorroboration()` (`lib/data/corroboration.ts`, deliberately dependency-free — no Prisma import — so it runs in both server routes and client components without pulling the Prisma client into the browser bundle): supporting-report count (every linked report, including relays), independent-source count (mirrors existing `sourceCount`), distinct source categories represented, earliest-report timestamp, latest-corroboration timestamp (the most recent linked report of *any* kind — a relay still shows the event is still being actively reported) | DONE |
+| 93 | New admin-only views: `/admin/events` (published events list — title/type/location/occurred/source count, linking into each) and `/admin/events/[id]` (event summary + a "Corroboration" panel: "N independent sources", "N supporting reports", categories joined as e.g. "News + Official", "Last corroborated Nh ago", "First reported Nh ago", plus an explicit line that this is descriptive metadata, not a truth/credibility score — spec's explicit requirement). "Events" added to the admin nav (`app/admin/layout.tsx`). No changes to the public `/world`/`/event/[slug]` UI — corroboration is admin-only for now, per spec | DONE |
+| 94 | `tests/event-corroboration.spec.ts` (4 tests × 2 projects + setup): publishes an event with an originating report, merges a genuinely independent corroborating report from a differently-categorized source, and merges a relay of the same originating source — verifies the admin view shows 2 independent sources / 3 supporting reports / both categories / correct earliest+latest timestamps, that the disclaimer text is present, that the events list links through correctly, and a boundary case (exactly one source) uses singular "source"/"report" wording, not plural | DONE |
+| 95 | Full re-verification on a reset DB: typecheck / lint / production build all clean; full Playwright suite (168 tests) run together — 165 passed, 3 skipped (pre-existing, intentional mobile-viewport skips unrelated to this stage), 0 failed | DONE |
+
 ## Beyond the Phase 1 floor (built ahead of schedule)
 
 The spec listed these as later-phase, but they were straightforward
@@ -473,3 +487,33 @@ rather than left as stubs:
   as a real event must override its title first (as already done for
   the Kyiv reference event) to avoid this class of cross-test
   contamination.
+
+### Phase 2i decisions
+
+- **Corroboration metadata needed zero schema changes.** Every field
+  (supporting-report count, independent-source count, categories,
+  earliest/latest timestamps) is derivable from `Event.sources` at read
+  time — the same "compute, don't store" pattern Phase 1.5 established
+  for severity/verification. `getEventCorroboration()` lives in its own
+  module (`lib/data/corroboration.ts`) with zero server-only
+  dependencies specifically so it's safe to call from client components
+  too, without pulling Prisma into the browser bundle.
+- **A relay's timestamp still extends "last corroborated."** Only
+  independent sources count toward `independentSourceCount`, but
+  *any* linked report — relay included — updates
+  `latestCorroborationAt`. A relay proves the event is still being
+  actively reported/discussed even though it isn't a new independent
+  witness; conflating "last reported at all" with "last independently
+  confirmed" would understate how current an event's coverage is.
+- **A brand-new `/admin/events` view, not an extension of the public
+  `/event/[slug]` page.** The spec explicitly scoped this to "admin
+  event view first, don't redesign the entire public UI yet" — adding
+  the panel to the public page would have been a public UI change by
+  definition, however small.
+- **The corroboration panel states outright that it isn't a
+  credibility score.** Spec requirement, not a suggestion: "3
+  independent sources" / "Official + local media" describe how many
+  reports and what kinds back an event, never whether it's true — the
+  panel's own copy says this explicitly, the same information-ethics
+  posture Phase 1's market/briefing pages already follow (non-causal,
+  descriptive language only).
