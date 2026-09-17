@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { LocationPicker } from "@/components/admin/location-picker";
 import { EVENT_TYPES, SEVERITY_LEVELS, REGIONS } from "@/lib/types";
 import { EVENT_TYPE_LABEL, getEventTypeLabel } from "@/components/events/event-type-icon";
+import { EXTRACTED_FACT_FIELD_LABEL } from "@/lib/ingestion/field-labels";
 import {
   DB_VERIFICATION_STATUSES,
   PROCESSING_STATUSES,
@@ -58,23 +59,7 @@ const AGE_OPTIONS: { label: string; value: string }[] = [
   { label: "Last 7 days", value: "168" },
 ];
 
-const FACT_FIELD_LABEL: Record<ExtractedFactField, string> = {
-  eventType: "Event type",
-  title: "Title",
-  summary: "Summary",
-  countryCode: "Country",
-  region: "Region",
-  locationName: "Location name",
-  latitude: "Latitude",
-  longitude: "Longitude",
-  occurredAt: "Occurred at",
-  actor: "Actor",
-  casualtiesKilled: "Killed",
-  casualtiesInjured: "Injured",
-  infrastructureDamage: "Infrastructure damage",
-  severity: "Severity",
-  conflictId: "Conflict",
-};
+const FACT_FIELD_LABEL = EXTRACTED_FACT_FIELD_LABEL;
 
 // Below this, a fact is visually flagged as low-confidence (spec "make
 // low-confidence fields visually distinct") — chosen to match this

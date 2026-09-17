@@ -14,6 +14,17 @@ export interface SourceRef {
   note?: string;
 }
 
+/** A single accepted change from an event's immutable history ledger
+ * (Live Event Updates spec) — deliberately loose/display-only typing
+ * here (no ExtractedFactField import) since lib/types/event.ts is the
+ * plain public-facing model, kept independent of DB-specific types. */
+export interface EventUpdateHistoryEntry {
+  field: string;
+  oldValue: string | null;
+  newValue: string;
+  changedAt: string; // ISO datetime
+}
+
 export interface ConflictEvent {
   id: string;
   slug: string;
@@ -33,4 +44,22 @@ export interface ConflictEvent {
   sourceCount: number;
   sources: SourceRef[];
   timeline: { label: string; time: string; description: string }[];
+  // Live Event Updates (spec "Live Event Updates"): all optional and
+  // omitted for mock events — only DB-backed events populate them.
+  // createdAt/updatedAt power "updated X ago" on the public page (only
+  // shown when updatedAt is meaningfully later than createdAt, i.e. an
+  // accepted change actually happened, not just on every event).
+  createdAt?: string;
+  updatedAt?: string;
+  // Populated only via an accepted EventUpdateProposal — never by direct
+  // manual entry (see prisma/schema.prisma's Event model comment).
+  actors?: string[];
+  casualtiesKilled?: number | null;
+  casualtiesInjured?: number | null;
+  infrastructureDamage?: string[];
+  // Concise, public-safe update history (spec "optionally show a concise
+  // update history") — every row here is already an ACCEPTED change by
+  // construction (see EventHistoryEntryDTO), so no extra filtering is
+  // needed before showing it.
+  updateHistory?: EventUpdateHistoryEntry[];
 }

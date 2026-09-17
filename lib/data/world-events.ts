@@ -1,9 +1,11 @@
 import type { ConflictEvent, SourceRef } from "@/lib/types";
 import type { EventType, Severity } from "@/lib/types";
 import type { DbVerificationStatus, EventAdminDTO } from "@/lib/types/db";
+import type { EventHistory } from "@prisma/client";
 import { prisma } from "@/lib/db/client";
 import type { EventWithSources } from "@/lib/db/repositories/events";
 import { eventStatus } from "@/lib/data/event-status";
+import { parseJsonArray } from "@/lib/ingestion/event-update-proposals";
 
 const SOURCE_TYPE_LABEL: Record<string, SourceRef["sourceType"]> = {
   rss: "Wire",
@@ -23,8 +25,11 @@ function toUiVerification(status: DbVerificationStatus): { verificationStatus: C
 /** Converts a published DB event (+ its linked sources) into the exact
  * shape the existing mock-data-driven UI (WorldMap, EventCard,
  * EventDetailPanel, MapFilters) already renders — so published events
- * appear on /world without any change to those components. */
-export function dbEventToConflictEvent(event: EventWithSources): ConflictEvent {
+ * appear on /world without any change to those components. `history` is
+ * optional and only populated by getDbEventBySlug's single-event lookup
+ * (spec "Live Event Updates" §7 "optionally show a concise update
+ * history") — the /world feed and admin list don't need it per-event. */
+export function dbEventToConflictEvent(event: EventWithSources & { history?: EventHistory[] }): ConflictEvent {
   const { verificationStatus, disputed } = toUiVerification(event.verificationStatus as DbVerificationStatus);
   const sources: SourceRef[] = event.sources.map((link) => ({
     id: link.rawIngestionItem.source.id,
@@ -71,6 +76,21 @@ export function dbEventToConflictEvent(event: EventWithSources): ConflictEvent {
         description: event.summary,
       },
     ],
+    createdAt: event.createdAt.toISOString(),
+    updatedAt: event.updatedAt.toISOString(),
+    // Populated only via an accepted EventUpdateProposal (spec "Live
+    // Event Updates") — undefined/empty for an event nothing has ever
+    // been accepted onto yet, same as a fresh mock event.
+    actors: parseJsonArray(event.actors),
+    casualtiesKilled: event.casualtiesKilled,
+    casualtiesInjured: event.casualtiesInjured,
+    infrastructureDamage: parseJsonArray(event.infrastructureDamage),
+    updateHistory: event.history?.map((h) => ({
+      field: h.field,
+      oldValue: h.oldValue,
+      newValue: h.newValue,
+      changedAt: h.createdAt.toISOString(),
+    })),
   };
 }
 
@@ -107,7 +127,14 @@ export function toEventAdminDTO(event: EventWithSources): EventAdminDTO {
 export async function getDbEventBySlug(slug: string): Promise<ConflictEvent | null> {
   const event = await prisma.event.findFirst({
     where: { slug, published: true },
-    include: { sources: { include: { rawIngestionItem: { include: { source: true } } } } },
+    include: {
+      sources: { include: { rawIngestionItem: { include: { source: true } } } },
+      // Concise, public-safe update history (spec §7 "optionally show a
+      // concise update history if cleanly supported") — capped at the 5
+      // most recent accepted changes; the admin history view
+      // (GET /api/admin/events/[id]/history) is unlimited.
+      history: { orderBy: { createdAt: "desc" }, take: 5 },
+    },
   });
   return event ? dbEventToConflictEvent(event) : null;
 }

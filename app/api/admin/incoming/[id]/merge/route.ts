@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
 import { linkEventSource } from "@/lib/db/repositories/event-sources";
 import { setProcessingStatus } from "@/lib/db/repositories/raw-ingestion-items";
+import { proposeEventUpdatesFromReport } from "@/lib/db/repositories/event-updates";
 import type { EventSourceRelationship } from "@/lib/types/db";
 
 interface MergeBody {
@@ -26,5 +27,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const relationship = body.relationship ?? "corroborating";
   await linkEventSource(body.eventId, id, relationship, relationship !== "relay");
   const item = await setProcessingStatus(id, "merged");
-  return NextResponse.json(item);
+
+  // Live Event Updates (spec "when new reports match an existing event,
+  // use their structured extracted facts to propose/update the event"):
+  // attachment itself (above) is the "match" action; this is what turns
+  // that match into reviewable proposals. Never fails the merge itself —
+  // a report with no extracted facts yet just proposes nothing.
+  const proposals = await proposeEventUpdatesFromReport(body.eventId, id);
+
+  return NextResponse.json({ ...item, proposalsCreated: proposals.length });
 }

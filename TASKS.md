@@ -288,6 +288,66 @@ their publication time explicitly.
   (`existing.originalValue ?? existing.value`), so the true source
   claim is never lost to provenance.
 
+### Phase 2n — Live Event Updates
+
+| # | Task | Status |
+|---|---|---|
+| 121 | New `EventUpdateProposal` and `EventHistory` tables (`prisma/schema.prisma`, additive migration), plus nullable `actors`/`casualtiesKilled`/`casualtiesInjured`/`infrastructureDamage` columns on `Event` — populated only through an accepted proposal, never by direct manual entry | DONE |
+| 122 | `lib/ingestion/fact-diff.ts` (extracted from the Structured Event Intelligence facts route): shared `pickEffectiveFact()`/`valuesDiffer()` so both the pre-merge candidate preview and the new post-merge proposal generator resolve multi-fact fields and tolerance-compare values identically | DONE |
+| 123 | `lib/ingestion/event-update-proposals.ts`: pure `buildProposalDrafts(event, facts)` comparing one report's extracted facts against one event's current state — scalar fields (title/summary/location/coordinates/time/severity/type/conflict) compare one-to-one; actors/infrastructure damage propose any new value not already in the event's array; casualty fields allow multiple simultaneous conflicting proposals per field | DONE |
+| 124 | `lib/db/repositories/event-updates.ts`: persistence + `acceptProposal()`/`rejectProposal()`/`acceptAllSafeProposals()` — accept mutates the event and writes an immutable `EventHistory` row in one transaction; reject only flips the proposal's own status, touching neither the event nor history; `hasConflict` computed fresh from sibling pending proposals on every read | DONE |
+| 125 | Wired into `POST /api/admin/incoming/[id]/merge` (proposal generation right after attachment) and four new routes: `GET/PATCH .../events/[id]/proposals[/​[proposalId]]`, `POST .../proposals/accept-safe`, `GET .../events/[id]/history` | DONE |
+| 126 | `/admin/events/[id]`: new "Supporting Reports", "Pending Updates" (current → proposed, change-type badge, confidence, provenance, conflict warning, Accept/Reject, bulk "Accept all safe"), and "History" panels; inline actors/casualties/damage once accepted; "Updated X ago" driven by the latest `EventHistory` entry, not `Event.updatedAt` (see Decisions) | DONE |
+| 127 | Public `/event/[slug]`: "Updated X ago" (same history-driven logic), inline actors/casualties/damage, and an optional concise "Recent Updates" section (last 5 accepted changes) — `EventHistory` rows are safe to show as-is since only accepted changes ever reach that table | DONE |
+| 128 | `tests/event-update-proposals.spec.ts` (11 pure-function checks) + `tests/event-update-proposals-api.spec.ts` (7 API-level checks): unchanged/changed/new-value fields, competing casualty figures, rejected facts excluded, effective-fact resolution, epsilon/tolerance compares, provenance passthrough, matching-report attach + proposal generation, safe-metadata auto-update, casualty-requires-approval, accept mutates event + writes history, reject leaves event untouched, competing values flagged conflicting | DONE |
+| 129 | Full re-verification on a reset DB: typecheck/lint/build clean; full Playwright suite (280 tests across Desktop + Mobile) — 275 passed, 5 pre-existing skips, 0 failed. Manually verified in-browser: merged two conflicting-casualty reports into a published event, confirmed the Pending Updates panel showed both figures with a conflict badge, accepted a severity change and watched History/`updatedAt`-derived "Updated X ago" update on both the admin and public event pages with zero console errors, then used "Accept all safe" and confirmed only proposals at/above the confidence floor were applied | DONE |
+
+### Phase 2n decisions
+
+- **`Event.updatedAt` is the wrong signal for "Updated X ago."** It
+  first appeared to work, then a real bug surfaced during manual
+  verification: publishing/unpublishing an event (a lifecycle action,
+  not a content change) also bumps Prisma's `@updatedAt`, which made a
+  freshly-published, never-edited event show a misleading "Updated just
+  now." Fixed by driving the badge from the most recent `EventHistory`
+  row instead (`history.length > 0`, timestamp from `history[0]`) on
+  both the admin and public pages — history rows are created ONLY by an
+  accepted proposal, so the badge now means exactly what the spec asked
+  for.
+- **`EventHistory` needs no "is this safe to show publicly" filter,
+  by construction.** A row is created in exactly one place
+  (`acceptProposal()`), and only for an ACCEPTED proposal — a rejected
+  proposal never produces one. So "do not expose rejected/unverified
+  proposals publicly" is satisfied simply by never querying
+  `EventUpdateProposal` from any public-facing code path, not by
+  filtering a shared table.
+- **Proposals store a snapshot of `currentValue`, not a live
+  reference.** If a second, later proposal for the same field gets
+  accepted first, an earlier pending proposal's displayed "current
+  value" stays as it was when that proposal was created rather than
+  silently updating underneath the admin reviewing it — "make it
+  obvious what will change" means obvious relative to what's on screen,
+  not a value that can drift mid-review.
+- **"Accept all safe" is still an admin action, not an automatic
+  path.** Every field this milestone proposes is explicitly a "factual
+  change" the spec keeps approval-based (casualties, location,
+  severity, actors, event type, summary, conflict) — there is no
+  unattended auto-apply anywhere in this pipeline. The genuinely
+  automatic half of spec §3 (source attachment, corroboration count,
+  lastCorroborated) required zero new code, because it was already
+  true: `EventSource` links and `lib/data/corroboration.ts`'s
+  derive-at-read-time corroboration metadata reflect a new attachment
+  immediately, with no proposal or approval step involved at all.
+- **List-valued fields (actors, infrastructure damage) needed a
+  different comparison shape than scalar fields, not a forced fit.**
+  Trying to express "the report named two new actors" as one
+  current-value/proposed-value pair would have meant either losing one
+  of the actors or inventing an array-diff encoding inside a plain
+  string column. Proposing one row per new, not-already-present value
+  is simpler and reuses the exact "one fact-claim per row" pattern
+  Structured Event Intelligence already established for the same
+  reason.
+
 ## Beyond the Phase 1 floor (built ahead of schedule)
 
 The spec listed these as later-phase, but they were straightforward

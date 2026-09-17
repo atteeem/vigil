@@ -137,6 +137,8 @@ model RawIngestionItem {
 
   eventLinks      EventSource[]
   extractedFacts  ExtractedFact[]
+  updateProposals EventUpdateProposal[]
+  historyEntries  EventHistory[]
 
   @@unique([sourceId, externalId])
   @@map("raw_ingestion_items")
@@ -232,9 +234,107 @@ model Event {
   // lib/data/event-status.ts.
   publishedAt DateTime? @map("published_at")
 
-  sources     EventSource[]
+  // Live Event Updates (spec "Live Event Updates"): populated only through
+  // an accepted EventUpdateProposal (see below), never by direct manual
+  // entry — these are the "structured facts flowed into event state" the
+  // milestone exists to enable. actors/infrastructureDamage are
+  // JSON-encoded string[] (SQLite has no array column type, same
+  // convention as RawIngestionItem.mediaUrls); casualties are single
+  // nullable counts — when sources disagree, the competing figures coexist
+  // as separate pending EventUpdateProposal rows until an admin accepts
+  // one, at which point IT becomes this column's value (still replaceable
+  // later by accepting a different proposal — the prior value is never
+  // lost, since every accepted change is also recorded in EventHistory).
+  actors               String?  @map("actors")
+  casualtiesKilled     Int?     @map("casualties_killed")
+  casualtiesInjured    Int?     @map("casualties_injured")
+  infrastructureDamage String?  @map("infrastructure_damage")
+
+  sources         EventSource[]
+  updateProposals EventUpdateProposal[]
+  history         EventHistory[]
 
   @@map("events")
+}
+
+// Live Event Updates (spec "Live Event Updates"): one row per proposed
+// field change to an already-published Event, generated when a matching
+// report is attached to it (see lib/db/repositories/event-updates.ts,
+// triggered from POST /api/admin/incoming/[id]/merge). Deliberately a
+// separate table from ExtractedFact — extraction stays a property of a
+// RawIngestionItem regardless of whether it ever matches an event;
+// proposals exist only once a report has been matched, and compare that
+// report's facts against a SPECIFIC event's current state. Never applied
+// automatically: every field this milestone proposes (title, summary,
+// location, coordinates, event time, actors, casualties, damage,
+// severity, conflict) is a "factual change" the spec keeps
+// approval-based — see the Event model's own comment for what accepting
+// one actually does. field values reuse ExtractedFactField's vocabulary
+// (lib/types/db.ts) so the two systems share one field-name convention.
+model EventUpdateProposal {
+  id                 String   @id @default(cuid())
+  eventId            String   @map("event_id")
+  event              Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  rawIngestionItemId String   @map("raw_ingestion_item_id")
+  rawIngestionItem   RawIngestionItem @relation(fields: [rawIngestionItemId], references: [id], onDelete: Cascade)
+  field              String
+  // The event's own value at proposal-creation time — null when the event
+  // had nothing for this field yet (changeType "new"). Kept as a snapshot
+  // rather than re-read live, so a proposal's displayed "current value"
+  // stays meaningful even if a DIFFERENT proposal for the same field gets
+  // accepted first (spec "make it obvious what will change before
+  // approval" — obvious relative to what the admin is looking at, not a
+  // live-recomputed value that could shift under them mid-review).
+  currentValue       String?  @map("current_value")
+  proposedValue      String   @map("proposed_value")
+  confidence         Float
+  source             String   // provenance, carried over from the originating ExtractedFact
+  observedAt         DateTime @map("observed_at")
+  changeType         String   @map("change_type") // "new" | "updated" — relative to currentValue at creation time
+  status             String   @default("pending") // "pending" | "accepted" | "rejected"
+  createdAt          DateTime @default(now()) @map("created_at")
+  resolvedAt         DateTime? @map("resolved_at")
+
+  @@index([eventId, status])
+  @@map("event_update_proposals")
+}
+
+// Immutable ledger of every accepted change to a published event's
+// fields — spec "Every accepted change must create an immutable
+// history/version record... Never destroy prior values." Nothing in this
+// codebase updates or deletes an EventHistory row after creation; a field
+// changing again just appends another row. Ordered by createdAt, this is
+// enough to reconstruct a field's value as of any prior timestamp (the
+// explicit design goal for the next milestone) — no separate snapshot
+// table needed.
+model EventHistory {
+  id                 String   @id @default(cuid())
+  eventId            String   @map("event_id")
+  event              Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  field              String
+  oldValue           String?  @map("old_value")
+  newValue           String   @map("new_value")
+  // Nullable only so a future non-report-driven change path (none exists
+  // yet) isn't blocked by this schema — every row this milestone creates
+  // sets it, since every accepted proposal traces back to one report.
+  rawIngestionItemId String?  @map("raw_ingestion_item_id")
+  rawIngestionItem   RawIngestionItem? @relation(fields: [rawIngestionItemId], references: [id], onDelete: SetNull)
+  source             String   // provenance, carried over from the accepted proposal
+  // Always false for now — every change this milestone produces goes
+  // through explicit admin accept (including the "accept all safe/
+  // high-confidence updates" bulk action, which is still an admin click,
+  // not an unattended auto-apply). Kept as a real column, not inferred,
+  // because "low-risk" auto-applied changes (new source attached,
+  // corroboration count, lastCorroboratedAt) are handled entirely by the
+  // existing EventSource + derive-don't-store corroboration path (see
+  // lib/data/corroboration.ts) and never touch this table at all — so
+  // automatic:true is reserved for a genuinely automatic path if one is
+  // ever added, not simulated here.
+  automatic          Boolean  @default(false)
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@index([eventId, createdAt])
+  @@map("event_history")
 }
 
 model EventSource {

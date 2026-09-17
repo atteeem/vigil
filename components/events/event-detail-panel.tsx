@@ -60,6 +60,14 @@ export function EventDetailPanel({
         </span>
         <span>{formatAbsoluteTime(event.occurredAt, effectiveTimezone)}</span>
         <span>{timeAgo(event.occurredAt, MOCK_NOW)}</span>
+        {/* Driven by updateHistory (an accepted change actually happened),
+            not by Event.updatedAt — that column also moves on lifecycle
+            actions like publish/unpublish that aren't content changes,
+            which would make "Updated X ago" misleading (spec "show
+            'updated X ago'" means since the last accepted fact update). */}
+        {event.updateHistory && event.updateHistory.length > 0 && (
+          <span data-testid="event-updated-ago">Updated {timeAgo(event.updateHistory[0]!.changedAt, MOCK_NOW)}</span>
+        )}
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -68,6 +76,20 @@ export function EventDetailPanel({
       </div>
 
       <p className="mt-4 text-sm leading-relaxed text-ink-dim">{event.summary}</p>
+
+      {((event.actors?.length ?? 0) > 0 ||
+        event.casualtiesKilled != null ||
+        event.casualtiesInjured != null ||
+        (event.infrastructureDamage?.length ?? 0) > 0) && (
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-dim" data-testid="event-accepted-facts">
+          {event.actors && event.actors.length > 0 && <span>Actors: {event.actors.join(", ")}</span>}
+          {event.casualtiesKilled != null && <span>Killed: {event.casualtiesKilled}</span>}
+          {event.casualtiesInjured != null && <span>Injured: {event.casualtiesInjured}</span>}
+          {event.infrastructureDamage && event.infrastructureDamage.length > 0 && (
+            <span>Damage: {event.infrastructureDamage.join(", ")}</span>
+          )}
+        </div>
+      )}
 
       {conflict && (
         <Link
@@ -92,6 +114,19 @@ export function EventDetailPanel({
           ))}
         </ol>
       </div>
+
+      {event.updateHistory && event.updateHistory.length > 0 && (
+        <div className="mt-5" data-testid="public-update-history">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Recent Updates</p>
+          <ul className="mt-2 space-y-1.5">
+            {event.updateHistory.map((h, i) => (
+              <li key={i} className="text-xs text-ink-dim">
+                <span className="text-ink-faint">{timeAgo(h.changedAt, MOCK_NOW)}</span> — {h.newValue}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="mt-5">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">

@@ -3,12 +3,15 @@ import { prisma } from "@/lib/db/client";
 import { getRawIngestionItem } from "@/lib/db/repositories/raw-ingestion-items";
 import { listExtractedFacts, toExtractedFactDTO } from "@/lib/db/repositories/extracted-facts";
 import { findDuplicateCandidates } from "@/lib/ingestion/duplicates";
+import { pickEffectiveFact, valuesDiffer } from "@/lib/ingestion/fact-diff";
 import type { ExtractedFactDTO, ExtractedFactField, ExtractedFactsResponseDTO, MatchedEventFieldDiffDTO } from "@/lib/types/db";
 
 // Fields that also exist as a real column on Event — the only ones a
-// "differs from the matched event" comparison can meaningfully answer
-// (spec: casualties/actors/damage have nowhere on Event to compare
-// against, deliberately — this milestone adds no Event columns).
+// "differs from the matched event" comparison can meaningfully answer.
+// Casualties/actors/infrastructure damage now DO have Event columns (see
+// prisma/schema.prisma's Event model, added by Live Event Updates), but
+// comparing against them belongs to the post-merge EventUpdateProposal
+// pipeline instead — see MatchedEventFieldDiffDTO's own comment.
 const COMPARABLE_FIELDS: ExtractedFactField[] = [
   "eventType",
   "title",
@@ -20,17 +23,8 @@ const COMPARABLE_FIELDS: ExtractedFactField[] = [
   "conflictId",
 ];
 
-/** The single value a field should contribute to duplicate-matching and
- * event comparison, when a field can have multiple simultaneous facts:
- * an admin's own decision (accepted/edited) wins over a raw suggestion,
- * and among undecided suggestions the highest-confidence one wins. Never
- * picks a rejected fact. */
 function effectiveValue(facts: ExtractedFactDTO[], field: ExtractedFactField): string | null {
-  const candidates = facts.filter((f) => f.field === field && f.status !== "rejected");
-  if (candidates.length === 0) return null;
-  const decided = candidates.find((f) => f.status === "accepted" || f.status === "edited");
-  if (decided) return decided.value;
-  return candidates.reduce((best, f) => (f.confidence > best.confidence ? f : best), candidates[0]!).value;
+  return pickEffectiveFact(facts, field)?.value ?? null;
 }
 
 // Read-only: returns whatever is currently persisted (see
@@ -92,11 +86,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
           const extracted = effectiveValue(facts, field);
           if (extracted === null) continue;
           const current = currentByField[field];
-          const differs =
-            (field === "latitude" || field === "longitude") && current !== null
-              ? Math.abs(Number(extracted) - Number(current)) > 0.0005 // ~50m — ignores float-formatting noise
-              : extracted !== current;
-          fieldDiffs.push({ field, extractedValue: extracted, currentEventValue: current, differs });
+          fieldDiffs.push({ field, extractedValue: extracted, currentEventValue: current, differs: valuesDiffer(field, current, extracted) });
         }
       }
     }

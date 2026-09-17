@@ -473,6 +473,91 @@ migration described later in this file.
   amber/warning styling. Designed to compare cleanly against future
   event state without needing a schema change for event history/
   versioning — the next milestone this unblocks.
+- **Live Event Updates** (`lib/ingestion/event-update-proposals.ts`,
+  `lib/db/repositories/event-updates.ts`, spec "Live Event Updates"): the
+  milestone that actually uses Structured Event Intelligence's extracted
+  facts to keep a published event current. Triggered from the existing
+  "attach this report to an existing event" action (`POST
+  /api/admin/incoming/[id]/merge`) — attachment itself is unchanged
+  (still just an `EventSource` link), but right after it, the just-
+  attached report's extracted facts are compared field-by-field against
+  the event's current state and any real difference becomes a pending
+  `EventUpdateProposal` row. Two-table design, kept deliberately apart:
+  `EventUpdateProposal` (mutable — pending/accepted/rejected) holds
+  proposed changes nothing has acted on yet; `EventHistory` (append-only,
+  nothing ever updates or deletes a row) holds only changes an admin has
+  actually accepted. Because rejected proposals never reach
+  `EventHistory`, that table is *already* exactly what's safe to show on
+  the public page (spec "do not expose rejected/unverified proposals
+  publicly") — no extra filtering needed. Comparison logic
+  (`buildProposalDrafts()`) is pure — takes a plain `Event` object and an
+  `ExtractedFactDTO[]`, returns draft objects, touches no database —
+  which is also what makes it directly unit-testable and keeps "proposals
+  separate from accepted event state" true at the module level, not just
+  by convention. Three field shapes, three comparison strategies:
+  - **Scalar fields** (title, summary, location, coordinates, event
+    time, severity, event type, conflict): one current value on `Event`,
+    one proposed value per report via `pickEffectiveFact()` (moved out of
+    the Structured Event Intelligence facts route into shared
+    `lib/ingestion/fact-diff.ts` so both features pick the same
+    admin-decision-wins-else-highest-confidence value the same way), one
+    proposal if they differ (`valuesDiffer()`, also shared — lat/lng get
+    a ~50m epsilon, occurredAt a 5-minute tolerance, everything else
+    exact equality).
+  - **List fields** (actors, infrastructure damage): genuinely multi-
+    valued on `Event` (JSON-encoded `string[]` columns, same convention
+    as `RawIngestionItem.mediaUrls` — SQLite has no array type). Every
+    distinct non-rejected fact value NOT already in the event's array
+    becomes its own "new" proposal; accepting one appends into the array
+    rather than replacing it.
+  - **Casualty fields** (killed, injured): one current figure on `Event`,
+    but a report can carry more than one distinct reported number — every
+    distinct non-rejected value that differs from the current figure
+    becomes its own proposal, so two reports (or one report's two
+    conflicting sentences) can produce two simultaneously pending
+    proposals rather than one silently picked (spec "if sources
+    disagree... preserve competing values... do not automatically choose
+    one solely by report count"). `hasConflict` (true when another still-
+    pending proposal on the same event+field has a different value) is
+    computed fresh on every read, never stored, since sibling proposals
+    resolve independently and a stored flag would go stale the moment one
+    does.
+  - Every field this milestone proposes is a "factual change" the spec
+    keeps approval-based — there is no automatic-apply path in this
+    codebase yet. "Automatically allow low-risk metadata updates" (new
+    source attached, corroboration count, lastSeen/lastCorroborated) is
+    already true with zero new code: source attachment is the pre-
+    existing `EventSource` link, and corroboration metadata
+    (`lib/data/corroboration.ts`) is computed fresh from `Event.sources`
+    at read time, so it reflects a new attachment immediately without
+    ever going through the proposal table. "Accept all safe/high-
+    confidence updates" (`POST /api/admin/events/[id]/proposals/accept-
+    safe`) is a bulk convenience for the admin — still an explicit click,
+    accepting every pending proposal at or above a 0.8 confidence floor
+    (comfortably above this heuristic's routine "real signal found"
+    confidences and above its honest-uncertainty ones for ambiguous
+    locations/no-strong-signal severity) — never an unattended background
+    job.
+  - Accepting a proposal (`PATCH /api/admin/events/[id]/proposals/
+    [proposalId]`) mutates the event and writes the `EventHistory` row in
+    one transaction, so a proposal can never end up "accepted" without a
+    matching history entry or vice versa. Rejecting only flips the
+    proposal's own status — the event and history table are untouched.
+  - Admin UX (`/admin/events/[id]`): a "Pending Updates" panel (current →
+    proposed value, change-type badge, confidence, provenance, a
+    "Conflicting with another pending update" warning, Accept/Reject per
+    row, "Accept all safe" bulk button) and a "History" panel (every
+    accepted change, oldest fields first are still visible since nothing
+    is ever overwritten), plus a compact "Supporting Reports" list (the
+    milestone's own "new supporting reports" requirement) and inline
+    actors/casualties/damage once any have been accepted. "Updated X ago"
+    (both admin and public `/event/[slug]`) is driven by the most recent
+    `EventHistory` entry, not `Event.updatedAt` directly — that column
+    also moves on lifecycle actions like publish/unpublish that aren't
+    content changes, which would otherwise show a misleading "Updated"
+    label. The public page's "Recent Updates" section (spec "optionally
+    show a concise update history") reuses the same `EventHistory` data,
+    capped at 5 rows, through `getDbEventBySlug()`.
 - **Geocoding abstraction** (`lib/geocoding/`, spec §4): `GeocodingProvider`
   is a one-method interface (`search(query): Promise<GeocodeCandidate[]>`)
   behind `getGeocodingProvider()`, so the concrete provider can change

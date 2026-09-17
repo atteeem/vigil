@@ -330,10 +330,16 @@ export interface ExtractedFactDTO {
   extractedAt: string; // ISO — when this row was computed
 }
 
-/** Only for fields that also exist on the Event table — casualties,
- * actors, and infrastructure damage have nowhere on Event to compare
- * against (deliberately: this milestone adds no Event columns), so they
- * never appear here even if extracted. */
+/** Covers only the fields this PRE-merge, candidate-match comparison was
+ * scoped to when it was built (Structured Event Intelligence) — casualties,
+ * actors, and infrastructure damage never appear here even though Event
+ * now has real columns for them (see the Event model in
+ * prisma/schema.prisma, added by Live Event Updates). Those three fields'
+ * comparison against an event's CONFIRMED state lives in the newer
+ * EventUpdateProposal pipeline instead (lib/db/repositories/
+ * event-updates.ts), which runs post-attachment and goes through explicit
+ * admin approval — a stronger guarantee than this pre-merge candidate
+ * preview needs. */
 export interface MatchedEventFieldDiffDTO {
   field: ExtractedFactField;
   extractedValue: string;
@@ -349,4 +355,57 @@ export interface ExtractedFactsResponseDTO {
    * duplicate-matching threshold. */
   matchedEvent: { eventId: string; slug: string; title: string } | null;
   fieldDiffs: MatchedEventFieldDiffDTO[];
+}
+
+// Live Event Updates (spec "Live Event Updates"). A proposal is generated
+// when a report is attached (merged) to an already-published event — see
+// lib/db/repositories/event-updates.ts — comparing that report's
+// extracted facts against the event's current state at that moment.
+export const EVENT_UPDATE_PROPOSAL_STATUSES = ["pending", "accepted", "rejected"] as const;
+export type EventUpdateProposalStatus = (typeof EVENT_UPDATE_PROPOSAL_STATUSES)[number];
+
+/** "new": the event had no value for this field yet. "updated": the event
+ * already had a different value and this proposes replacing it. Computed
+ * once, relative to currentValue, at proposal-creation time — never
+ * recomputed later (see EventUpdateProposalDTO.currentValue's comment). */
+export const EVENT_UPDATE_CHANGE_TYPES = ["new", "updated"] as const;
+export type EventUpdateChangeType = (typeof EVENT_UPDATE_CHANGE_TYPES)[number];
+
+export interface EventUpdateProposalDTO {
+  id: string;
+  eventId: string;
+  rawIngestionItemId: string;
+  field: ExtractedFactField;
+  currentValue: string | null;
+  proposedValue: string;
+  confidence: number;
+  source: string;
+  observedAt: string;
+  changeType: EventUpdateChangeType;
+  status: EventUpdateProposalStatus;
+  createdAt: string;
+  resolvedAt: string | null;
+  /** True when another still-pending proposal exists for the same event
+   * + field with a DIFFERENT proposedValue — spec "if sources disagree...
+   * do not automatically choose one... allow admin to resolve later."
+   * Computed at read time (lib/db/repositories/event-updates.ts), never
+   * stored — sibling proposals can appear/resolve independently, so a
+   * stored flag on this row would go stale the moment another one does. */
+  hasConflict: boolean;
+}
+
+/** Immutable — every row here is, by construction, an ACCEPTED change
+ * (rejected proposals never create one), so this is exactly what's safe
+ * to surface on the public event page (spec "do not expose rejected/
+ * unverified proposals publicly") with no extra filtering needed. */
+export interface EventHistoryEntryDTO {
+  id: string;
+  eventId: string;
+  field: ExtractedFactField;
+  oldValue: string | null;
+  newValue: string;
+  rawIngestionItemId: string | null;
+  source: string;
+  automatic: boolean;
+  createdAt: string;
 }

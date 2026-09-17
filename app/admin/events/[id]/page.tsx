@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ShieldQuestion, Pencil, Globe2, EyeOff, Trash2, X, Check } from "lucide-react";
+import { ArrowLeft, ShieldQuestion, Pencil, Globe2, EyeOff, Trash2, X, Check, AlertTriangle, History, CheckCheck, Radio } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LocationPicker, type LocationValue } from "@/components/admin/location-picker";
@@ -13,7 +13,8 @@ import { EventStatusBadge } from "@/components/events/event-status-badge";
 import { getEventCorroboration } from "@/lib/data/corroboration";
 import { timeAgo } from "@/lib/utils";
 import { EVENT_TYPES, SEVERITY_LEVELS } from "@/lib/types";
-import { DB_VERIFICATION_STATUSES, type EventStatus } from "@/lib/types/db";
+import { DB_VERIFICATION_STATUSES, type EventStatus, type EventUpdateProposalDTO, type EventHistoryEntryDTO } from "@/lib/types/db";
+import { EXTRACTED_FACT_FIELD_LABEL } from "@/lib/ingestion/field-labels";
 import type { ConflictEvent } from "@/lib/types";
 
 type EventAdminDetail = ConflictEvent & { locationName: string | null; status: EventStatus; publishedAt: string | null; createdAt: string; updatedAt: string };
@@ -87,6 +88,42 @@ export default function AdminEventDetailPage() {
   }
 
   const refresh = () => queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] === "admin" || q.queryKey[0] === "events" });
+
+  const { data: proposalsData } = useQuery({
+    queryKey: ["admin", "events", id, "proposals"],
+    queryFn: async (): Promise<{ proposals: EventUpdateProposalDTO[] }> => (await fetch(`/api/admin/events/${id}/proposals`)).json(),
+    enabled: Boolean(id),
+  });
+  const proposals = proposalsData?.proposals ?? [];
+  const pendingProposals = proposals.filter((p) => p.status === "pending");
+
+  const { data: historyData } = useQuery({
+    queryKey: ["admin", "events", id, "history"],
+    queryFn: async (): Promise<{ history: EventHistoryEntryDTO[] }> => (await fetch(`/api/admin/events/${id}/history`)).json(),
+    enabled: Boolean(id),
+  });
+  const history = historyData?.history ?? [];
+
+  const [resolvingProposalId, setResolvingProposalId] = useState<string | null>(null);
+  const [acceptingAllSafe, setAcceptingAllSafe] = useState(false);
+
+  async function resolveProposal(proposalId: string, action: "accept" | "reject") {
+    setResolvingProposalId(proposalId);
+    await fetch(`/api/admin/events/${id}/proposals/${proposalId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+    await refresh();
+    setResolvingProposalId(null);
+  }
+
+  async function acceptAllSafe() {
+    setAcceptingAllSafe(true);
+    await fetch(`/api/admin/events/${id}/proposals/accept-safe`, { method: "POST" });
+    await refresh();
+    setAcceptingAllSafe(false);
+  }
 
   async function changeLifecycle(action: "publish" | "unpublish" | "delete") {
     if (action === "delete" && (!event || !confirm(`Delete "${event.title}"? This cannot be undone. Reports without other event links will return to the incoming queue.`))) return;
@@ -221,6 +258,24 @@ export default function AdminEventDetailPage() {
             </div>
             <h1 className="text-lg font-semibold text-ink">{event.title}</h1>
             <p className="mt-1 text-sm text-ink-dim">{event.summary}</p>
+            {history.length > 0 && (
+              <p className="mt-1 text-[11px] text-ink-faint" data-testid="event-updated-ago">
+                Updated {timeAgo(history[0]!.createdAt)}
+              </p>
+            )}
+            {((event.actors?.length ?? 0) > 0 ||
+              event.casualtiesKilled != null ||
+              event.casualtiesInjured != null ||
+              (event.infrastructureDamage?.length ?? 0) > 0) && (
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-dim" data-testid="event-accepted-facts">
+                {event.actors && event.actors.length > 0 && <span>Actors: {event.actors.join(", ")}</span>}
+                {event.casualtiesKilled != null && <span>Killed: {event.casualtiesKilled}</span>}
+                {event.casualtiesInjured != null && <span>Injured: {event.casualtiesInjured}</span>}
+                {event.infrastructureDamage && event.infrastructureDamage.length > 0 && (
+                  <span>Damage: {event.infrastructureDamage.join(", ")}</span>
+                )}
+              </div>
+            )}
           </>
         ) : (
           edit &&
@@ -390,6 +445,132 @@ export default function AdminEventDetailPage() {
           Corroboration describes how many reports and sources exist for this event — it is not a truth or
           credibility score. Multiple sources reporting the same thing does not by itself prove it happened.
         </p>
+      </Card>
+
+      <Card className="mt-4 p-4" data-testid="supporting-reports-panel">
+        <div className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-faint">
+          <Radio className="h-3.5 w-3.5" />
+          Supporting Reports ({event.sources.length})
+        </div>
+        <ul className="space-y-1.5">
+          {event.sources.map((s, i) => (
+            <li key={`${s.id}-${i}`} className="flex items-center justify-between gap-2 text-xs">
+              <span className="truncate text-ink-dim">
+                {s.name}
+                {s.note && <span className="ml-1.5 text-ink-faint">({s.note})</span>}
+              </span>
+              <span className="shrink-0 text-ink-faint">{timeAgo(s.publishedAt)}</span>
+            </li>
+          ))}
+        </ul>
+      </Card>
+
+      <Card className="mt-4 p-4" data-testid="update-proposals-panel">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-faint">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Pending Updates{pendingProposals.length > 0 && ` (${pendingProposals.length})`}
+          </div>
+          {pendingProposals.some((p) => p.confidence >= 0.8) && (
+            <Button size="sm" variant="ghost" onClick={acceptAllSafe} disabled={acceptingAllSafe} data-testid="accept-all-safe-button">
+              <CheckCheck className="h-3.5 w-3.5" /> Accept all safe
+            </Button>
+          )}
+        </div>
+        {pendingProposals.length === 0 ? (
+          <p className="text-xs text-ink-faint">No pending updates from newly attached reports.</p>
+        ) : (
+          <ul className="space-y-2">
+            {pendingProposals.map((p) => (
+              <li
+                key={p.id}
+                data-testid={`proposal-${p.id}`}
+                className={`rounded-lg border px-3 py-2 text-xs ${p.hasConflict ? "border-high/30 bg-high/10" : "border-border"}`}
+              >
+                <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                  <span className="font-medium text-ink">{EXTRACTED_FACT_FIELD_LABEL[p.field]}</span>
+                  <span className="rounded-full bg-white/5 px-1.5 py-0.5 text-[9px] text-ink-faint">
+                    {p.changeType === "new" ? "New value" : "Update"}
+                  </span>
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-[9px] ${p.confidence < 0.5 ? "bg-high/20 text-high" : "bg-white/10 text-ink-faint"}`}
+                  >
+                    {Math.round(p.confidence * 100)}% confidence
+                  </span>
+                  {p.hasConflict && (
+                    <span
+                      data-testid={`proposal-conflict-${p.id}`}
+                      className="inline-flex items-center gap-1 rounded-full bg-high/20 px-1.5 py-0.5 text-[9px] text-high"
+                    >
+                      <AlertTriangle className="h-2.5 w-2.5" /> Conflicting with another pending update
+                    </span>
+                  )}
+                </div>
+                <p className="text-ink-dim">
+                  {p.currentValue !== null && (
+                    <>
+                      <span className="text-ink-faint line-through">{p.currentValue}</span>
+                      {" → "}
+                    </>
+                  )}
+                  <span className="font-medium text-ink">{p.proposedValue}</span>
+                </p>
+                <p className="mt-1 truncate text-ink-faint" title={p.source}>
+                  {p.source}
+                </p>
+                <p className="mt-0.5 text-[10px] text-ink-faint">Observed {timeAgo(p.observedAt)}</p>
+                <div className="mt-2 flex gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="accent"
+                    disabled={resolvingProposalId === p.id}
+                    onClick={() => resolveProposal(p.id, "accept")}
+                  >
+                    <Check className="h-3 w-3" /> Accept
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={resolvingProposalId === p.id}
+                    onClick={() => resolveProposal(p.id, "reject")}
+                  >
+                    <X className="h-3 w-3" /> Reject
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <Card className="mt-4 p-4" data-testid="event-history-panel">
+        <div className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-faint">
+          <History className="h-3.5 w-3.5" />
+          History
+        </div>
+        {history.length === 0 ? (
+          <p className="text-xs text-ink-faint">No accepted changes yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {history.map((h) => (
+              <li key={h.id} data-testid={`history-${h.id}`} className="rounded-lg border border-border px-3 py-2 text-xs">
+                <p className="font-medium text-ink">{EXTRACTED_FACT_FIELD_LABEL[h.field]}</p>
+                <p className="mt-0.5 text-ink-dim">
+                  {h.oldValue !== null && (
+                    <>
+                      <span className="text-ink-faint line-through">{h.oldValue}</span>
+                      {" → "}
+                    </>
+                  )}
+                  <span>{h.newValue}</span>
+                </p>
+                <p className="mt-0.5 text-[10px] text-ink-faint">
+                  {timeAgo(h.createdAt)} · {h.automatic ? "automatic" : "admin-approved"}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
     </div>
   );
