@@ -11,6 +11,8 @@ import { clusterEvents, clusterRadiusForAltitude, formatClusterCount, type Event
 import { ENERGY_ARCS, TRADE_ARCS, type GlobeArc } from "@/lib/globe/arcs";
 import type { MapLayer, GlobeViewMode, GlobeLayerVisibility, ContentSensitivity } from "@/hooks/use-app-store";
 import type { GlobePath, CountryLabel } from "@/lib/globe/country-borders";
+import type { CityLabel } from "@/lib/globe/city-labels";
+import { cityLabelTierForAltitude } from "@/lib/globe/city-labels";
 import { GlobeLoading, GlobeUnavailable } from "./globe-loading";
 
 function detectWebGL(): boolean {
@@ -75,6 +77,13 @@ type GlobeMarker =
   | { kind: "conflict"; lat: number; lng: number; conflict: Conflict }
   | { kind: "cluster"; lat: number; lng: number; cluster: EventCluster };
 
+// Country-name labels and city-name labels share three-globe's single
+// labelsData layer (it exposes only one), tagged so one set of accessors
+// can render each its own way — country names larger/brighter (they name
+// a whole region), city names smaller/subtler point labels (spec "labels
+// should remain subtle").
+type GlobeLabel = ({ kind: "country" } & CountryLabel) | ({ kind: "city" } & CityLabel);
+
 export interface ConflictGlobeProps {
   conflicts: Conflict[];
   events?: ConflictEvent[];
@@ -106,6 +115,7 @@ export function ConflictGlobe({
   const [webglOk, setWebglOk] = useState<boolean | null>(null);
   const [borderPaths, setBorderPaths] = useState<GlobePath[]>([]);
   const [countryLabels, setCountryLabels] = useState<CountryLabel[]>([]);
+  const [cityLabels, setCityLabels] = useState<CityLabel[]>([]);
   const [cameraAltitude, setCameraAltitude] = useState(2.15);
 
   useEffect(() => {
@@ -155,7 +165,9 @@ export function ConflictGlobe({
   // Political borders + country labels are real Natural Earth vector data
   // (~490KB), not needed unless the corresponding layer is switched on —
   // loaded lazily via dynamic import so Intel-mode-only sessions (and every
-  // first paint) never pay for it.
+  // first paint) never pay for it. City labels (lib/globe/city-labels.ts)
+  // are a tiny hand-curated dataset, but fetched the same lazy way for
+  // consistency — both live behind the one "labels" toggle.
   useEffect(() => {
     if (!globeLayers.borders && !globeLayers.labels) return;
     let cancelled = false;
@@ -164,6 +176,14 @@ export function ConflictGlobe({
       if (globeLayers.borders) setBorderPaths(mod.getCountryBorderPaths());
       if (globeLayers.labels) setCountryLabels(mod.getCountryLabels(isMobile ? 2 : 3));
     });
+    if (globeLayers.labels) {
+      import("@/lib/globe/city-labels").then((mod) => {
+        if (cancelled) return;
+        // Fetches the full curated list once; the altitude-driven tier
+        // filter below (cityLabelsToRender) decides what's actually shown.
+        setCityLabels(mod.getCityLabels(3));
+      });
+    }
     return () => {
       cancelled = true;
     };
@@ -253,6 +273,29 @@ export function ConflictGlobe({
     [conflictHotspots, eventClusters],
   );
 
+  // City-label tier reveal (spec "world view: capitals + major global
+  // cities only... reveal more cities as the user zooms in... hide or
+  // reduce labels when zoomed too far out") reuses the same
+  // altitude-polling state the event-cluster radius already depends on —
+  // no second interval. Reduced by one tier on mobile (mirrors the
+  // existing country-label maxLabelRank reduction) and in Satellite mode
+  // (spec "satellite mode can use fewer/fainter labels if needed").
+  const cityLabelsToRender = useMemo(() => {
+    if (!globeLayers.labels) return [];
+    let tier: number = cityLabelTierForAltitude(cameraAltitude);
+    if (isMobile) tier -= 1;
+    if (isSatellite) tier -= 1;
+    return tier <= 0 ? [] : cityLabels.filter((c) => c.tier <= tier);
+  }, [globeLayers.labels, cityLabels, cameraAltitude, isMobile, isSatellite]);
+
+  const combinedLabels = useMemo<GlobeLabel[]>(() => {
+    if (!globeLayers.labels) return [];
+    return [
+      ...countryLabels.map((c): GlobeLabel => ({ kind: "country", ...c })),
+      ...cityLabelsToRender.map((c): GlobeLabel => ({ kind: "city", ...c })),
+    ];
+  }, [globeLayers.labels, countryLabels, cityLabelsToRender]);
+
   if (webglOk === false) {
     return (
       <div ref={containerRef} className={className}>
@@ -295,13 +338,25 @@ export function ConflictGlobe({
           // (Layers popover) is checked.
           pathsData={globeLayers.borders && !isSatellite ? borderPaths : []}
           pathPoints={(d: object) => (d as GlobePath).points}
-          // Same subtle gray-blue as the landmass fill's own polygonCapColor
-          // just above, for visual consistency between the two layers.
-          pathColor={() => "rgba(141,150,165,0.4)"}
-          // Kept low and explicit (below the landmass fill at 0.006 and
-          // htmlElements/markers at 0.012) so borders always render
-          // beneath every other overlay, never on top.
-          pathPointAlt={() => 0.002}
+          // A light, cool neutral with real contrast against BOTH the dark
+          // ocean and the landmass fill's own gray-blue cap color just
+          // above (rgba(141,150,165,0.4)) — the two used to be the exact
+          // same color, which made borders invisible everywhere they
+          // crossed land instead of coastline (the whole point of a
+          // political border layer). Disputed/indeterminate boundaries
+          // (spec "distinguish disputed-boundary metadata" — Natural
+          // Earth's own TYPE field, see lib/globe/country-borders.ts) get
+          // a distinct amber tint instead of blending in as an ordinary
+          // undisputed border.
+          pathColor={(d: object) => ((d as GlobePath).disputed ? "rgba(228, 196, 65, 0.85)" : "rgba(210, 218, 230, 0.65)")}
+          pathDashLength={(d: object) => ((d as GlobePath).disputed ? 0.4 : 1)}
+          pathDashGap={(d: object) => ((d as GlobePath).disputed ? 0.25 : 0)}
+          // Above the landmass fill (0.006) so borders actually render on
+          // top of it instead of being occluded by it, but still well
+          // below htmlElements/markers (0.012) and labels (~0.0105-0.011)
+          // — spec "borders must render beneath heatmaps, conflict
+          // layers, markers, and future territorial-control overlays".
+          pathPointAlt={() => 0.0065}
           // Deliberately NOT setting pathStroke: a numeric stroke switches
           // three-globe to its "fat line" renderer (a Line2 + brand-new
           // LineMaterial + LineGeometry per path, instanced-geometry-backed
@@ -309,19 +364,35 @@ export function ConflictGlobe({
           // than a plain THREE.Line). At globe scale a 1px line reads fine
           // for a country-outline overlay, and this is what actually kept
           // the Borders toggle cheap — mesh/point-count reduction alone
-          // did not (measured).
+          // did not (measured). Dashing (above) works fine on this cheap
+          // renderer too — it's a shader uniform, not a fat-line feature.
           // Higher = less great-circle interpolation between our already
           // (deliberately coarse) border points — keeps the toggle cheap.
           pathResolution={6}
           pathTransitionDuration={0}
-          labelsData={globeLayers.labels ? countryLabels : []}
-          labelLat={(d: object) => (d as CountryLabel).lat}
-          labelLng={(d: object) => (d as CountryLabel).lng}
-          labelText={(d: object) => (d as CountryLabel).name}
-          labelSize={0.55}
-          labelColor={() => "rgba(243,245,247,0.8)"}
-          labelDotRadius={0.25}
-          labelAltitude={0.011}
+          labelsData={combinedLabels}
+          labelLat={(d: object) => (d as GlobeLabel).lat}
+          labelLng={(d: object) => (d as GlobeLabel).lng}
+          labelText={(d: object) => (d as GlobeLabel).name}
+          // Country names read as a large, brighter label spanning a
+          // region; city names are smaller point labels, subtler still at
+          // deeper tiers (2/3) so the busiest, closest-zoom tier doesn't
+          // compete visually with tier-1 capitals — spec "labels should
+          // remain subtle".
+          labelSize={(d: object) => {
+            const l = d as GlobeLabel;
+            if (l.kind === "country") return 0.55;
+            return l.tier === 1 ? 0.38 : l.tier === 2 ? 0.32 : 0.27;
+          }}
+          labelColor={(d: object) =>
+            (d as GlobeLabel).kind === "country" ? "rgba(243,245,247,0.8)" : "rgba(226,232,240,0.72)"
+          }
+          labelDotRadius={(d: object) => ((d as GlobeLabel).kind === "country" ? 0.25 : 0.16)}
+          // Below htmlElements/markers (0.012), and both label kinds sit
+          // above the landmass/border layers so text never renders
+          // underneath the fill — city labels a hair below country labels
+          // so a same-spot country name always wins the z-fight.
+          labelAltitude={(d: object) => ((d as GlobeLabel).kind === "country" ? 0.011 : 0.0105)}
           labelResolution={2}
           labelsTransitionDuration={0}
           htmlElementsData={globeMarkers}

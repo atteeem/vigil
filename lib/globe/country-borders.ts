@@ -13,19 +13,29 @@ import countryBordersGeo from "@/public/globe/country-borders.json";
 interface CountryBorderFeature {
   name: string;
   labelRank: number;
+  // Natural Earth's own TYPE field — "Disputed" (e.g. Palestine, per its
+  // SOVEREIGNT vs. ADMIN split) or "Indeterminate" (e.g. Western Sahara,
+  // Somaliland: no internationally settled sovereign) get a visually
+  // distinct outline instead of rendering as an ordinary undisputed
+  // border (spec "distinguish disputed-boundary metadata"). Everything
+  // else ("Sovereign country", "Country", "Dependency") renders as normal.
+  disputed: boolean;
   geometry: Polygon | MultiPolygon;
 }
+
+const DISPUTED_TYPES = new Set(["Disputed", "Indeterminate"]);
 
 let cachedFeatures: CountryBorderFeature[] | null = null;
 
 function getFeatures(): CountryBorderFeature[] {
   if (cachedFeatures) return cachedFeatures;
   const collection = countryBordersGeo as unknown as {
-    features: Feature<Polygon | MultiPolygon, { NAME?: string; LABELRANK?: number }>[];
+    features: Feature<Polygon | MultiPolygon, { NAME?: string; LABELRANK?: number; TYPE?: string }>[];
   };
   cachedFeatures = collection.features.map((f) => ({
     name: f.properties?.NAME ?? "",
     labelRank: f.properties?.LABELRANK ?? 6,
+    disputed: DISPUTED_TYPES.has(f.properties?.TYPE ?? ""),
     geometry: f.geometry,
   }));
   return cachedFeatures;
@@ -33,6 +43,7 @@ function getFeatures(): CountryBorderFeature[] {
 
 export interface GlobePath {
   points: [number, number][];
+  disputed: boolean;
 }
 
 function polygonsOf(geometry: Polygon | MultiPolygon): Position[][][] {
@@ -85,7 +96,7 @@ let cachedPaths: GlobePath[] | null = null;
 export function getCountryBorderPaths(): GlobePath[] {
   if (cachedPaths) return cachedPaths;
   const paths: GlobePath[] = [];
-  for (const { geometry } of getFeatures()) {
+  for (const { geometry, disputed } of getFeatures()) {
     let largest: Position[] | null = null;
     for (const rings of polygonsOf(geometry)) {
       const outer = rings[0];
@@ -93,7 +104,7 @@ export function getCountryBorderPaths(): GlobePath[] {
     }
     if (largest) {
       const points = decimateRing(largest);
-      if (points.length > 1) paths.push({ points });
+      if (points.length > 1) paths.push({ points, disputed });
     }
   }
   cachedPaths = paths;

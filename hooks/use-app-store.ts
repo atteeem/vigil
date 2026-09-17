@@ -20,22 +20,26 @@ export interface GlobeLayerVisibility {
   labels: boolean;
 }
 
-// Conflicts hotspots and country Borders are on by default; Events/Labels
-// are genuinely optional extras (Events adds per-report markers on top of
-// the conflict hotspots already shown, and Labels is the visually busiest
-// layer), left off to keep first paint fast on every device, mobile
-// especially. Borders' own dataset is real Natural Earth data, but it's
-// lazy-imported (ConflictGlobe's effect below) and pre-decimated to a
-// single ~22-point ring per country (lib/globe/country-borders.ts) —
-// measured as a bounded ~0.5-1s one-time cost, not an ongoing frame cost,
-// so defaulting it on doesn't reopen the "keep first paint fast" tradeoff
-// this comment used to justify leaving it off. ConflictGlobe also skips
-// rendering it in Satellite mode regardless of this setting.
+// Conflicts hotspots, country Borders, and Labels (country + city names)
+// are on by default; Events is the one genuinely optional extra (it adds
+// per-report markers on top of the conflict hotspots already shown), left
+// off to keep first paint fast on every device, mobile especially.
+// Borders'/Labels' own datasets are real Natural Earth data plus a small
+// curated city list, but both are lazy-imported (ConflictGlobe's effect
+// below) — Borders is pre-decimated to a single ~22-point ring per
+// country (lib/globe/country-borders.ts), and Labels only ever renders a
+// handful of tier-1 entries at the globe's default zoomed-out resting
+// altitude (lib/globe/city-labels.ts) — both measured as a bounded
+// ~0.5-1s one-time cost, not an ongoing frame cost, so defaulting them on
+// doesn't reopen the "keep first paint fast" tradeoff this comment used
+// to justify leaving Borders off in an earlier stage. ConflictGlobe skips
+// rendering Borders in Satellite mode regardless of this setting, and
+// shows fewer/fainter Labels there.
 const DEFAULT_GLOBE_LAYERS: GlobeLayerVisibility = {
   conflicts: true,
   events: false,
   borders: true,
-  labels: false,
+  labels: true,
 };
 
 interface AppState {
@@ -108,6 +112,21 @@ export const useAppStore = create<AppState>()(
     {
       name: "vigil-preferences",
       storage: createJSONStorage(() => localStorage),
+      // Bumped when Borders/Labels flipped from off- to on-by-default
+      // (globe readability fix): zustand's persist middleware otherwise
+      // uses whatever a returning user's browser already saved verbatim,
+      // so without this migration their globeLayers would keep silently
+      // pinning both to the OLD default forever — "enabled in config" is
+      // not the same as "actually visible in a real browser" for anyone
+      // who'd loaded this app before this fix shipped.
+      version: 1,
+      migrate: (persistedState, version) => {
+        const state = persistedState as Partial<AppState>;
+        if (version < 1 && state.globeLayers) {
+          state.globeLayers = { ...state.globeLayers, borders: true, labels: true };
+        }
+        return state;
+      },
       // Only persist the actual preference fields — transient UI state
       // (search-open, the live map-layer segmented control) stays
       // session-only on purpose.
