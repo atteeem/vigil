@@ -13,6 +13,7 @@ import type { MapLayer, GlobeViewMode, GlobeLayerVisibility, ContentSensitivity 
 import type { GlobePath, CountryLabel } from "@/lib/globe/country-borders";
 import type { CityLabel } from "@/lib/globe/city-labels";
 import { cityLabelTierForAltitude } from "@/lib/globe/city-labels";
+import { LAND_FILL_COLOR, BORDER_COLOR, DISPUTED_BORDER_COLOR } from "@/lib/globe/globe-colors";
 import { GlobeLoading, GlobeUnavailable } from "./globe-loading";
 
 function detectWebGL(): boolean {
@@ -326,7 +327,7 @@ export function ConflictGlobe({
           // land, so the fill layer is switched off there (political
           // border lines below still render in both modes).
           polygonsData={isSatellite ? [] : landFeatures}
-          polygonCapColor={() => "rgba(141, 150, 165, 0.4)"}
+          polygonCapColor={() => LAND_FILL_COLOR}
           polygonSideColor={() => "rgba(20, 24, 30, 0.35)"}
           polygonStrokeColor={() => "rgba(76, 194, 255, 0.28)"}
           polygonAltitude={0.006}
@@ -348,7 +349,7 @@ export function ConflictGlobe({
           // Earth's own TYPE field, see lib/globe/country-borders.ts) get
           // a distinct amber tint instead of blending in as an ordinary
           // undisputed border.
-          pathColor={(d: object) => ((d as GlobePath).disputed ? "rgba(228, 196, 65, 0.85)" : "rgba(210, 218, 230, 0.65)")}
+          pathColor={(d: object) => ((d as GlobePath).disputed ? DISPUTED_BORDER_COLOR : BORDER_COLOR)}
           pathDashLength={(d: object) => ((d as GlobePath).disputed ? 0.4 : 1)}
           pathDashGap={(d: object) => ((d as GlobePath).disputed ? 0.25 : 0)}
           // Above the landmass fill (0.006) so borders actually render on

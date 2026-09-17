@@ -84,20 +84,81 @@ Next.js Route Handlers / Server Actions
   rotation, which doesn't change distance — doesn't trigger a
   recompute), so zooming out merges a region into fewer/larger clusters
   and zooming in splits them apart.
-- **Borders** (`lib/globe/country-borders.ts`, spec "normal globe
-  borders"): on by default (`DEFAULT_GLOBE_LAYERS.borders` in
-  `hooks/use-app-store.ts`) on the Intel globe specifically — suppressed
-  in Satellite mode regardless of the toggle state, since photographic
-  imagery doesn't need line-art country outlines overlaid. Still
-  lazy-imported only once a session actually needs it (Intel is the
-  default view mode, so this now happens on first paint rather than only
-  when a user opts in), and still capped to one ~22-point ring per
-  country (pre-existing decimation) — the measured cost is a bounded
-  ~0.5–1s one-time hit, not a per-frame cost, which is what makes
-  defaulting it on compatible with the "keep first paint fast" reasoning
-  that originally justified leaving it off (see Decisions.md). Rendered
-  at a fixed, explicit `pathPointAlt` below the landmass fill and every
-  marker layer, so it always stays beneath them.
+- **Borders** (`lib/globe/country-borders.ts`, `lib/globe/globe-colors.ts`,
+  spec "normal globe borders" / "Globe readability"): on by default
+  (`DEFAULT_GLOBE_LAYERS.borders` in `hooks/use-app-store.ts`) on the
+  Intel globe specifically — suppressed in Satellite mode regardless of
+  the toggle state, since photographic imagery doesn't need line-art
+  country outlines overlaid. Still lazy-imported only once a session
+  actually needs it (Intel is the default view mode, so this now happens
+  on first paint rather than only when a user opts in), and still capped
+  to one ~22-point ring per country (pre-existing decimation) — the
+  measured cost is a bounded ~0.5–1s one-time hit, not a per-frame cost,
+  which is what makes defaulting it on compatible with the "keep first
+  paint fast" reasoning that originally justified leaving it off (see
+  Decisions.md). **Fixed a real invisibility bug** (spec "verify borders
+  are actually visible in-browser, not just enabled in config"): borders
+  were on by default but rendered in the exact same color as the
+  landmass fill's cap color sitting on top of them (`polygonAltitude`
+  0.006 vs. the border's old `pathPointAlt` 0.002 — the fill was both
+  color-matched AND literally in front), so a border was invisible
+  everywhere it crossed land instead of coastline, which is the common
+  case for a political border. Now rendered at `pathPointAlt` 0.0065
+  (above the land fill, still well below `htmlElements`/labels at
+  0.011–0.012) in a named, distinct `BORDER_COLOR`
+  (`lib/globe/globe-colors.ts`, plus a `colorDistance()` helper the test
+  suite uses to assert the fill and border colors are actually far apart
+  in RGBA space — a regression guard a plain string-inequality check
+  wouldn't catch). **Disputed/indeterminate boundaries** (Natural
+  Earth's own `TYPE` field on the bundled dataset — "Disputed" for
+  Palestine, "Indeterminate" for Western Sahara/Somaliland/Antarctica,
+  genuinely relevant to a conflict-tracking app) render with a distinct
+  dashed amber `DISPUTED_BORDER_COLOR` instead of blending in as an
+  ordinary undisputed border (`GlobePath.disputed`, set once in
+  `getCountryBorderPaths()`); dashing uses `pathDashLength`/
+  `pathDashGap` per-path accessors, which three-globe implements as a
+  shader uniform on its plain (non-fat-line) `THREE.Line` renderer, so it
+  costs nothing extra over a solid line.
+- **City labels** (`lib/globe/city-labels.ts`, spec "Globe readability" §2):
+  no populated-places dataset existed anywhere in this project or bundled
+  with `three-globe` (only country polygons), so this is a small
+  hand-curated static list (~200 entries, no new dependency) rather than
+  a geocoding-grade gazetteer — tiered exactly like `getCountryLabels()`'s
+  existing `labelRank` filtering, but by hand: tier 1 (capitals + major
+  global cities, world zoom), tier 2 (major regional cities), tier 3
+  (further notable cities, close zoom). `cityLabelTierForAltitude()`
+  maps the same camera-altitude value the event-cluster radius already
+  polls (see above) to a max tier, calibrated so the globe's own default
+  resting altitude (~2.15 desktop / ~2.6 mobile) lands in the
+  tier-1-only bucket, zooming in reveals tiers 2 then 3, and zooming out
+  far enough (>3.2) hides city labels entirely. Reduced by one tier on
+  mobile and in Satellite mode. Shares three-globe's single `labelsData`
+  layer with the pre-existing country-name labels via a `GlobeLabel`
+  tagged union (`{kind:"country"}` / `{kind:"city"}`) — country names
+  render larger/brighter (they name a whole region); city names are
+  smaller, subtler point labels, one size step down again per deeper
+  tier, so the busiest close-zoom tier doesn't visually compete with
+  tier-1 capitals. Both label kinds render via three-globe's canvas-
+  sprite text layer, which has no click handler wired up
+  (`onLabelClick` is never set) — labels are structurally non-
+  interactive and live in a different render layer from the
+  `htmlElementsData` marker buttons entirely, so they can never intercept
+  a click meant for a conflict hotspot or event cluster regardless of
+  z-order. **Overlap** is handled by curation, not runtime collision
+  detection: three-globe has no built-in label-declutter system for
+  `labelsData`, so each tier's city list was hand-spaced with real
+  geographic separation rather than left to chance — this is why the
+  dataset is static/curated instead of pulled from a denser source that
+  would need that machinery.
+- A returning browser's already-persisted `globeLayers` preference
+  (zustand `persist`, `hooks/use-app-store.ts`) does not automatically
+  pick up a later change to `DEFAULT_GLOBE_LAYERS` — the persisted value
+  wins over the code's default for any key it already contains. The
+  Borders/Labels-on-by-default fix ships with `version: 1` and a
+  `migrate()` that forces `borders`/`labels` to `true` for any persisted
+  state saved under the previous (unversioned) state, so this exact class
+  of "the config says true but a real user's browser still shows it off"
+  bug can't quietly persist for anyone who used the app before this fix.
 - Auto-rotation runs via `requestAnimationFrame` at a slow fixed angular
   velocity, paused on pointer-down, resumed after ~4s of inactivity via a
   debounced timer.

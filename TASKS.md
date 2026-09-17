@@ -348,6 +348,56 @@ their publication time explicitly.
   Structured Event Intelligence already established for the same
   reason.
 
+### Phase 2o — Globe readability: visible borders, disputed boundaries, city labels
+
+| # | Task | Status |
+|---|---|---|
+| 130 | Found and fixed the actual bug behind "borders don't visibly show": `pathColor` was set to the exact same string as the landmass fill's `polygonCapColor`, and rendered at a lower `pathPointAlt` than that fill, so a border was both color-matched to AND visually occluded by the land sitting in front of it — invisible everywhere it crossed land rather than coastline. Fixed by moving borders above the land fill (still below markers/labels) and giving them a distinct, named `BORDER_COLOR` | DONE |
+| 131 | Natural Earth's own `TYPE` field on the bundled border dataset ("Disputed" for Palestine, "Indeterminate" for Western Sahara/Somaliland/Antarctica) is now carried through as `GlobePath.disputed` and rendered with a distinct dashed amber color instead of blending in as an ordinary undisputed border | DONE |
+| 132 | `lib/globe/city-labels.ts` (NEW): a ~200-entry hand-curated tiered city dataset (no new dependency — none existed anywhere in the project or bundled with three-globe) — tier 1 (capitals/major global cities), tier 2 (regional), tier 3 (close-zoom), reusing the exact tiering convention `getCountryLabels()` already established | DONE |
+| 133 | `cityLabelTierForAltitude()` reuses the same camera-altitude polling the event-cluster radius already depends on (no second interval) to reveal more city tiers on zoom-in and hide labels entirely when zoomed too far out; reduced one tier further on mobile and in Satellite mode | DONE |
+| 134 | Country-name and city-name labels now share three-globe's single `labelsData` layer via a `GlobeLabel` tagged union, sized/colored so city names read as visually subordinate to country names | DONE |
+| 135 | `DEFAULT_GLOBE_LAYERS.labels` flipped to `true` (Labels was the one remaining globe layer still off by default) with a zustand-persist `version`/`migrate()` bump so a returning browser's already-saved `globeLayers` preference doesn't silently keep pinning Borders/Labels off forever just because that was the default when it was first saved | DONE |
+| 136 | `lib/globe/globe-colors.ts` (NEW): named `LAND_FILL_COLOR`/`BORDER_COLOR`/`DISPUTED_BORDER_COLOR` constants (replacing inline JSX string literals) plus a `colorDistance()` helper, so the invisibility bug's regression test can assert the colors are actually far apart in RGBA space, not just string-different | DONE |
+| 137 | `tests/globe-readability.spec.ts` (10 pure-function checks): border/land-fill color distance, disputed/ordinary color distance, real disputed-territory data presence, city-label tier supersets, tier-0 hides everything, valid coordinates, altitude-to-tier calibration against the globe's own default resting altitude, monotonic tier-vs-altitude behavior. Extended `tests/globe-rendering.spec.ts` test 1 to also assert Labels defaults to checked | DONE |
+| 138 | Full re-verification on a reset DB: typecheck/lint/build clean; full Playwright suite (300 tests across Desktop + Mobile) — 295 passed, 5 pre-existing skips, 0 failed (a first full run hit 2 unrelated flaky failures in ingestion/source-fixture tests untouched by this milestone; both passed in isolation and on a clean re-run). Manually verified in-browser across Europe, Middle East, North America, and East Asia: borders clearly visible and readable on the Intel globe, Western Sahara's disputed border renders dashed amber, city names (e.g. Madrid, Beijing, Seattle/Denver/Ottawa) appear and reveal more on zoom-in, no excessive overlap observed, Satellite mode suppresses borders and shows fewer labels at the same zoom, and clicking a conflict hotspot still opens its detail panel — labels do not block interaction. Zero console errors throughout | DONE |
+
+### Phase 2o decisions
+
+- **A toggle being checked is not the same as the thing it controls
+  being visible.** The existing "Borders are visible by default" test
+  only asserted the Layers popover checkbox was checked — which was
+  already true and always passed — while the actual rendered line was
+  invisible the whole time because its color exactly matched the
+  landmass fill rendered in front of it. Fixed the bug, then fixed the
+  gap in what was being verified: color-distance assertions
+  (`colorDistance()` in `lib/globe/globe-colors.ts`) now guard the
+  specific invariant that broke, and manual in-browser verification
+  across four real regions is the ground truth for "actually visible,"
+  not a substitute automated check pretending to be one.
+- **Overlap prevention for city labels is a data-curation problem here,
+  not a runtime one.** three-globe's `labelsData` has no built-in
+  collision/declutter system (unlike, say, a Mapbox symbol layer). Rather
+  than building screen-space collision detection from scratch — a much
+  larger and riskier addition than this fix calls for — the ~200-city
+  dataset itself is hand-spaced with real geographic separation within
+  each cumulative tier, and the altitude-gated tier system means only a
+  fraction of the dataset is ever visible at once.
+- **No new geographic dependency.** The spec explicitly allowed a
+  lightweight static dataset over a heavy new one if nothing suitable
+  already existed — nothing did (checked both this project's `lib/data/
+  *` and everything bundled with `three-globe`), so `city-labels.ts` is
+  a plain hand-curated TypeScript array, not a geocoding library or a
+  fetched dataset.
+- **A version bump on the persisted preferences store, not just a
+  default-value change.** Flipping `DEFAULT_GLOBE_LAYERS` alone would
+  only affect browsers with nothing saved yet — zustand's `persist`
+  middleware otherwise trusts whatever a returning user's `localStorage`
+  already has for any key present in it. Without the `migrate()` step,
+  anyone who'd loaded the app before this fix would have kept seeing
+  Borders/Labels off forever, silently, which is exactly the "enabled in
+  config but not in a real browser" failure mode the spec called out.
+
 ## Beyond the Phase 1 floor (built ahead of schedule)
 
 The spec listed these as later-phase, but they were straightforward
