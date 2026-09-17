@@ -151,6 +151,24 @@ real bugs found doing it.
 | 78 | `tests/ingestion-reliability.spec.ts` (6 tests × 2 projects): bounded concurrency (timing-based — a 6-source tick measurably takes two worker-pool "waves," not one), a broken + slow + healthy source together under the bounded scheduler, Retry-After overriding a shorter backoff, exponential backoff growth then reset-on-success, an actual exceeded timeout (not just a slow-but-successful fetch), and overlap prevention + duplicate protection reconfirmed under the new bounded-concurrency code path. `app/api/test-fixtures/rss/[name]/route.ts` gained `?status=`/`?retryAfter=` simulation params alongside the existing `?delayMs=`. `INGESTION_FETCH_TIMEOUT_MS` (`lib/ingestion/poll.ts`) is now configurable via env, set short for the test server process (`playwright.config.ts`) so the timeout test doesn't need to wait out the real 20s default | DONE |
 | 79 | Full re-verification: typecheck / lint / production build clean; `ingestion-reliability.spec.ts` passes 12/12 reliably across repeated standalone runs; full Playwright suite passes 119/120 runnable in a combined run, the one failure being the same previously-diagnosed environment-only flakiness pattern (reconfirmed via an immediate isolated rerun of the affected file, 20/20 clean) | DONE |
 
+### Phase 2g — Stage 3: event matching / clustering foundation
+
+The spec asked for a new deterministic candidate-matching service — this
+turned out to already exist as the duplicate-candidate engine
+(`lib/ingestion/duplicates.ts`, Phase 2c). Rather than build a second,
+parallel system, this phase hardens that one against the exact failure
+modes the spec calls out by name, so Stage 4's UI (below) can build on
+the same engine instead of a redundant one.
+
+| # | Task | Status |
+|---|---|---|
+| 80 | Event-type compatibility grading: types are grouped (kinetic/military, civil unrest, natural disaster, health/humanitarian, policy/other) in `lib/ingestion/duplicates.ts`. An exact match scores full credit, a different type in the same group gets half credit (airstrike vs. explosion), a cross-group pairing (earthquake vs. explosion) is actively penalized rather than merely contributing zero — closes a real gap where a same-place/same-time pairing of clearly unrelated event kinds could still clear the match threshold on distance+time alone | DONE |
+| 81 | Geographic-signal gate: if nothing places two reports anywhere near each other (not close distance ≤500km, not the same region/country, not the same conflict), a real penalty applies instead of leaving distance at a bare 0 contribution — closes a real gap where an identical/near-identical headline with a matching type and similar time-of-day could clear the threshold from title+type+time alone on opposite sides of the planet | DONE |
+| 82 | Generic-headline false-positive guard: expanded the title-similarity stopword list (`breaking`, `news`, `update`/`updates`, `latest`, `live`, `watch`, `video`, `says`/`say`) so two unrelated wire-service headlines don't score a false match purely on shared newsroom boilerplate | DONE |
+| 83 | `DuplicateCandidateDTO` gained `eventType`/`region`/`countryCode`/`occurredAt` (context for Stage 4's UI), `eventTypeCompatible`, and `reasons: string[]` — short, human-readable explanations for the score (e.g. "0.3 km away", "same conflict", "62% title overlap"), always at least one entry | DONE |
+| 84 | `tests/event-matching.spec.ts` (9 tests × 2 projects) proves every scenario the spec names: obvious same event, same location substantially different time, same event type in a different country, same place/time but incompatible event type, similar wording but geographically unrelated, generic-headline false-positive protection, a boundary case just under `MIN_SCORE`, and the no-candidate case. Publishes one reference event via the real publish API, then calls the existing `POST /api/admin/incoming/[id]/duplicates` directly with synthetic candidates | DONE |
+| 85 | Full re-verification: typecheck / lint / production build clean; new suite passes 18/18; `classification.spec.ts` + `multi-source-ingestion.spec.ts` (both exercise the same scoring function) re-run clean, 54/54, confirming no regression from the hardening | DONE |
+
 ## Beyond the Phase 1 floor (built ahead of schedule)
 
 The spec listed these as later-phase, but they were straightforward
@@ -394,3 +412,29 @@ rather than left as stubs:
   Playwright test server process runs with a much shorter one so
   `tests/ingestion-reliability.spec.ts`'s timeout test doesn't need to
   wait out 20 real seconds to prove a timeout is handled correctly.
+
+### Phase 2g decisions
+
+- **Hardened the existing duplicate-candidate engine rather than
+  building a second, parallel matching service.** The spec's "Event
+  Matching / Clustering Foundation" describes almost exactly what
+  `lib/ingestion/duplicates.ts` already did — geographic proximity,
+  temporal proximity, event-type compatibility, title similarity, a
+  ranked score, never auto-merging. Building a separate system would
+  mean two subtly-different scoring functions and two places for
+  Stage 4's UI to potentially disagree with each other. The real gaps
+  (incompatible types scoring the same as "no signal," no floor on
+  geographic relevance, generic headlines inflating title similarity)
+  were fixed in place instead.
+- **Event-type compatibility is graded (exact / same-group / cross-group
+  penalty), not a flat same/different boolean.** A flat boolean either
+  ignores genuinely related types (airstrike vs. explosion) or fails to
+  actively discourage genuinely unrelated ones (earthquake vs.
+  explosion) — grading by group does both without hand-listing every
+  type pair.
+- **A missing geographic/conflict signal is penalized, not left at
+  zero.** Leaving distance at a bare 0 contribution when nothing at all
+  places two reports near each other allows title+type+time to clear
+  the match threshold on their own — geographic proximity is the
+  spec's first-listed signal precisely because it has to gate the
+  result, not just be one more additive term among several.

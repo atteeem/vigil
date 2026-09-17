@@ -308,15 +308,39 @@ migration described later in this file.
   `components/admin/location-picker.tsx` shows all candidates for a human
   to pick from (plus a search box for any other place name, manual
   lat/lng inputs, and an embedded MapLibre marker preview).
-- **Duplicate-candidate engine** (`lib/ingestion/duplicates.ts`, spec §2):
+- **Duplicate-candidate / event-matching engine** (`lib/ingestion/duplicates.ts`,
+  spec §2 and "Event Matching / Clustering Foundation"):
   `findDuplicateCandidates()` scores every already-published event within
   a ±14-day window of the candidate's `occurredAt` against a weighted sum
   of distance (haversine, decaying to 0 past 25km), time-apart (decaying
-  to 0 past 12h), same event type, same country/region, same conflict,
-  and title similarity (Jaccard over stopword-filtered tokens) — returns
-  the top 5 candidates scoring ≥35/100, descending. Never merges
-  anything automatically. The review UI shows each as "Possible
-  duplicate — N% / title / N min apart / N km away" with three actions:
+  to 0 past 12h), event-type compatibility, same country/region, same
+  conflict, and title similarity (Jaccard over stopword-filtered tokens)
+  — returns the top 5 candidates scoring ≥35/100, descending, each with a
+  `reasons: string[]` explaining the score in plain terms (e.g. "0.3 km
+  away", "same conflict", "62% title overlap"). Never merges anything
+  automatically. Two hardening rules beyond plain weighted addition:
+  - **Event-type compatibility is graded, not binary.** Types are grouped
+    (kinetic/military, civil unrest, natural disaster, health/
+    humanitarian, policy/other). An exact match gets full credit, a
+    different type in the *same* group gets half credit (an airstrike
+    very plausibly produces an explosion someone else reports
+    independently), and a genuinely cross-group pairing (e.g. earthquake
+    vs. explosion) is actively penalized rather than merely scoring zero
+    for that component — otherwise a same-place/same-time pairing of
+    clearly unrelated event kinds could still clear the threshold on
+    distance+time alone.
+  - **No geographic or conflict corroboration at all is itself
+    penalized.** Geographic proximity is the first-listed signal, and
+    treating it as just one more additive component lets an identical
+    headline (e.g. republished wire copy) with a matching type and
+    similar time-of-day clear the threshold from title+type+time alone
+    on opposite sides of the planet. If nothing places the two reports
+    anywhere near each other — not close distance (≤500km), not the same
+    region/country, not the same conflict — a real penalty applies
+    instead of leaving distance at a bare 0 contribution.
+
+  The review UI shows each as "Possible duplicate — N% / title / N min
+  apart / N km away" with three actions:
   **View existing event** (opens `/event/[slug]`), **Merge into event**
   (`POST /api/admin/incoming/[id]/merge`), and **Ignore suggestion**
   (client-side only — removes it from that review session's list without
@@ -566,3 +590,18 @@ The concurrency test asserts a generous lower bound on elapsed time (two
 worker-pool "waves" measurably takes longer than one would) and only a
 loose upper bound (a hang-guard, not a performance assertion — this
 sandbox's per-request latency is too variable to assert tightly on).
+
+**`tests/event-matching.spec.ts`** covers the duplicate/event-matching
+engine's hardening described under "Duplicate-candidate / event-matching
+engine" above — the exact scenarios named in the spec: an obvious same
+event (close in time and space), the same location days apart (should
+score much lower, not necessarily zero — nothing here ever auto-merges
+regardless of score), the same event type in a different country
+(geographic-signal gate), an incompatible event type at the same place/
+time (compatibility-group penalty), similar wording but geographically
+unrelated, generic/boilerplate headlines that share only wire-service
+filler words, a boundary case just under `MIN_SCORE`, and the empty-
+result case. Publishes one reference event via the real publish API,
+then calls `POST /api/admin/incoming/[id]/duplicates` directly with
+synthetic candidate reports — no fixture RSS feed involved, since this
+stage is about the scoring function itself, not ingestion.

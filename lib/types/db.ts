@@ -115,13 +115,31 @@ export interface DuplicateCandidateDTO {
   eventId: string;
   slug: string;
   title: string;
+  /** For the reviewer's context (spec "Event-Matching UX": "existing
+   * event title, event type, location, event time") — not used in
+   * scoring beyond what sameEventType/sameRegionOrCountry already
+   * summarize. */
+  eventType: string;
+  region: string | null;
+  countryCode: string | null;
+  occurredAt: string; // ISO datetime
   score: number; // 0-100
   distanceKm: number | null;
   minutesApart: number | null;
   sameEventType: boolean;
+  /** Same event, or an event in the same broad category (e.g. airstrike
+   * vs explosion) — as opposed to a genuinely incompatible pairing (e.g.
+   * earthquake vs explosion), which actively lowers the score rather
+   * than merely not contributing to it (spec "incompatible event types
+   * should reduce or eliminate a match"). */
+  eventTypeCompatible: boolean;
   sameConflict: boolean;
   sameRegionOrCountry: boolean;
   titleSimilarity: number; // 0-1
+  /** Short, human-readable explanations for the score (spec "component
+   * scores or matching reasons where practical") — e.g. "0.3 km away",
+   * "12 min apart", "same conflict". Always at least one entry. */
+  reasons: string[];
 }
 
 export interface LocationCandidateDTO {
