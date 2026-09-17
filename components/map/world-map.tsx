@@ -132,9 +132,18 @@ function addEventLayers(map: MapLibreMap, initialData: GeoJSON.FeatureCollection
     // "High zoom: full category-specific icons".
     minzoom: ICON_DETAIL_ZOOM,
     layout: {
-      // Every value EVENT_TYPES can hold has a matching image registered by
-      // registerEventIcons(), so a plain concat (no match/fallback) is safe.
-      "icon-image": ["concat", "event-icon-", ["get", "eventType"]],
+      // SQLite has no enum type (prisma/schema.prisma), so a real DB row's
+      // eventType is never actually validated against EVENT_TYPES the way
+      // TypeScript assumes elsewhere — a stray/legacy value would resolve
+      // to an unregistered image id and MapLibre would silently render no
+      // icon for that marker. The "in" check falls back to the "other"
+      // icon (always registered) instead.
+      "icon-image": [
+        "case",
+        ["in", ["get", "eventType"], ["literal", EVENT_TYPES as unknown as string[]]],
+        ["concat", "event-icon-", ["get", "eventType"]],
+        "event-icon-other",
+      ],
       "icon-size": ["interpolate", ["linear"], ["get", "importance"], 40, 0.32, 100, 0.5],
       "icon-allow-overlap": true,
       "icon-ignore-placement": true,

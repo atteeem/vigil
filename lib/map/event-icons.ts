@@ -161,9 +161,74 @@ const DRAWERS: Record<EventType, Drawer> = {
   },
   // Simple filled diamond — a generic classified event.
   conflict: (ctx, s) => poly(ctx, [[s(12), s(2)], [s(22), s(12)], [s(12), s(22)], [s(2), s(12)]]),
+  // Jagged seismograph zigzag — an earthquake trace.
+  earthquake: (ctx, s) =>
+    strokeLine(
+      ctx,
+      [
+        [s(2), s(14)], [s(6), s(14)], [s(8.5), s(6)], [s(11), s(19)],
+        [s(13.5), s(9)], [s(16), s(14)], [s(22), s(14)],
+      ],
+      s(2.4),
+    ),
+  // Two stacked wave lines — floodwater.
+  flood: (ctx, s) => {
+    [9, 15].forEach((y) => {
+      ctx.beginPath();
+      ctx.moveTo(s(2), s(y));
+      ctx.bezierCurveTo(s(6), s(y - 3.5), s(9), s(y + 3.5), s(13), s(y));
+      ctx.bezierCurveTo(s(17), s(y - 3.5), s(20), s(y + 3.5), s(22), s(y));
+      ctx.lineWidth = s(2.2);
+      ctx.lineCap = "round";
+      ctx.strokeStyle = "#ffffff";
+      ctx.stroke();
+    });
+  },
+  // Spiral funnel — a storm/cyclone.
+  storm: (ctx, s) => {
+    ctx.beginPath();
+    const cx = s(12);
+    const cy = s(12);
+    const turns = 2.2;
+    const maxR = s(10);
+    for (let t = 0; t <= 1; t += 0.02) {
+      const angle = t * Math.PI * 2 * turns;
+      const r = t * maxR;
+      const x = cx + Math.cos(angle) * r;
+      const y = cy + Math.sin(angle) * r;
+      if (t === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.lineWidth = s(2.4);
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#ffffff";
+    ctx.stroke();
+  },
+  // Open hand cradling a heart — humanitarian aid.
+  humanitarian: (ctx, s) => {
+    ctx.beginPath();
+    ctx.moveTo(s(12), s(9.5));
+    ctx.bezierCurveTo(s(9.5), s(5.5), s(4), s(7.5), s(4), s(11.5));
+    ctx.bezierCurveTo(s(4), s(15), s(9), s(18.5), s(12), s(20.5));
+    ctx.bezierCurveTo(s(15), s(18.5), s(20), s(15), s(20), s(11.5));
+    ctx.bezierCurveTo(s(20), s(7.5), s(14.5), s(5.5), s(12), s(9.5));
+    ctx.closePath();
+    ctx.fill();
+  },
+  // Cross-in-circle — a health/medical marker.
+  health: (ctx, s) => {
+    ring(ctx, s(12), s(12), s(10.2), s(7.6));
+    poly(ctx, [[s(10.2), s(7)], [s(13.8), s(7)], [s(13.8), s(10.2)], [s(17), s(10.2)], [s(17), s(13.8)], [s(13.8), s(13.8)], [s(13.8), s(17)], [s(10.2), s(17)], [s(10.2), s(13.8)], [s(7), s(13.8)], [s(7), s(10.2)], [s(10.2), s(10.2)]]);
+  },
   other: (ctx, s) => DRAWERS.conflict(ctx, s),
 };
 
 export function createEventIconImageData(category: EventType): ImageData {
-  return withCanvas((ctx, s) => DRAWERS[category](ctx, s));
+  // Falls back to "other"'s diamond rather than throwing — the loop in
+  // world-map.tsx's registerEventIcons() only ever calls this with a
+  // value from EVENT_TYPES, but SQLite has no enum type (see
+  // prisma/schema.prisma), so a real DB row's eventType is never actually
+  // validated at the boundary the way this parameter's TS type assumes.
+  const draw = DRAWERS[category] ?? DRAWERS.other;
+  return withCanvas((ctx, s) => draw(ctx, s));
 }

@@ -34,6 +34,13 @@ export type ExposureDimension = (typeof EXPOSURE_DIMENSIONS)[number];
 // added alongside rather than renaming/removing anything — e.g. "ground"
 // and "ground_clash" both exist and share the same marker icon. See
 // lib/map/event-icons.ts and Map Requirements.md in the Obsidian vault.
+//
+// earthquake/flood/storm/humanitarian/health added for the multi-source
+// ingestion milestone: GDACS Disaster Alerts (a seeded real source) is
+// entirely natural-disaster content, and WHO/ReliefWeb produce
+// health/humanitarian reports — without these, that real, currently-
+// flowing content had no meaningful category and fell into "other" (see
+// lib/ingestion/event-type-keywords.ts for the matching keywords).
 export const EVENT_TYPES = [
   "airstrike",
   "drone",
@@ -55,6 +62,11 @@ export const EVENT_TYPES = [
   "sanctions",
   "infrastructure",
   "conflict",
+  "earthquake",
+  "flood",
+  "storm",
+  "humanitarian",
+  "health",
   "other",
 ] as const;
 

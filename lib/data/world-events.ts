@@ -38,6 +38,7 @@ export function dbEventToConflictEvent(event: EventWithSources): ConflictEvent {
       (link.rawIngestionItem.source.sourceCategory as SourceRef["sourceType"] | null) ??
       SOURCE_TYPE_LABEL[link.rawIngestionItem.source.type] ??
       "OSINT",
+    sourceRole: link.rawIngestionItem.source.sourceRole,
     url: link.rawIngestionItem.originalUrl ?? "",
     publishedAt: (link.rawIngestionItem.publishedAt ?? link.rawIngestionItem.receivedAt).toISOString(),
     note: link.relationship === "relay" ? "Relay — not an independent confirmation of the originating source." : undefined,

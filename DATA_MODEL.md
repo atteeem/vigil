@@ -39,7 +39,7 @@ so the migration is mechanical.
 | slug | text (unique) | |
 | title | text | |
 | summary | text | neutral, attribution-preserving |
-| event_type | enum | the full 21-category set in `lib/types/severity.ts` `EVENT_TYPES` (airstrike, drone, missile, explosion, artillery, ground, ground_clash, naval, air_defense, protest, civil_unrest, fire, security, terrorism, cyber, border, diplomacy, sanctions, infrastructure, conflict, other) — see `lib/map/event-icons.ts` for the matching icon per category |
+| event_type | enum | the full 26-category set in `lib/types/severity.ts` `EVENT_TYPES` (airstrike, drone, missile, explosion, artillery, ground, ground_clash, naval, air_defense, protest, civil_unrest, fire, security, terrorism, cyber, border, diplomacy, sanctions, infrastructure, conflict, earthquake, flood, storm, humanitarian, health, other) — see `lib/map/event-icons.ts` for the matching map-marker icon and `components/events/event-type-icon.tsx` for the DOM icon/label per category. SQLite has no enum column type, so this is a plain `String` enforced only by convention (application code), not the database — see that same file's `EventTypeIcon`/`getEventTypeLabel` for the safe-fallback behavior this requires |
 | latitude / longitude | double | mirrored into `location geography(Point)` |
 | country_code | text (FK → countries) | |
 | region | text | |
@@ -81,7 +81,7 @@ mechanical.
 | language | text, nullable | e.g. `en` |
 | source_category | text, nullable | e.g. "News" — shown as the source's displayed type on event detail pages, preferred over a generic per-`type` label |
 | reliability_tier | text, nullable | e.g. `A` |
-| source_role | text, nullable | trust-model classification (spec "Source Trust Model") — `originating` \| `relay` \| `official` \| `local_media` \| `eyewitness_community` \| `aggregator`. Complements, doesn't replace, `source_category`/`reliability_tier` |
+| source_role | text, nullable | trust-model classification (spec "Source Trust Model") — `originating` \| `relay` \| `official` \| `local_media` \| `eyewitness_community` \| `aggregator`. Complements, doesn't replace, `source_category`/`reliability_tier`. Also drives the source icon shown on `/admin/sources` and event detail pages (`components/events/source-role-icon.tsx`) — a source with no role set renders a generic fallback icon, never a blank one |
 | permission_status | text | `authorized` \| `unauthorized` \| `pending` — Telegram sources default `unauthorized` until real credentials exist |
 | enabled | boolean | |
 | auto_ingest | boolean | polled by the scheduler when true; "Fetch Now" works regardless |

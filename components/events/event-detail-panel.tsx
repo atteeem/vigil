@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, MapPin } from "lucide-react";
 import type { ConflictEvent } from "@/lib/types";
-import { EVENT_TYPE_ICON, EVENT_TYPE_LABEL } from "./event-type-icon";
+import { EventTypeIcon, getEventTypeLabel } from "./event-type-icon";
+import { SourceRoleIcon, getSourceRoleLabel } from "./source-role-icon";
 import { VerificationBadge } from "@/components/ui/verification-badge";
 import { SeverityBadge } from "@/components/ui/severity-badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -22,7 +23,6 @@ export function EventDetailPanel({
   /** Hide the "Open full event page" link when this panel IS the full event page (avoids a self-referential link). */
   linkToFullPage?: boolean;
 }) {
-  const Icon = EVENT_TYPE_ICON[event.eventType];
   const country = getCountryByCode(event.countryCode);
   const conflict = event.conflictId ? getConflictById(event.conflictId) : undefined;
   const timezone = useAppStore((s) => s.timezone);
@@ -49,8 +49,8 @@ export function EventDetailPanel({
   return (
     <div>
       <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
-        <Icon className="h-3.5 w-3.5" aria-hidden />
-        {EVENT_TYPE_LABEL[event.eventType]}
+        <EventTypeIcon eventType={event.eventType} className="h-3.5 w-3.5" />
+        {getEventTypeLabel(event.eventType)}
       </div>
       <h2 className="mt-1.5 text-lg font-semibold leading-snug text-ink">{event.title}</h2>
 
@@ -101,7 +101,8 @@ export function EventDetailPanel({
           {event.sources.map((s, i) => (
             <li key={s.id} className="rounded-lg border border-border px-3 py-2 text-xs">
               <div className="flex items-center justify-between gap-2">
-                <p className="font-medium text-ink">
+                <p className="flex items-center gap-1.5 font-medium text-ink">
+                  <SourceRoleIcon sourceRole={s.sourceRole} className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
                   {s.name}
                   {i === 0 && (
                     <span className="ml-1.5 rounded-full border border-accent/30 bg-accent-dim px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-accent">
@@ -111,7 +112,10 @@ export function EventDetailPanel({
                 </p>
                 <p className="shrink-0 text-ink-faint">{timeAgo(s.publishedAt, MOCK_NOW)}</p>
               </div>
-              <p className="mt-0.5 text-ink-faint">Source type: {s.sourceType}</p>
+              <p className="mt-0.5 text-ink-faint">
+                Source type: {s.sourceType}
+                {getSourceRoleLabel(s.sourceRole) && ` · ${getSourceRoleLabel(s.sourceRole)}`}
+              </p>
               <p className="mt-0.5 text-ink-faint">Published: {formatAbsoluteTime(s.publishedAt, effectiveTimezone)}</p>
               {s.url && (
                 <a

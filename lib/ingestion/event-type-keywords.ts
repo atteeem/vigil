@@ -16,7 +16,10 @@ export const EVENT_TYPE_KEYWORDS: [EventType, string[]][] = [
   ["ground_clash", ["ground clash", "firefight", "gun battle", "clashes", "offensive", "counteroffensive"]],
   ["protest", ["protest", "demonstration", "rally"]],
   ["civil_unrest", ["riot", "unrest", "civil unrest"]],
-  ["fire", ["wildfire", "fire broke out", "blaze"]],
+  // "forest fire notification" (GDACS Disaster Alerts' real wording) is
+  // distinct from "wildfire" — both are checked so the seeded real source
+  // actually classifies instead of falling through to "other".
+  ["fire", ["wildfire", "forest fire", "fire broke out", "blaze"]],
   ["cyber", ["cyberattack", "cyber attack", "hacked", "data breach", "ransomware"]],
   ["border", ["border crossing", "border clash", "border incident"]],
   ["diplomacy", ["summit", "peace talks", "ceasefire", "negotiat", "diplomat"]],
@@ -24,6 +27,18 @@ export const EVENT_TYPE_KEYWORDS: [EventType, string[]][] = [
   ["infrastructure", ["power grid", "pipeline", "infrastructure", "water supply"]],
   ["terrorism", ["terrorist", "terror attack", "suicide bomb"]],
   ["security", ["security operation", "raid", "arrest"]],
+  // Natural-disaster categories — real GDACS Disaster Alerts wording
+  // ("Green earthquake (Magnitude...)", "Green flood alert...", "Green/
+  // Orange notification for tropical cyclone...").
+  ["earthquake", ["earthquake", "seismic", "magnitude"]],
+  ["flood", ["flood alert", "flooding", "flash flood", "flood warning"]],
+  ["storm", ["tropical cyclone", "hurricane", "typhoon", "tropical storm"]],
+  // Real ReliefWeb/GDACS wording ("Drought is on going in...") and
+  // generic humanitarian-crisis language.
+  ["humanitarian", ["drought", "humanitarian crisis", "famine", "displacement", "refugee crisis"]],
+  // Real WHO News wording ("...Global Health...", "health priorities",
+  // "World Health Assembly", "pandemic agreement").
+  ["health", ["pandemic", "disease outbreak", "epidemic", "health emergency", "world health", "global health"]],
 ];
 
 export function detectEventType(text: string): EventType {

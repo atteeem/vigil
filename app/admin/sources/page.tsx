@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { SOURCE_TYPES, SOURCE_ROLES, type SourceDTO, type SourceType, type SourceRole } from "@/lib/types/db";
 import type { FetchResult } from "@/lib/ingestion/poll";
 import { timeAgo, timeUntil, cn } from "@/lib/utils";
+import { SourceRoleIcon, SOURCE_ROLE_LABEL } from "@/components/events/source-role-icon";
 
 interface SourceFormState {
   name: string;
@@ -39,15 +40,6 @@ const EMPTY_FORM: SourceFormState = {
   pollIntervalMinutes: "5",
   autoIngest: false,
   autoProcessing: true,
-};
-
-const SOURCE_ROLE_LABEL: Record<SourceRole, string> = {
-  originating: "Originating",
-  relay: "Relay",
-  official: "Official",
-  local_media: "Local media",
-  eyewitness_community: "Eyewitness / community",
-  aggregator: "Aggregator",
 };
 
 function toPayload(form: SourceFormState) {
@@ -377,9 +369,10 @@ export default function AdminSourcesPage() {
                   </td>
                   <td className="px-4 py-3 text-ink-dim">
                     <div>{source.type}</div>
-                    {source.sourceRole && (
-                      <div className="text-xs text-ink-faint">{SOURCE_ROLE_LABEL[source.sourceRole]}</div>
-                    )}
+                    <div className="mt-0.5 flex items-center gap-1 text-xs text-ink-faint">
+                      <SourceRoleIcon sourceRole={source.sourceRole} className="h-3 w-3 shrink-0" />
+                      {source.sourceRole ? SOURCE_ROLE_LABEL[source.sourceRole] : "Unclassified"}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-ink-dim">{source.region ?? "—"}</td>
                   <td className="px-4 py-3 text-ink-dim">{source.reliabilityTier ?? "—"}</td>

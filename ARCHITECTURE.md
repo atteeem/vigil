@@ -332,10 +332,73 @@ migration described later in this file.
   `lib/data/world-events.ts`) for a published admin-review event — a
   freshly published RSS-sourced event has a fully working detail page,
   not just a `/world` preview panel. The Sources section shows each
-  source's name, an "Originating report" badge on the first
-  (originating, non-relay) source, its type (preferring the source's own
-  configured category, e.g. "News", over a generic per-adapter label),
-  an absolute "Published:" timestamp, and the clickable original URL.
+  source's name, its role icon (see "Source icon" below), an "Originating
+  report" badge on the first (originating, non-relay) source, its type
+  (preferring the source's own configured category, e.g. "News", over a
+  generic per-adapter label), an absolute "Published:" timestamp, and the
+  clickable original URL.
+
+### End-to-end pipeline verification (Phase 2e)
+
+The scheduler/ingestion pipeline (Phase 2d) was built and tested against
+fixtures, but no real article had been published through it yet — real
+content accumulated in `/admin/incoming` (hundreds of pending items from
+the seeded RSS sources) while `/world` kept showing only mock/test data,
+which read as "the real pipeline doesn't work" even though every stage
+up to Publish was already correct. This phase closes the loop: real BBC
+World / GDACS articles were reviewed and published through the actual
+`/admin/incoming` UI and publish API (never inserted directly), and
+confirmed to appear on `/world`, render a full event detail page, and
+link back to the genuine original article — see TASKS.md Phase 2e for
+the specific articles and confirmed slugs.
+
+Two real bugs surfaced by that verification, both fixed:
+
+- **Real disaster-source content had nowhere to classify into.** GDACS
+  Disaster Alerts (the majority of real pending content at the time) and
+  WHO News use wording
+  (`lib/ingestion/event-type-keywords.ts`'s comments have the exact
+  examples: "forest fire notification", "flood alert", "earthquake
+  (Magnitude...)", "tropical cyclone", "Drought is on going in...",
+  "World Health Assembly") that had no matching keywords and no matching
+  `EventType` category at all — it all fell into "other". Five
+  categories were added — `earthquake`, `flood`, `storm`, `humanitarian`,
+  `health` (`lib/types/severity.ts` `EVENT_TYPES`) — each with real-
+  wording keyword matches and both a DOM icon
+  (`components/events/event-type-icon.tsx`) and a map-marker icon
+  (`lib/map/event-icons.ts`, canvas-drawn SDF, matching the existing
+  style).
+- **An unrecognized `eventType` would crash the render, not just look
+  wrong.** SQLite has no enum column type (DATA_MODEL.md), so a DB row's
+  `eventType` is a plain `String` — validated by application convention
+  (the admin UI's `<select>` only offers real `EventType` values,
+  `extractDraft()`'s heuristic only ever returns one), never enforced by
+  the database or by any runtime check on the publish route. A stray/
+  legacy value would make a direct object-index lookup like
+  `EVENT_TYPE_ICON[eventType]` return `undefined`, and React throws
+  rendering `undefined` as a component. Every lookup site now has a safe
+  fallback to "other"'s icon/label instead: `EventTypeIcon`/
+  `getEventTypeLabel` (components/events/event-type-icon.tsx),
+  `createEventIconImageData` (lib/map/event-icons.ts), and the MapLibre
+  `icon-image` layout expression (`components/map/world-map.tsx`, a
+  `case`/`in` expression rather than a bare `concat`). Regression-tested
+  directly in `tests/pipeline-integrity.spec.ts` by publishing an event
+  with a deliberately bogus `eventType` via the API (bypassing the
+  TypeScript union the same way a stray DB value would) and confirming
+  the page still renders, with the "other" fallback visible, and zero
+  console errors.
+
+### Source icon (Phase 2e)
+
+`components/events/source-role-icon.tsx` is the one central mapping from
+a source's `sourceRole` (the trust-model field from Phase 2d — see
+"Source trust model" above) to an icon, with a generic fallback
+(`Radio`) for any source with no role set or an unrecognized value —
+used on `/admin/sources`'s table and the event detail page's Sources
+list, so a source never renders a blank icon. This also absorbed a small
+pre-existing duplication: `app/admin/sources/page.tsx` had its own local
+copy of the `sourceRole` → display-label map; that's now imported from
+this one file instead.
 
 ## Backend (Phase 2+, not built in Phase 1)
 
@@ -444,3 +507,27 @@ never touches this project's real live sources (BBC World, Al Jazeera,
 etc.) as a side effect of running the suite. Real sources are exercised
 manually — see the milestone's final report for their live-tested status,
 not something the automated suite asserts on.
+
+**`tests/pipeline-integrity.spec.ts`** covers the "real article visibly
+works end-to-end" guarantee and its two icon-fallback regressions (see
+"End-to-end pipeline verification" above): fetched-article persistence
+and required review fields, publish → reachable via the public
+`/api/events` path with the original source URL intact, a known event
+type's icon/label rendering with zero console errors, an unrecognized
+`eventType` (sent directly via the API, bypassing the TypeScript union)
+falling back to "other" instead of crashing the page, a source with no
+configured role rendering the generic fallback icon, and the exact
+real-world GDACS/WHO wording samples that originally fell through to
+"other" now classifying correctly. Same fixture-only pattern as the
+other deterministic suites.
+
+Local-DB hygiene: none of these suites reset the database themselves,
+so repeated manual verification (publishing real articles, running the
+suite many times in one long session) accumulates real and test data in
+the same local `prisma/dev.db` over time. That's expected and harmless
+for correctness, but on this sandbox's flagged "slow filesystem" it can
+produce transient full-suite-only flakiness under heavy accumulated load
+(distinct from the live-BBC-feed flakiness `rss-ingestion.spec.ts`
+already documents) — if a combined run shows an isolated, non-reproducing
+failure, try `rm prisma/dev.db* && npm run db:migrate && npm run db:seed`
+before concluding it's a real regression.

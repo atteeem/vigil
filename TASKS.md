@@ -123,6 +123,24 @@ migration.
 | 67 | Deterministic tests: `tests/multi-source-ingestion.spec.ts` (10 tests × 2 projects) covers scheduled polling (due/not-due), multiple independent sources in one tick, per-source failure isolation, overlap prevention (a slow fixture + staggered concurrent ticks), processing-after-ingestion (with and without `autoProcessing`), source health reporting, source independence via the scheduler path (relay merge), no-auto-publishing, and live map refresh after publish — all against local fixture feeds (`lib/testing/rss-fixtures.ts` gained a second feed, and a `?delayMs=` param for the overlap test), scoped away from this project's real live sources via an optional `sourceIds` filter on the scheduler-tick test endpoint so running the suite never hammers external feeds | DONE |
 | 68 | Full re-verification: typecheck / lint / production build clean; `multi-source-ingestion.spec.ts` passes 20/20 reliably standalone and as the lead file in a combined run. A combined 108-test run showed occasional transient failures only after several minutes of continuous execution against an ever-growing local SQLite DB on this sandbox's flagged "slow filesystem" — root-caused to environment I/O contention, not application logic (the specific failing call was independently reproduced as succeeding via a direct HTTP request, and isolated reruns of the affected spec pass consistently) | DONE |
 
+### Phase 2e — Stage 1: end-to-end pipeline verification & icon-system hardening
+
+The real ingestion pipeline (scheduler → raw items → review → publish) was
+built and tested in isolation in Phase 2d, but no real article had
+actually been published yet — hundreds of real fetched articles sat
+unreviewed in `/admin/incoming`, so `/world` showed only mock/test data.
+This phase closes that loop end-to-end with real content and hardens two
+real bugs found doing it.
+
+| # | Task | Status |
+|---|---|---|
+| 69 | Verified the full real pipeline end-to-end with genuine BBC World articles, publishing them through the actual `/admin/incoming` review UI and API (not inserted directly): confirmed on `/world`, on the event detail page, with correct icon, source attribution, and a working original-source link — see ARCHITECTURE.md "End-to-end pipeline verification" | DONE |
+| 70 | Fixed a real classification gap: GDACS Disaster Alerts (324 of ~630 pending real items at the time — the majority of currently-flowing real content) and WHO News had no matching event-type keywords at all ("forest fire notification" ≠ "wildfire", no earthquake/flood/storm/drought/health keywords existed), so effectively all of it fell into "other". Added 5 new categories — `earthquake`, `flood`, `storm`, `humanitarian`, `health` — to `EVENT_TYPES`, with real-wording keyword matches in `lib/ingestion/event-type-keywords.ts`, icons in both `components/events/event-type-icon.tsx` (DOM) and `lib/map/event-icons.ts` (map markers, canvas-drawn SDF), verified live against real GDACS/WHO content | DONE |
+| 71 | Fixed a real crash-class bug: `EVENT_TYPE_ICON[event.eventType]` (and the equivalent map-marker/label lookups) assumed every DB row's `eventType` is a valid `EventType` — true only as far as the TypeScript compiler can see, not actually enforced at the SQLite boundary (no enum column type). A stray/legacy value would resolve to `undefined` and crash the render. Added a single safe-fallback path used everywhere: `EventTypeIcon`/`getEventTypeLabel` (components/events/event-type-icon.tsx) fall back to "other"'s icon/label, `createEventIconImageData` (lib/map/event-icons.ts) falls back to "other"'s drawer, and the MapLibre `icon-image` expression (`components/map/world-map.tsx`) falls back to `event-icon-other` for anything not in `EVENT_TYPES` — the UI now never renders a blank/missing event icon | DONE |
+| 72 | Added a source-icon system (spec "Fix source icons/logos"): `components/events/source-role-icon.tsx` is the one central mapping from `Source.sourceRole` (the trust-model field from Phase 2d) to an icon, with a generic fallback for sources with no role set — used on `/admin/sources` and the event detail page's Sources list. Consolidated the pre-existing duplicate `SOURCE_ROLE_LABEL` map out of `app/admin/sources/page.tsx` into this one file | DONE |
+| 73 | `tests/pipeline-integrity.spec.ts` (6 tests × 2 projects): fetched-article persistence + required review fields, publish → real event → reachable via `/api/events` with the original source URL preserved, known-event-type icon rendering with zero console errors, unrecognized-event-type fallback (a direct regression test for #71, bypassing the TS union the same way a stray DB value would), source-with-no-role fallback icon, and the exact real-world GDACS/WHO wording samples from #70 classifying correctly | DONE |
+| 74 | Full re-verification: typecheck / lint / production build clean; full Playwright suite (120 tests) passes 117/117 runnable in one clean run against a freshly reset+reseeded local DB (3 pre-existing mobile-viewport skips, unrelated) | DONE |
+
 ## Beyond the Phase 1 floor (built ahead of schedule)
 
 The spec listed these as later-phase, but they were straightforward
@@ -313,3 +331,33 @@ rather than left as stubs:
   scheduler itself is disabled entirely for the Playwright process
   (`DISABLE_BACKGROUND_SCHEDULER=true`, `playwright.config.ts`) for the
   same reason.
+
+### Phase 2e decisions
+
+- **New disaster/health event types, not a rename of existing ones.**
+  The exact category names requested for this pass (`armed_clash`,
+  `missile_attack`, `drone_attack`, etc.) are mostly renamed variants of
+  categories that already exist (`ground_clash`, `missile`, `drone`) —
+  renaming stored `EventType` values would be a wide, purely-cosmetic
+  breaking change (seed data, every component, every test) for no
+  behavioral benefit. Only the categories with no existing equivalent at
+  all — `earthquake`, `flood`, `storm`, `humanitarian`, `health` — were
+  added, justified directly by real content (GDACS, WHO) already flowing
+  through the pipeline with nowhere meaningful to classify into.
+- **A safe fallback belongs at every render site, not just at the data
+  boundary.** SQLite has no enum column type (see DATA_MODEL.md), so
+  `event.eventType` is a plain string validated only by convention, not
+  by the database. Rather than trying to guarantee "this can never be an
+  unrecognized value" (impossible to fully close off with a schemaless
+  column and a direct-write API route), every icon/label lookup now
+  degrades to the same "other" fallback a genuinely-unclassified event
+  already uses — cheap, and turns a potential crash into an identical
+  no-worse-than-today render.
+- **Source icon is driven by the trust-model `sourceRole` field, not the
+  older free-text `sourceCategory`.** `sourceRole` is already a clean,
+  small controlled vocabulary (Phase 2d); `sourceCategory` is
+  free text with inconsistent casing across the seeded sources ("News"
+  vs "official" vs "emergency"). Building the icon lookup on the messier
+  field would have meant normalizing that casing too, for no benefit
+  over using the field already built for exactly this kind of
+  classification.
