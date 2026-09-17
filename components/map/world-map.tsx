@@ -13,8 +13,10 @@ import type { ConflictEvent } from "@/lib/types";
 import { EVENT_TYPES } from "@/lib/types";
 import { getMapStyle, getMapTilerKey, type MapBasemapMode } from "@/lib/map/style";
 import { eventsToGeoJSON, type EventFeatureProps } from "@/lib/map/events-to-geojson";
+import { eventsToHeatGeoJSON, conflictBaseGeoJSON } from "@/lib/map/heat-layers";
 import { createEventIconImageData } from "@/lib/map/event-icons";
 import { SEVERITY_HEX } from "@/lib/utils/severity";
+import { MOCK_NOW } from "@/lib/data/constants";
 
 // Simplified colored-dot markers ("medium zoom") give way to full
 // category icons ("high zoom") at this threshold — see Map Requirements.md
@@ -69,7 +71,12 @@ export interface WorldMapProps {
   className?: string;
 }
 
-function addEventLayers(map: MapLibreMap, initialData: GeoJSON.FeatureCollection) {
+function addEventLayers(
+  map: MapLibreMap,
+  initialData: GeoJSON.FeatureCollection,
+  initialHeatData: GeoJSON.FeatureCollection,
+  initialConflictBaseData: GeoJSON.FeatureCollection,
+) {
   // A basemap-mode switch calls setStyle(), which discards every source and
   // layer added imperatively (they aren't part of the new style document),
   // so this whole setup must be safely re-runnable, not just mount-once.
@@ -82,6 +89,14 @@ function addEventLayers(map: MapLibreMap, initialData: GeoJSON.FeatureCollection
     clusterMaxZoom: 7,
     clusterRadius: 46,
   });
+  // Separate, uncluster-ed sources for heatmap mode — clustering the
+  // "events" source above is specifically for the marker-mode point/icon
+  // layers (grouping nearby pins at low zoom); the heat visualization
+  // needs every individual event's own severity/recency/corroboration,
+  // and a second, pre-aggregated per-conflict source for the broader
+  // "ongoing conflict" base glow (see lib/map/heat-layers.ts).
+  map.addSource("events-heat", { type: "geojson", data: initialHeatData });
+  map.addSource("conflict-bases", { type: "geojson", data: initialConflictBaseData });
 
   map.addLayer({
     id: "clusters",
@@ -154,28 +169,71 @@ function addEventLayers(map: MapLibreMap, initialData: GeoJSON.FeatureCollection
       "icon-halo-width": 1.2,
     },
   });
+  // Conflict base layer (spec #4): a wide, soft, severity-colored glow per
+  // ongoing conflict, sized by the geographic spread of its own events —
+  // rendered BELOW the per-event hotspots so a sustained conflict reads as
+  // a broad affected area, not just a cluster of isolated dots. Opacity
+  // only nudges up mildly with how many events feed it (eventCount, capped
+  // at a modest 0.42) — a mild "more corroborated as an ongoing situation"
+  // signal, never enough on its own to look "severe"; color is entirely
+  // driven by the group's worst severity (see conflictBaseGeoJSON), never
+  // by event count, so this can never become a wrongly-red area purely
+  // from report volume. Recency-independent — an active conflict's base
+  // presence persists through reporting gaps (spec #6), so no age input.
   map.addLayer({
-    id: "events-heatmap",
-    type: "heatmap",
-    source: "events",
+    id: "conflict-base-heat",
+    type: "circle",
+    source: "conflict-bases",
     layout: { visibility: "none" },
     paint: {
-      "heatmap-weight": ["interpolate", ["linear"], ["get", "importance"], 0, 0, 100, 1],
-      "heatmap-intensity": 1.1,
-      "heatmap-radius": 26,
-      "heatmap-color": [
+      // spreadKm is the conflict's own events' geographic extent; the
+      // floor (110px even for a tight/single-point cluster) is what makes
+      // a sustained conflict read as a broad AREA rather than a dot the
+      // moment it has 2+ events, and the interpolation scales up sharply
+      // for genuinely regional conflicts (spec's West Bank example).
+      "circle-radius": [
         "interpolate",
         ["linear"],
-        ["heatmap-density"],
+        ["get", "spreadKm"],
         0,
-        "rgba(76,194,255,0)",
-        0.3,
-        "rgba(228,196,65,0.5)",
-        0.6,
-        "rgba(240,146,59,0.7)",
-        1,
-        "rgba(179,18,43,0.9)",
+        110,
+        50,
+        160,
+        200,
+        260,
+        600,
+        380,
       ],
+      "circle-color": SEVERITY_COLOR_MATCH,
+      "circle-opacity": ["interpolate", ["linear"], ["get", "eventCount"], 1, 0.22, 6, 0.42],
+      "circle-blur": 1,
+    },
+  });
+  map.addLayer({
+    id: "events-heat",
+    type: "circle",
+    source: "events-heat",
+    layout: { visibility: "none" },
+    paint: {
+      // Scope (spec #3): importance is the existing "how significant is
+      // this incident" scalar (already drives marker size in markers
+      // mode) — reused here, scaled far wider than the old fixed 26px
+      // heatmap-radius, so a major event visibly dominates its area while
+      // a minor one stays modest.
+      "circle-radius": ["interpolate", ["linear"], ["get", "importance"], 20, 46, 55, 85, 100, 150],
+      // Color = severity, per event, never touched by nearby report
+      // volume (spec #1/#7) — same match expression the marker layers use.
+      "circle-color": SEVERITY_COLOR_MATCH,
+      // Opacity = corroboration x recency (spec #5/#6), multiplied rather
+      // than added so neither factor alone can force full strength: a
+      // single-source report stays modest even if brand new, and a
+      // heavily-corroborated report still fades once old.
+      "circle-opacity": [
+        "*",
+        ["interpolate", ["linear"], ["get", "sourceCount"], 1, 0.4, 3, 0.75, 8, 1],
+        ["interpolate", ["linear"], ["get", "ageHours"], 0, 1, 24, 0.65, 168, 0.25, 720, 0.08],
+      ],
+      "circle-blur": 0.85,
     },
   });
 }
@@ -202,9 +260,9 @@ export function WorldMap({ events, viewMode, basemapMode, onSelectEvent, classNa
     ["clusters", "cluster-count", "unclustered-point", "unclustered-point-icon"].forEach((id) => {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", markerVis);
     });
-    if (map.getLayer("events-heatmap")) {
-      map.setLayoutProperty("events-heatmap", "visibility", heatVis);
-    }
+    ["conflict-base-heat", "events-heat"].forEach((id) => {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", heatVis);
+    });
   };
 
   useEffect(() => {
@@ -241,7 +299,12 @@ export function WorldMap({ events, viewMode, basemapMode, onSelectEvent, classNa
     // (re)wires source/layers/interactions — it must stay idempotent-safe
     // per addEventLayers' own getSource() guard.
     map.on("style.load", () => {
-      addEventLayers(map, eventsToGeoJSON(eventsRef.current));
+      addEventLayers(
+        map,
+        eventsToGeoJSON(eventsRef.current),
+        eventsToHeatGeoJSON(eventsRef.current, MOCK_NOW),
+        conflictBaseGeoJSON(eventsRef.current),
+      );
       applyViewModeVisibility(map);
 
       map.on("click", "clusters", (e: MapLayerMouseEvent) => {
@@ -294,8 +357,9 @@ export function WorldMap({ events, viewMode, basemapMode, onSelectEvent, classNa
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const source = map.getSource("events") as GeoJSONSource | undefined;
-    source?.setData(eventsToGeoJSON(events));
+    (map.getSource("events") as GeoJSONSource | undefined)?.setData(eventsToGeoJSON(events));
+    (map.getSource("events-heat") as GeoJSONSource | undefined)?.setData(eventsToHeatGeoJSON(events, MOCK_NOW));
+    (map.getSource("conflict-bases") as GeoJSONSource | undefined)?.setData(conflictBaseGeoJSON(events));
   }, [events]);
 
   useEffect(() => {

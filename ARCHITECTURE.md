@@ -96,6 +96,33 @@ Next.js Route Handlers / Server Actions
   `config.WORKER_URL` at `/maplibre-gl-worker.mjs` directly so the worker
   loads regardless of the bundler. Re-copy both files from
   `node_modules/maplibre-gl/dist/` if the `maplibre-gl` version changes.
+- **Heatmap mode** (`lib/map/heat-layers.ts`) is two `circle` layers with
+  heavy `circle-blur`, not MapLibre's native `heatmap` layer type — that
+  type's `heatmap-density` is a spatial sum of nearby weighted points, so
+  color is structurally coupled to how many reports are nearby (more
+  reports in an area pushes it toward red regardless of their individual
+  severity). The two layers separate that out:
+  - `events-heat` (per event): color = `severity` directly (the same
+    `SEVERITY_COLOR_MATCH` match expression the marker layers use), radius
+    = `importance` (geographic/significance scope, wider range than the
+    old fixed 26px), opacity = independent source count (corroboration) ×
+    an age-based decay curve (recency) — multiplied, not summed, so
+    neither factor alone can force full strength.
+  - `conflict-base-heat` (per conflict, underneath): one wide glow per
+    `conflictId` group, centered at the group's centroid, radius scaled by
+    the group's own geographic spread (haversine `distanceKm` from
+    `lib/utils/geo.ts`, with a floor so even a tight cluster reads as an
+    area, not a point), colored by the group's *worst* (max-ranked)
+    severity — never an average or a count — and NOT recency-decayed, so
+    an active conflict's footprint persists through temporary reporting
+    gaps. Events with no `conflictId` (one-off incidents) get no base
+    layer, only their own event-hotspot.
+  Both are built by `eventsToHeatGeoJSON`/`conflictBaseGeoJSON` against
+  the same "now" reference (`MOCK_NOW`) the rest of the mixed mock+live
+  event set already uses for relative-time display, kept in their own
+  GeoJSON sources (`events-heat`, `conflict-bases`) separate from the
+  clustered `events` source marker-mode uses, and toggle visibility
+  together with the existing Markers/Heatmap control — no new UI.
 
 ## Data model → see `DATA_MODEL.md`
 

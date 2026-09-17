@@ -219,6 +219,15 @@ marker so it cannot be mislabeled Draft; it is not an independently known
 first-publication timestamp. New manual and incoming publications record
 their publication time explicitly.
 
+### Phase 2k — Conflict/event heatmap redesign
+
+| # | Task | Status |
+|---|---|---|
+| 102 | Replace MapLibre's native `heatmap` layer (color coupled to nearby-report density) with two `circle`-based layers (`lib/map/heat-layers.ts`, `components/map/world-map.tsx`): per-event color = severity, opacity = corroboration × recency decay, radius = scope (importance) — report count drives neither color nor the severity signal | DONE |
+| 103 | Add a conflict base layer: one wide glow per `conflictId`, centered on the group's centroid, radius scaled by the group's own geographic spread (with a floor so a tight cluster still reads as an area), colored by the group's worst (max) severity, not recency-decayed so it persists through reporting gaps | DONE |
+| 104 | `tests/world-map-heat.spec.ts` (16 checks × 2 projects): pure-function coverage of the report-count-never-drives-color guarantee, single-source-severe-stays-red, wide vs. tight spread radius, recency ageHours, corroboration pass-through, no-conflictId exclusion, multi-conflict independence, plus a real-published-events render-with-no-console-errors check | DONE |
+| 105 | Full re-verification: typecheck/lint/build clean; full Playwright suite (212 tests) — 207 passed, 5 skipped (pre-existing intentional mobile skips), 0 failed. Manually inspected the Middle East/West Bank area in heatmap mode at desktop viewport width — confirmed a wide, soft, red-to-orange gradient area rather than isolated dots, distinct from the separately-colored Syria conflict's glow nearby | DONE |
+
 ## Beyond the Phase 1 floor (built ahead of schedule)
 
 The spec listed these as later-phase, but they were straightforward
