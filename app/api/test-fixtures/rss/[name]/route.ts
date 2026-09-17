@@ -8,17 +8,31 @@ import { getRssFixture } from "@/lib/testing/rss-fixtures";
 // tests point a throwaway Source.url directly at this route.
 //
 // ?delayMs=N artificially slows the response — used by
-// tests/multi-source-ingestion.spec.ts to exercise the scheduler's
-// overlap-prevention path (two ticks firing while one source is still
-// mid-fetch), which otherwise can't be reproduced deterministically
-// against a near-instant fixture response.
+// tests/multi-source-ingestion.spec.ts's overlap-prevention test and
+// tests/ingestion-reliability.spec.ts's timeout test (paired with a short
+// INGESTION_FETCH_TIMEOUT_MS in playwright.config.ts).
+//
+// ?status=N simulates an HTTP error status (spec "HTTP Failure
+// Handling": 403/406/429/5xx) instead of serving the fixture feed —
+// ?retryAfter=N additionally sends a Retry-After header (seconds) on
+// that error response, for the Retry-After-respects-backoff test.
 export async function GET(request: Request, { params }: { params: Promise<{ name: string }> }) {
   const { name } = await params;
+  const url = new URL(request.url);
+
+  const delayMs = Number(url.searchParams.get("delayMs")) || 0;
+  if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+  const status = Number(url.searchParams.get("status")) || 0;
+  if (status) {
+    const headers: Record<string, string> = {};
+    const retryAfter = url.searchParams.get("retryAfter");
+    if (retryAfter) headers["Retry-After"] = retryAfter;
+    return new NextResponse(`Simulated ${status} response`, { status, headers });
+  }
+
   const xml = getRssFixture(name);
   if (!xml) return NextResponse.json({ error: `Unknown fixture: ${name}` }, { status: 404 });
-
-  const delayMs = Number(new URL(request.url).searchParams.get("delayMs")) || 0;
-  if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
 
   return new NextResponse(xml, { headers: { "Content-Type": "application/rss+xml" } });
 }

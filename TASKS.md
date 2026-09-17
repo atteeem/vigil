@@ -141,6 +141,16 @@ real bugs found doing it.
 | 73 | `tests/pipeline-integrity.spec.ts` (6 tests × 2 projects): fetched-article persistence + required review fields, publish → real event → reachable via `/api/events` with the original source URL preserved, known-event-type icon rendering with zero console errors, unrecognized-event-type fallback (a direct regression test for #71, bypassing the TS union the same way a stray DB value would), source-with-no-role fallback icon, and the exact real-world GDACS/WHO wording samples from #70 classifying correctly | DONE |
 | 74 | Full re-verification: typecheck / lint / production build clean; full Playwright suite (120 tests) passes 117/117 runnable in one clean run against a freshly reset+reseeded local DB (3 pre-existing mobile-viewport skips, unrelated) | DONE |
 
+### Phase 2f — Stage 2: ingestion reliability hardening
+
+| # | Task | Status |
+|---|---|---|
+| 75 | Bounded fetch concurrency: `lib/ingestion/scheduler.ts`'s `schedulerTick()` now polls due sources through a small worker pool (`MAX_CONCURRENT_FETCHES = 4`, a free slot immediately picks up the next due source) instead of firing every due source at once. Directly motivated by a real problem seen in Phase 2d/2e: this sandbox's network has limited concurrent-connection headroom, and polling ~9 real sources simultaneously caused several to hit connect timeouts that succeeded individually moments later. Overlap prevention, per-source poll interval, and failure isolation are all unchanged | DONE |
+| 76 | HTTP failure handling: `lib/ingestion/errors.ts`'s new `HttpFetchError` carries the response status and a parsed `Retry-After` (delta-seconds or HTTP-date, RFC 9110 §10.2.3); `lib/ingestion/rss-adapter.ts` throws it on any non-2xx response (403/406/429/5xx all handled uniformly — no special-casing per status). `lib/ingestion/poll.ts`'s `applyRetryAfterFloor()` makes a `Retry-After` a floor on the next-poll delay, winning over a shorter backoff-computed one (never over a longer one after repeated failures) | DONE |
+| 77 | Exponential backoff kept from Phase 2d, reconfirmed and directly tested this time: 2x/4x/.../8x-capped per `consecutiveFailures`, reset to the plain interval on the next success | DONE |
+| 78 | `tests/ingestion-reliability.spec.ts` (6 tests × 2 projects): bounded concurrency (timing-based — a 6-source tick measurably takes two worker-pool "waves," not one), a broken + slow + healthy source together under the bounded scheduler, Retry-After overriding a shorter backoff, exponential backoff growth then reset-on-success, an actual exceeded timeout (not just a slow-but-successful fetch), and overlap prevention + duplicate protection reconfirmed under the new bounded-concurrency code path. `app/api/test-fixtures/rss/[name]/route.ts` gained `?status=`/`?retryAfter=` simulation params alongside the existing `?delayMs=`. `INGESTION_FETCH_TIMEOUT_MS` (`lib/ingestion/poll.ts`) is now configurable via env, set short for the test server process (`playwright.config.ts`) so the timeout test doesn't need to wait out the real 20s default | DONE |
+| 79 | Full re-verification: typecheck / lint / production build clean; `ingestion-reliability.spec.ts` passes 12/12 reliably across repeated standalone runs; full Playwright suite passes 119/120 runnable in a combined run, the one failure being the same previously-diagnosed environment-only flakiness pattern (reconfirmed via an immediate isolated rerun of the affected file, 20/20 clean) | DONE |
+
 ## Beyond the Phase 1 floor (built ahead of schedule)
 
 The spec listed these as later-phase, but they were straightforward
@@ -361,3 +371,26 @@ rather than left as stubs:
   field would have meant normalizing that casing too, for no benefit
   over using the field already built for exactly this kind of
   classification.
+
+### Phase 2f decisions
+
+- **A worker pool, not fixed-size batching, for bounded concurrency.**
+  Batching (wait for all N sources in a batch, then start the next N)
+  wastes slots idle whenever one source in a batch is slower than its
+  batch-mates. A worker pool where a freed slot immediately claims the
+  next due source keeps all `MAX_CONCURRENT_FETCHES` slots busy until
+  the due-list is exhausted, which matters directly for the "one slow/
+  failing source must not indefinitely block unrelated sources"
+  requirement.
+- **`Retry-After` is a floor, not the delay outright.** A server asking
+  for a 10-minute wait after one failure shouldn't get polled again in 2
+  minutes just because that's the plain backoff figure — but a source
+  that's failed several times running already has a longer backoff than
+  a single `Retry-After` might request, and that shouldn't get
+  shortened either. `applyRetryAfterFloor()` takes the max of the two,
+  never the `Retry-After` value outright.
+- **`INGESTION_FETCH_TIMEOUT_MS` is configurable, not hardcoded, purely
+  for test determinism.** Real local dev keeps the 20s default; the
+  Playwright test server process runs with a much shorter one so
+  `tests/ingestion-reliability.spec.ts`'s timeout test doesn't need to
+  wait out 20 real seconds to prove a timeout is handled correctly.

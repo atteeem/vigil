@@ -150,11 +150,27 @@ migration described later in this file.
   polled twice if a tick fires again before a slow fetch finishes (no
   cross-process locking needed — this is a single-process local-dev
   server per Decisions.md). Due sources within one tick are polled
-  concurrently via `Promise.allSettled`, so one source's failure or hang
-  (bounded by `pollSource`'s own 20s fetch timeout) never blocks another
-  (spec "A failed source must not break other sources"). Repeated
-  failures back off exponentially (capped at 8x the normal interval),
-  reset to normal on the next success.
+  through a bounded-concurrency worker pool (`MAX_CONCURRENT_FETCHES = 4`
+  — a free slot immediately claims the next due source, rather than
+  fixed-size batching that would leave slots idle whenever one source is
+  slower than its batch-mates), so one source's failure or hang (bounded
+  by `pollSource`'s own fetch timeout, `INGESTION_FETCH_TIMEOUT_MS`,
+  default 20s) never blocks another (spec "A failed source must not
+  break other sources"), and firing every due source in the same instant
+  never happens regardless of how many are due at once — a real problem
+  found live (see Decisions.md "Source polling"): this sandbox's network
+  has limited concurrent-connection headroom, and polling ~9 real
+  sources simultaneously caused several to hit connect timeouts that
+  succeeded individually moments later. Repeated failures back off
+  exponentially (capped at 8x the normal interval), reset to normal on
+  the next success — and a `429`/`5xx` response's `Retry-After` header
+  (parsed in `lib/ingestion/errors.ts`, RFC 9110 §10.2.3 delta-seconds or
+  HTTP-date) is a *floor* on that delay: it wins over a shorter
+  backoff-computed one, but never shortens a longer one from several
+  prior failures. `lib/ingestion/rss-adapter.ts` throws a typed
+  `HttpFetchError` (status + parsed `Retry-After`) uniformly for any
+  non-2xx response — 403/406/429/5xx are all handled the same way, no
+  per-status special-casing.
 - **Two ways to trigger a poll**: (1) the scheduler above, for due
   sources; (2) an explicit admin "Fetch Now" button per source (any
   type, not just RSS — `POST /api/admin/sources/[id]/fetch`) that polls
@@ -531,3 +547,22 @@ produce transient full-suite-only flakiness under heavy accumulated load
 already documents) — if a combined run shows an isolated, non-reproducing
 failure, try `rm prisma/dev.db* && npm run db:migrate && npm run db:seed`
 before concluding it's a real regression.
+
+**`tests/ingestion-reliability.spec.ts`** covers bounded scheduler
+concurrency, HTTP failure handling, and Retry-After/backoff — see
+"Source scheduler" above. `app/api/test-fixtures/rss/[name]/route.ts`
+gained `?status=N` (simulates any HTTP status instead of serving the
+fixture feed) and `?retryAfter=N` (adds a `Retry-After` header to that
+simulated response) alongside the existing `?delayMs=`.
+`playwright.config.ts`'s `webServer.env` sets
+`INGESTION_FETCH_TIMEOUT_MS=8000` for the test server process so the
+timeout test sees a real timeout in seconds rather than the real 20s
+default; the spec's own `beforeAll` sends a few warm-up requests to the
+fixture route first, since this sandbox's dev-mode Turbopack can take
+several seconds to compile a route on its very first hit after an edit —
+without the warm-up, that one-time cost could itself trip the shortened
+test timeout for reasons unrelated to the scheduler logic being tested.
+The concurrency test asserts a generous lower bound on elapsed time (two
+worker-pool "waves" measurably takes longer than one would) and only a
+loose upper bound (a hang-guard, not a performance assertion — this
+sandbox's per-request latency is too variable to assert tightly on).

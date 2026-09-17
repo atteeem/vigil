@@ -32,6 +32,14 @@ export default defineConfig({
       // instrumentation.ts's comment. Tests drive polling explicitly via
       // POST /api/admin/scheduler/tick instead.
       DISABLE_BACKGROUND_SCHEDULER: "true",
+      // Short enough that tests/ingestion-reliability.spec.ts's timeout
+      // test sees a real timeout in seconds instead of the real 20s
+      // default, but generous enough to absorb this sandbox's dev-mode
+      // Turbopack first-hit compile latency on a freshly-edited route
+      // (observed: a route's very first request after an edit can itself
+      // take several seconds) — see lib/ingestion/poll.ts's
+      // FETCH_TIMEOUT_MS and that spec's warm-up request.
+      INGESTION_FETCH_TIMEOUT_MS: "8000",
     },
   },
 });

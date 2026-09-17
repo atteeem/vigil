@@ -1,5 +1,6 @@
 import type { Source } from "@prisma/client";
 import type { SourceAdapter, NormalizedItem, HealthCheckResult } from "@/lib/ingestion/types";
+import { HttpFetchError, parseRetryAfter } from "@/lib/ingestion/errors";
 
 interface RssItem {
   title?: string;
@@ -54,7 +55,7 @@ export const RSSAdapter: SourceAdapter = {
   async fetchLatest(source: Source): Promise<unknown[]> {
     if (!source.url) return [];
     const res = await fetch(source.url, { headers: RSS_REQUEST_HEADERS });
-    if (!res.ok) throw new Error(`RSS fetch failed: ${res.status} ${res.statusText}`);
+    if (!res.ok) throw new HttpFetchError(res.status, res.statusText, parseRetryAfter(res.headers.get("retry-after")));
     const xml = await res.text();
     return parseRss(xml);
   },

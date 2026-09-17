@@ -14,6 +14,7 @@ import {
   scheduleNextPoll,
 } from "@/lib/db/repositories/sources";
 import { recordIngestionAttempt } from "@/lib/db/repositories/ingestion-logs";
+import { HttpFetchError } from "@/lib/ingestion/errors";
 
 export interface FetchResult {
   fetched: number;
@@ -24,9 +25,11 @@ export interface FetchResult {
 }
 
 // A hung external feed must not hang the whole ingestion pass or stall the
-// sources behind it in a sequential poll — see lib/ingestion/scheduler.ts's
-// per-source isolation via Promise.allSettled, and this per-fetch cutoff.
-const FETCH_TIMEOUT_MS = 20_000;
+// sources behind it — see lib/ingestion/scheduler.ts's bounded-concurrency
+// worker pool, and this per-fetch cutoff. Overridable via env so
+// tests/ingestion-reliability.spec.ts can exercise an actual timeout in
+// well under a second instead of waiting out a real 20s.
+const FETCH_TIMEOUT_MS = Number(process.env.INGESTION_FETCH_TIMEOUT_MS) || 20_000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -54,6 +57,15 @@ function nextPollDelayMinutes(pollIntervalMinutes: number, consecutiveFailures: 
   if (consecutiveFailures <= 0) return pollIntervalMinutes;
   const multiplier = Math.min(2 ** consecutiveFailures, MAX_BACKOFF_MULTIPLIER);
   return pollIntervalMinutes * multiplier;
+}
+
+/** A 429/503 response with a Retry-After header is the server telling us
+ * exactly when it's safe to come back — that's a floor on the delay, not
+ * just a suggestion, so it always wins over a shorter backoff-computed
+ * delay (never over a longer one, e.g. after several prior failures). */
+function applyRetryAfterFloor(delayMinutes: number, retryAfterSeconds: number | null): number {
+  if (retryAfterSeconds === null) return delayMinutes;
+  return Math.max(delayMinutes, retryAfterSeconds / 60);
 }
 
 /** Runs the automated draft-extraction heuristic once for a freshly
@@ -132,9 +144,11 @@ export async function pollSource(source: Source): Promise<FetchResult> {
     const message = err instanceof Error ? err.message : String(err);
     const updated = await recordIngestionError(source.id, message);
     await recordIngestionAttempt({ sourceId: source.id, fetched: 0, newCount: 0, alreadyKnown: 0, success: false, errorMessage: message });
+    const backoffMinutes = nextPollDelayMinutes(updated.pollIntervalMinutes, updated.consecutiveFailures);
+    const retryAfterSeconds = err instanceof HttpFetchError ? err.retryAfterSeconds : null;
     await scheduleNextPoll(
       source.id,
-      new Date(Date.now() + nextPollDelayMinutes(updated.pollIntervalMinutes, updated.consecutiveFailures) * 60_000),
+      new Date(Date.now() + applyRetryAfterFloor(backoffMinutes, retryAfterSeconds) * 60_000),
     );
     return { fetched: 0, alreadyKnown: 0, new: 0, errors: 1, error: message };
   }

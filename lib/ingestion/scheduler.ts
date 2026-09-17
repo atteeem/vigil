@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/client";
+import type { Source } from "@prisma/client";
 import { pollSource } from "@/lib/ingestion/poll";
 
 // Per-source polling scheduler (spec "Source Scheduler") — each enabled +
@@ -15,6 +16,33 @@ import { pollSource } from "@/lib/ingestion/poll";
 // restart, since nothing is "in flight" across process boundaries.
 const inFlightSourceIds = new Set<string>();
 
+// Bounded fetch concurrency (spec "Ingestion Reliability Hardening") —
+// firing every due source at once turned out to be a real problem, not
+// just a theoretical one: this project's own sandbox network has limited
+// concurrent-connection headroom, and polling ~9 real RSS sources in the
+// same instant caused several to hit connect timeouts that succeeded
+// individually moments later (see Decisions.md "Source polling"). A
+// worker-pool of a few concurrent slots — a free slot immediately picks
+// up the next due source — keeps total connections bounded without
+// making a slow/hung source (bounded anyway by pollSource's own fetch
+// timeout) block sources behind it in a queue.
+const MAX_CONCURRENT_FETCHES = 4;
+
+/** Runs `worker` over every item in `items`, at most `limit` concurrently.
+ * A worker-pool, not batching by chunks — a slot frees up and immediately
+ * picks up the next item the moment its own promise settles, rather than
+ * waiting for the slowest item in a fixed-size batch. */
+async function runWithConcurrencyLimit<T>(items: T[], limit: number, worker: (item: T) => Promise<void>): Promise<void> {
+  let nextIndex = 0;
+  async function runNext(): Promise<void> {
+    const index = nextIndex++;
+    if (index >= items.length) return;
+    await worker(items[index]!);
+    await runNext();
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => runNext()));
+}
+
 export interface SchedulerTickResult {
   due: number;
   polled: number;
@@ -23,10 +51,11 @@ export interface SchedulerTickResult {
 
 /** Runs one scheduler pass: finds every enabled + auto-ingest source whose
  * nextPollAt has arrived (or is unset) and polls each one, skipping any
- * already mid-poll from a previous tick. Sources are polled concurrently
- * via Promise.allSettled — one source's failure or hang (bounded by
- * pollSource's own fetch timeout) never blocks another (spec "A failed
- * source must not break other sources").
+ * already mid-poll from a previous tick. Due sources are polled with
+ * bounded concurrency (MAX_CONCURRENT_FETCHES) — one source's failure or
+ * hang (bounded by pollSource's own fetch timeout) never blocks another
+ * (spec "A failed source must not break other sources"), and every due
+ * source is eventually polled regardless of how many are due at once.
  *
  * `sourceIds`, when passed, additionally restricts the due-set to those
  * ids — the real background loop never passes it (a real tick considers
@@ -54,9 +83,13 @@ export async function schedulerTick(now = new Date(), sourceIds?: string[]): Pro
   });
 
   for (const source of toPoll) inFlightSourceIds.add(source.id);
-  await Promise.allSettled(
-    toPoll.map((source) => pollSource(source).finally(() => inFlightSourceIds.delete(source.id))),
-  );
+  await runWithConcurrencyLimit(toPoll, MAX_CONCURRENT_FETCHES, async (source: Source) => {
+    try {
+      await pollSource(source);
+    } finally {
+      inFlightSourceIds.delete(source.id);
+    }
+  });
 
   return { due: due.length, polled: toPoll.length, skippedInFlight };
 }
