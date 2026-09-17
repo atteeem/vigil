@@ -13,6 +13,7 @@ import {
   PROCESSING_STATUSES,
   DUPLICATE_LIKELIHOODS,
   INCOMING_SORTS,
+  EXTRACTED_FACT_FIELDS,
   type RawIngestionItemWithSourceDTO,
   type ConflictDTO,
   type SourceDTO,
@@ -21,6 +22,8 @@ import {
   type ProcessingStatus,
   type DuplicateLikelihood,
   type IncomingSort,
+  type ExtractedFactField,
+  type ExtractedFactsResponseDTO,
 } from "@/lib/types/db";
 import { timeAgo } from "@/lib/utils";
 import type { ConflictEvent } from "@/lib/types";
@@ -54,6 +57,32 @@ const AGE_OPTIONS: { label: string; value: string }[] = [
   { label: "Last 24 hours", value: "24" },
   { label: "Last 7 days", value: "168" },
 ];
+
+const FACT_FIELD_LABEL: Record<ExtractedFactField, string> = {
+  eventType: "Event type",
+  title: "Title",
+  summary: "Summary",
+  countryCode: "Country",
+  region: "Region",
+  locationName: "Location name",
+  latitude: "Latitude",
+  longitude: "Longitude",
+  occurredAt: "Occurred at",
+  actor: "Actor",
+  casualtiesKilled: "Killed",
+  casualtiesInjured: "Injured",
+  infrastructureDamage: "Infrastructure damage",
+  severity: "Severity",
+  conflictId: "Conflict",
+};
+
+// Below this, a fact is visually flagged as low-confidence (spec "make
+// low-confidence fields visually distinct") — chosen to match this
+// extractor's own honesty-over-guessing scale: ambiguous locations and
+// the no-signal severity default both sit at 0.35 and should read as
+// "needs a human look", while single-gazetteer-match/keyword-match facts
+// (0.65+) should not.
+const LOW_CONFIDENCE_THRESHOLD = 0.5;
 
 const SORT_LABEL: Record<IncomingSort, string> = {
   newest: "Newest",
@@ -158,6 +187,10 @@ export default function AdminIncomingPage() {
   const [checkingDuplicates, setCheckingDuplicates] = useState<string | null>(null);
   const [mergeTargets, setMergeTargets] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<Record<string, boolean>>({});
+  const [facts, setFacts] = useState<Record<string, ExtractedFactsResponseDTO | undefined>>({});
+  const [extractingFacts, setExtractingFacts] = useState<string | null>(null);
+  const [editingFactId, setEditingFactId] = useState<string | null>(null);
+  const [factEdits, setFactEdits] = useState<Record<string, string>>({});
 
   const refresh = () =>
     queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] === "admin" || q.queryKey[0] === "events" });
@@ -173,15 +206,51 @@ export default function AdminIncomingPage() {
   async function toggleReview(item: RawIngestionItemWithSourceDTO) {
     const willExpand = expandedId !== item.id;
     setExpandedId(willExpand ? item.id : null);
-    if (!willExpand || item.id in suggestions) return;
+    if (!willExpand) return;
 
-    const res = await fetch(`/api/admin/incoming/${item.id}/draft`);
-    const { draft }: { draft: DraftSuggestionDTO | null } = await res.json();
-    setSuggestions((prev) => ({ ...prev, [item.id]: draft }));
-    if (draft) {
-      setDrafts((prev) => (prev[item.id] ? prev : { ...prev, [item.id]: draftFromSuggestion(item, draft) }));
-      setDuplicates((prev) => ({ ...prev, [item.id]: draft.duplicates }));
+    if (!(item.id in suggestions)) {
+      const res = await fetch(`/api/admin/incoming/${item.id}/draft`);
+      const { draft }: { draft: DraftSuggestionDTO | null } = await res.json();
+      setSuggestions((prev) => ({ ...prev, [item.id]: draft }));
+      if (draft) {
+        setDrafts((prev) => (prev[item.id] ? prev : { ...prev, [item.id]: draftFromSuggestion(item, draft) }));
+        setDuplicates((prev) => ({ ...prev, [item.id]: draft.duplicates }));
+      }
     }
+
+    if (!(item.id in facts)) {
+      let data = await fetchFacts(item.id);
+      // Sources with autoProcessing off (or an item ingested before this
+      // feature existed) have nothing persisted yet — extract on demand
+      // rather than showing an empty panel forever.
+      if (data.facts.length === 0) {
+        await fetch(`/api/admin/incoming/${item.id}/extract`, { method: "POST" });
+        data = await fetchFacts(item.id);
+      }
+    }
+  }
+
+  async function fetchFacts(itemId: string): Promise<ExtractedFactsResponseDTO> {
+    const res = await fetch(`/api/admin/incoming/${itemId}/facts`);
+    const data: ExtractedFactsResponseDTO = await res.json();
+    setFacts((prev) => ({ ...prev, [itemId]: data }));
+    return data;
+  }
+
+  async function reextractFacts(itemId: string) {
+    setExtractingFacts(itemId);
+    await fetch(`/api/admin/incoming/${itemId}/extract`, { method: "POST" });
+    await fetchFacts(itemId);
+    setExtractingFacts(null);
+  }
+
+  async function patchFact(itemId: string, factId: string, action: "accept" | "reject" | "edit", value?: string) {
+    await fetch(`/api/admin/incoming/${itemId}/facts/${factId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, value }),
+    });
+    await fetchFacts(itemId);
   }
 
   async function recheckDuplicates(item: RawIngestionItemWithSourceDTO) {
@@ -547,6 +616,182 @@ export default function AdminIncomingPage() {
                       </div>
                     </div>
                   )}
+
+                  {/* ---------- STRUCTURED FACTS (spec "Structured Event Intelligence") ---------- */}
+                  {(() => {
+                    const itemFacts = facts[item.id];
+                    if (!itemFacts) return null;
+                    const grouped = new Map<ExtractedFactField, typeof itemFacts.facts>();
+                    for (const f of itemFacts.facts) {
+                      const arr = grouped.get(f.field) ?? [];
+                      arr.push(f);
+                      grouped.set(f.field, arr);
+                    }
+                    const diffByField = new Map(itemFacts.fieldDiffs.map((d) => [d.field, d]));
+                    return (
+                      <div
+                        className="mb-4 rounded-lg border border-border p-3"
+                        data-testid={`structured-facts-${item.id}`}
+                      >
+                        <div className="mb-2 flex items-center justify-between">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+                            Structured Facts — extracted, not verified
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => reextractFacts(item.id)}
+                            disabled={extractingFacts === item.id}
+                          >
+                            <RefreshCw className={`h-3.5 w-3.5 ${extractingFacts === item.id ? "animate-spin" : ""}`} />{" "}
+                            Re-extract
+                          </Button>
+                        </div>
+
+                        {itemFacts.matchedEvent && (
+                          <p className="mb-2 text-[11px] text-ink-faint">
+                            Compared against matched event:{" "}
+                            <a
+                              href={`/event/${itemFacts.matchedEvent.slug}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-accent hover:underline"
+                            >
+                              {itemFacts.matchedEvent.title}
+                            </a>
+                          </p>
+                        )}
+
+                        {itemFacts.facts.length === 0 ? (
+                          <p className="text-xs text-ink-faint">No structured facts extracted from this report.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {EXTRACTED_FACT_FIELDS.filter((field) => grouped.has(field)).map((field) => {
+                              const fieldFacts = grouped.get(field)!;
+                              const diff = diffByField.get(field);
+                              return (
+                                <div key={field} className="rounded-lg border border-border/60 px-2.5 py-2">
+                                  <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+                                    <span>{FACT_FIELD_LABEL[field]}</span>
+                                    {diff && (
+                                      <span
+                                        data-testid={`fact-diff-${item.id}-${field}`}
+                                        className={`rounded-full px-1.5 py-0.5 text-[9px] normal-case ${
+                                          diff.differs ? "bg-high/15 text-high" : "bg-white/5 text-ink-faint"
+                                        }`}
+                                      >
+                                        {diff.differs
+                                          ? `differs from event (currently: ${diff.currentEventValue ?? "unset"})`
+                                          : "matches event"}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="space-y-1">
+                                    {fieldFacts.map((fact) => {
+                                      const lowConfidence = fact.confidence < LOW_CONFIDENCE_THRESHOLD;
+                                      return (
+                                        <div
+                                          key={fact.id}
+                                          data-testid={`fact-${fact.id}`}
+                                          className={`flex flex-wrap items-center gap-1.5 rounded-md px-2 py-1 text-xs ${
+                                            lowConfidence ? "border border-high/30 bg-high/10" : "bg-white/5"
+                                          } ${fact.status === "rejected" ? "opacity-50" : ""}`}
+                                        >
+                                          {editingFactId === fact.id ? (
+                                            <>
+                                              <input
+                                                className="min-w-0 flex-1 rounded border border-border bg-surface px-2 py-1 text-xs text-ink"
+                                                value={factEdits[fact.id] ?? fact.value}
+                                                onChange={(e) =>
+                                                  setFactEdits((prev) => ({ ...prev, [fact.id]: e.target.value }))
+                                                }
+                                              />
+                                              <Button
+                                                size="sm"
+                                                variant="primary"
+                                                onClick={() => {
+                                                  patchFact(item.id, fact.id, "edit", factEdits[fact.id] ?? fact.value);
+                                                  setEditingFactId(null);
+                                                }}
+                                              >
+                                                Save
+                                              </Button>
+                                              <Button size="sm" variant="ghost" onClick={() => setEditingFactId(null)}>
+                                                Cancel
+                                              </Button>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <span
+                                                className="max-w-[16rem] truncate font-medium text-ink"
+                                                title={fact.originalValue ? `Originally extracted as: ${fact.originalValue}` : fact.value}
+                                              >
+                                                {fact.value}
+                                              </span>
+                                              <span
+                                                data-testid={`fact-confidence-${fact.id}`}
+                                                className={`rounded-full px-1.5 py-0.5 text-[9px] ${
+                                                  lowConfidence ? "bg-high/20 text-high" : "bg-white/10 text-ink-faint"
+                                                }`}
+                                              >
+                                                {Math.round(fact.confidence * 100)}% confidence
+                                              </span>
+                                              <span className="rounded-full bg-white/5 px-1.5 py-0.5 text-[9px] text-ink-faint">
+                                                {fact.status}
+                                              </span>
+                                              <span
+                                                className="max-w-[14rem] truncate text-ink-faint"
+                                                title={fact.source}
+                                              >
+                                                {fact.source}
+                                              </span>
+                                              <div className="ml-auto flex shrink-0 gap-1">
+                                                {fact.status !== "accepted" && (
+                                                  <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    aria-label="Accept fact"
+                                                    onClick={() => patchFact(item.id, fact.id, "accept")}
+                                                  >
+                                                    <Check className="h-3 w-3" />
+                                                  </Button>
+                                                )}
+                                                {fact.status !== "rejected" && (
+                                                  <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    aria-label="Reject fact"
+                                                    onClick={() => patchFact(item.id, fact.id, "reject")}
+                                                  >
+                                                    <X className="h-3 w-3" />
+                                                  </Button>
+                                                )}
+                                                <Button
+                                                  size="icon"
+                                                  variant="ghost"
+                                                  aria-label="Edit fact"
+                                                  onClick={() => {
+                                                    setEditingFactId(fact.id);
+                                                    setFactEdits((prev) => ({ ...prev, [fact.id]: fact.value }));
+                                                  }}
+                                                >
+                                                  <Pencil className="h-3 w-3" />
+                                                </Button>
+                                              </div>
+                                            </>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="text-xs text-ink-faint">

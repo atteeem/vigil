@@ -276,3 +276,77 @@ export interface RawIngestionItemWithSourceDTO {
   topDuplicate: DuplicateCandidateDTO | null;
   duplicateLikelihood: DuplicateLikelihood;
 }
+
+// Structured Event Intelligence (spec "Structured Event Intelligence").
+// One field per individually-extractable fact; a raw item can have MORE
+// THAN ONE ExtractedFactDTO for the same field name at once (see
+// EXTRACTED_FACT_FIELDS_MULTI below) — that's how conflicting source
+// claims (two different casualty counts, several named actors, an
+// ambiguous location's several candidates) coexist instead of one
+// silently overwriting another.
+export const EXTRACTED_FACT_FIELDS = [
+  "eventType",
+  "title",
+  "summary",
+  "countryCode",
+  "region",
+  "locationName",
+  "latitude",
+  "longitude",
+  "occurredAt",
+  "actor",
+  "casualtiesKilled",
+  "casualtiesInjured",
+  "infrastructureDamage",
+  "severity",
+  "conflictId",
+] as const;
+export type ExtractedFactField = (typeof EXTRACTED_FACT_FIELDS)[number];
+
+/** Fields where multiple simultaneous rows are the expected, normal case
+ * (every actor mentioned; every distinct casualty figure reported) rather
+ * than a sign of ambiguity — used only to choose UI copy ("N reported
+ * values" vs. "N candidates"), never to change extraction or storage
+ * behavior, which already allows any field to have multiple rows. */
+export const EXTRACTED_FACT_FIELDS_MULTI: ReadonlySet<ExtractedFactField> = new Set([
+  "actor",
+  "casualtiesKilled",
+  "casualtiesInjured",
+  "infrastructureDamage",
+]);
+
+export const EXTRACTED_FACT_STATUSES = ["extracted", "accepted", "rejected", "edited"] as const;
+export type ExtractedFactStatus = (typeof EXTRACTED_FACT_STATUSES)[number];
+
+export interface ExtractedFactDTO {
+  id: string;
+  field: ExtractedFactField;
+  value: string;
+  confidence: number; // 0-1
+  source: string; // provenance: what evidence/reasoning produced this claim
+  observedAt: string; // ISO — the report's own timestamp, not extraction time
+  status: ExtractedFactStatus;
+  originalValue: string | null; // set only once a fact has been edited
+  extractedAt: string; // ISO — when this row was computed
+}
+
+/** Only for fields that also exist on the Event table — casualties,
+ * actors, and infrastructure damage have nowhere on Event to compare
+ * against (deliberately: this milestone adds no Event columns), so they
+ * never appear here even if extracted. */
+export interface MatchedEventFieldDiffDTO {
+  field: ExtractedFactField;
+  extractedValue: string;
+  currentEventValue: string | null;
+  differs: boolean;
+}
+
+export interface ExtractedFactsResponseDTO {
+  facts: ExtractedFactDTO[];
+  /** The same top duplicate-candidate event this item's Review screen
+   * already surfaces (spec "if an existing event match exists, show
+   * which fields differ") — null when no candidate clears the existing
+   * duplicate-matching threshold. */
+  matchedEvent: { eventId: string; slug: string; title: string } | null;
+  fieldDiffs: MatchedEventFieldDiffDTO[];
+}

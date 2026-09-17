@@ -239,6 +239,55 @@ their publication time explicitly.
 | 110 | `tests/globe-clusters.spec.ts` (6 checks × 2 projects): pure-function coverage of merge/split-by-radius, worst-severity-not-average-or-count (both directions — one severe event among many low ones, and many low-severity events alone), 99+ label capping without touching the real count, and altitude-to-radius scaling. `tests/globe-rendering.spec.ts` (2 checks × 2 projects): borders-on-by-default reaches the real UI toggle state, and enabling the Events layer renders real cluster markers with correct count/severity aria-labels, both with zero console errors | DONE |
 | 111 | Full re-verification on a reset DB: typecheck/lint/build clean; full Playwright suite (228 tests) — 223 passed, 5 skipped (pre-existing intentional mobile skips), 0 failed. Manually verified in-browser (desktop viewport): the redesigned gradient rings are visibly smoother/more pronounced than the two-layer version: clear bright cores fading to fully transparent edges, no banding; cluster markers show correct counts and re-cluster live as the camera zooms in/out on the Middle East/Sahel region; country border lines are visible on the Intel globe by default | DONE |
 
+### Phase 2m — Structured Event Intelligence
+
+| # | Task | Status |
+|---|---|---|
+| 112 | New `ExtractedFact` table (`prisma/schema.prisma`, additive migration) — one row per individually extractable field per incoming report, no unique constraint on `(rawIngestionItemId, field)` so conflicting source values (multiple casualty figures, multiple named actors, multiple ambiguous-location candidates) coexist rather than one silently overwriting another | DONE |
+| 113 | `lib/ingestion/extract-facts.ts`: deterministic heuristic extractor (event type, title, summary, country/region/location name, lat/lng, occurred-at, actors, casualties killed/injured, infrastructure damage, severity, likely conflict), each fact carrying confidence + source/provenance + observedAt. "Unknown stays unknown" — a field with no supporting evidence produces no fact, never a guessed/defaulted value | DONE |
+| 114 | Three new curated-heuristic modules: `lib/ingestion/actors.ts` (alias table collapsing surface forms like "IDF"/"Israeli forces" to one canonical actor), `lib/ingestion/casualties.ts` (regex casualty-figure extraction with explicit-negation bailout), `lib/ingestion/infrastructure-damage.ts` (keyword-phrase damage detection) | DONE |
+| 115 | `lib/db/repositories/extracted-facts.ts`: status-aware persistence — re-extraction replaces only still-`"extracted"` facts, leaving admin-accepted/rejected/edited facts untouched; editing a fact preserves the true original extracted value in `originalValue` across repeated edits | DONE |
+| 116 | Three new admin API routes: `POST /api/admin/incoming/[id]/extract` (force re-extraction), `GET /api/admin/incoming/[id]/facts` (persisted facts + effective-value resolution + matched-event field diffs, reusing the existing `findDuplicateCandidates()` engine — no second matching system), `PATCH /api/admin/incoming/[id]/facts/[factId]` (accept/reject/edit one fact) | DONE |
+| 117 | Automatic extraction wired into `pollSource()` (`lib/ingestion/poll.ts`) alongside the existing suggestion snapshot, same never-block-ingestion error handling; extraction, accept/reject/edit are all admin-side annotations only — nothing in this pipeline auto-publishes or auto-modifies a public `Event` | DONE |
+| 118 | `/admin/incoming` "Structured Facts" panel: per-field grouping of (possibly multiple) facts, confidence + status + provenance display, inline edit, accept/reject actions, amber styling for facts below 0.5 confidence, and a "differs from event" / "matches event" badge per field when a duplicate-matched event exists | DONE |
+| 119 | `tests/extract-facts.spec.ts` (5 pure-function checks) + `tests/extract-facts-api.spec.ts` (3 API-level checks): clear location/type extraction, missing info stays absent, conflicting casualty figures coexist, multiple actors, ambiguous low-confidence geolocation, provenance preserved across repeated edits, extraction/review never auto-publishes or modifies an event, field-diff comparison against a matched event | DONE |
+| 120 | Full re-verification on a reset DB: typecheck/lint/build clean; full Playwright suite (244 tests across Desktop + Mobile) — 239 passed, 5 skipped (pre-existing intentional mobile skips), 0 failed. Manually verified in-browser: Structured Facts panel renders confidence/provenance/status, low-confidence ambiguous-location facts render with distinct amber styling, accept/edit interactions work live against the real API, and the matched-event diff badges correctly show "differs from event (currently: …)" for a changed field and "matches event" for an unchanged one | DONE |
+
+### Phase 2m decisions
+
+- **One fact-claim per row, not one row per report.** Omitting a unique
+  constraint on `(rawIngestionItemId, field)` was the whole mechanism
+  needed to satisfy "conflicting source values must coexist" — no
+  array/JSON column, no conflict-resolution algorithm. Multiplicity is
+  simply allowed; `GET .../facts`'s `effectiveValue()` picks a single
+  value only where the *caller* (duplicate matching, event-diffing)
+  needs one, and even then admin decisions always outrank raw
+  suggestions.
+- **A second, deliberately separate pipeline from `extractDraft()`,
+  not a replacement.** `lib/ingestion/draft.ts` is untouched. The two
+  differ in exactly the ways the spec required: field-level (not flat)
+  output, multi-value fields, and genuine field omission on no
+  evidence — `extractDraft()`'s always-fill-every-field shape exists
+  because it feeds a required publish form and has no way to leave a
+  field blank; `extractFacts()` has no such constraint.
+- **Comparison against a matched event is scoped to columns `Event`
+  actually has.** Casualties, actors, and infrastructure damage are
+  extracted and stored like any other field, but never appear in
+  `fieldDiffs` — `Event` has no such columns, and this milestone
+  intentionally adds none, to keep event history/versioning (the next
+  milestone) unconstrained by a premature schema decision here.
+  Lat/lng comparison uses a ~50m epsilon rather than exact string
+  equality, so float-formatting noise between two independently
+  computed coordinates doesn't register as a false "differs."
+- **Re-extraction must not discard review work.** Persistence deletes
+  and recreates only rows still in `status: "extracted"`; anything an
+  admin already accepted, rejected, or edited survives a re-extraction
+  untouched (e.g. after the admin edits the raw report text and
+  re-runs extraction). Editing a fact keeps the *first* extracted
+  value in `originalValue` even across a second or third edit
+  (`existing.originalValue ?? existing.value`), so the true source
+  claim is never lost to provenance.
+
 ## Beyond the Phase 1 floor (built ahead of schedule)
 
 The spec listed these as later-phase, but they were straightforward

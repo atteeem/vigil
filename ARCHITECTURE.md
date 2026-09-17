@@ -395,6 +395,84 @@ migration described later in this file.
   "Source Data" section above it; every field in it maps 1:1 to an
   editable form field the human can override before publishing (spec
   "Human can override everything").
+- **Structured Event Intelligence** (`lib/ingestion/extract-facts.ts`,
+  spec "Structured Event Intelligence"): a separate, field-level
+  extraction pipeline from `extractDraft()` above — same deterministic
+  heuristic philosophy (keyword/gazetteer matching, no AI/LLM call), but
+  three deliberate differences. (1) **Field-level granularity**:
+  `extractFacts()` returns `ExtractedFactDraft[]` — one row per
+  individually extractable field (event type, title, summary, country,
+  region, location name, lat/lng, occurred-at, actor, casualties killed/
+  injured, infrastructure damage, severity, likely conflict), each
+  carrying its own `confidence` (0-1), `source` (provenance — what
+  evidence produced the claim), `status`, and `observedAt`, persisted in
+  a new `ExtractedFact` table (`prisma/schema.prisma`) via
+  `lib/db/repositories/extracted-facts.ts`. (2) **A field can have
+  multiple simultaneous facts.** `ExtractedFact` has no unique constraint
+  on `(rawIngestionItemId, field)` — every actor named, every distinct
+  casualty figure reported, every candidate for an ambiguous location
+  becomes its own row and all coexist (spec "conflicting source values
+  must coexist rather than silently overwrite each other"); no
+  array/JSON column or special conflict-resolution mechanism was needed,
+  multiplicity is just allowed. (3) **"Unknown stays unknown" for real**:
+  a field with no supporting evidence produces no fact at all — e.g.
+  `eventType` is omitted entirely (not defaulted to `"other"`) when no
+  keyword matches, unlike `extractDraft()`'s always-fill-every-field
+  `DraftSuggestionDTO`, which feeds a required publish form and has to
+  default something. `extractFacts()` reuses `detectEventType`/
+  `suggestSeverityAndImportance` (`lib/ingestion/event-type-keywords.ts`)
+  and the gazetteer (`lib/geocoding/gazetteer.ts`) directly, plus three
+  new curated-heuristic modules: `lib/ingestion/actors.ts` (alias table
+  mapping surface forms like "IDF"/"Israeli forces" to one canonical
+  actor name, so the same actor named two ways in one report doesn't
+  produce two facts), `lib/ingestion/casualties.ts` (regex-based killed/
+  injured figure extraction, explicit numbers only, bails out entirely on
+  an explicit negation like "no casualties reported"), and
+  `lib/ingestion/infrastructure-damage.ts` (keyword-phrase damage
+  detection). Runs automatically alongside the existing suggestion
+  snapshot at ingestion time for `autoProcessing: true` sources
+  (`computeAndStoreFacts()` in `lib/ingestion/poll.ts`, same
+  never-block-ingestion error handling as `computeAndStoreSnapshot()`),
+  and on demand via `POST /api/admin/incoming/[id]/extract` for any item
+  regardless of source config. Persistence is **status-aware**:
+  `replaceExtractedFacts()` deletes and recreates only facts still in
+  `status: "extracted"` on re-extraction, leaving anything an admin has
+  already `accepted`/`rejected`/`edited` untouched, so re-running
+  extraction after an admin edits the raw text never discards review
+  work already done. Editing a fact's value (`PATCH
+  /api/admin/incoming/[id]/facts/[factId]`, `action: "edit"`) preserves
+  the *original* extracted value in `originalValue` even across repeated
+  edits (`existing.originalValue ?? existing.value`), so provenance back
+  to the true source claim is never lost. `GET
+  /api/admin/incoming/[id]/facts` additionally resolves each field's
+  "effective value" (an admin's own accept/edit decision wins over a raw
+  suggestion; among undecided suggestions the highest-confidence one
+  wins; a rejected fact is never picked) and reuses the *existing*
+  `findDuplicateCandidates()` engine (no second matching system) to find
+  a matched event, then diffs the effective values against that event's
+  own columns for every field that actually exists on `Event`
+  (`eventType`, `title`, `countryCode`, `region`, `latitude`,
+  `longitude`, `severity`, `conflictId` — casualties/actors/
+  infrastructure damage are deliberately excluded from this comparison,
+  since `Event` has no such columns and this milestone adds none) —
+  lat/lng compares with a ~50m epsilon tolerance to ignore float-
+  formatting noise, not exact string equality. This never writes to
+  `Event`; it only computes and returns `differs: boolean` per field for
+  the review UI to render (spec "if an existing event match exists, show
+  which fields differ from the current event"). Nothing in this pipeline
+  auto-publishes or auto-modifies a public event — extraction, accept,
+  reject, and edit are all admin-side annotations on `ExtractedFact`
+  rows only, same "never publishes without a human" invariant as the
+  rest of the ingestion pipeline. Admin UX lives in `/admin/incoming`'s
+  review card as a "Structured Facts — extracted, not verified" panel,
+  directly below the existing "Automated Suggestion" box: each field
+  groups its (possibly multiple) facts, shows value/confidence/status/
+  provenance, an inline edit control, accept/reject buttons, a
+  "differs from event" / "matches event" badge per field when a match
+  exists, and low-confidence facts (below 0.5) render with distinct
+  amber/warning styling. Designed to compare cleanly against future
+  event state without needing a schema change for event history/
+  versioning — the next milestone this unblocks.
 - **Geocoding abstraction** (`lib/geocoding/`, spec §4): `GeocodingProvider`
   is a one-method interface (`search(query): Promise<GeocodeCandidate[]>`)
   behind `getGeocodingProvider()`, so the concrete provider can change

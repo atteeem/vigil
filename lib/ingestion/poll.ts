@@ -2,6 +2,8 @@ import type { Source } from "@prisma/client";
 import { prisma } from "@/lib/db/client";
 import { getAdapter } from "@/lib/ingestion/registry";
 import { extractDraft } from "@/lib/ingestion/draft";
+import { extractFacts } from "@/lib/ingestion/extract-facts";
+import { replaceExtractedFacts } from "@/lib/db/repositories/extracted-facts";
 import {
   createRawIngestionItemIfNew,
   setSuggestionSnapshot,
@@ -95,6 +97,21 @@ async function computeAndStoreSnapshot(item: RawIngestionItemDTO, source: Source
   }
 }
 
+/** Structured Event Intelligence (spec "Automatically extract structured
+ * facts from incoming reports"): runs alongside the suggestion snapshot
+ * above, same never-block-ingestion error handling. Kept as a fully
+ * separate call (not folded into computeAndStoreSnapshot) since it
+ * writes to a different table via a different module — extraction stays
+ * decoupled from the pre-existing suggestion-snapshot pipeline. */
+async function computeAndStoreFacts(item: RawIngestionItemDTO): Promise<void> {
+  try {
+    const drafts = await extractFacts(item);
+    await replaceExtractedFacts(item.id, drafts, item.publishedAt ?? item.receivedAt);
+  } catch (err) {
+    console.error(`[ingestion] fact extraction failed for item ${item.id}:`, err);
+  }
+}
+
 /** Fetches, normalizes, and dedupes one source's latest items into
  * raw_ingestion_items — never publishes anything. Shared by the scheduler
  * (lib/ingestion/scheduler.ts, enabled+auto-ingest sources only, on their
@@ -124,7 +141,10 @@ export async function pollSource(source: Source): Promise<FetchResult> {
     }
 
     if (source.autoProcessing) {
-      for (const item of createdItems) await computeAndStoreSnapshot(item, source);
+      for (const item of createdItems) {
+        await computeAndStoreSnapshot(item, source);
+        await computeAndStoreFacts(item);
+      }
     }
 
     const updated = await recordIngestionSuccess(source.id);

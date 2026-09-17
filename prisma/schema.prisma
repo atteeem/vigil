@@ -136,9 +136,44 @@ model RawIngestionItem {
   processedAt     DateTime? @map("processed_at")
 
   eventLinks      EventSource[]
+  extractedFacts  ExtractedFact[]
 
   @@unique([sourceId, externalId])
   @@map("raw_ingestion_items")
+}
+
+// Structured Event Intelligence (spec "Structured Event Intelligence"):
+// one row per individual field-level claim extracted from a raw report,
+// NOT one row per report. That granularity is what lets the same field
+// hold more than one row at once — a report whose text says "local
+// officials report 5 killed, hospital sources say 8" becomes two
+// `casualtiesKilled` rows with different values/sources, coexisting
+// rather than one overwriting the other; a report naming both "Israeli
+// forces" and "Hamas" becomes two `actor` rows. Deliberately never
+// touches the Event table — this is proposed, human-reviewable
+// intelligence about a RawIngestionItem, not a mutation of any published
+// event (see ARCHITECTURE.md "Structured fact extraction"). Value is a
+// plain string (SQLite has no JSON/variant column type); which fields
+// are numeric vs. text is a convention the extractor and its consumers
+// share (lib/ingestion/extract-facts.ts's EXTRACTED_FACT_FIELDS).
+model ExtractedFact {
+  id                 String   @id @default(cuid())
+  rawIngestionItemId String   @map("raw_ingestion_item_id")
+  rawIngestionItem   RawIngestionItem @relation(fields: [rawIngestionItemId], references: [id], onDelete: Cascade)
+  field              String   // one of EXTRACTED_FACT_FIELDS — e.g. "eventType", "actor", "casualtiesKilled"
+  value              String
+  confidence         Float
+  source             String   // provenance: what evidence/reasoning produced this claim
+  observedAt         DateTime @map("observed_at") // the report's own timestamp, not extraction time
+  status             String   @default("extracted") // "extracted" | "accepted" | "rejected" | "edited"
+  // Set only when an admin edits a fact's value — preserves the original
+  // extracted value/provenance rather than overwriting it, per spec
+  // "preserve original wording/source evidence... for provenance".
+  originalValue      String?  @map("original_value")
+  extractedAt        DateTime @default(now()) @map("extracted_at")
+
+  @@index([rawIngestionItemId, field])
+  @@map("extracted_facts")
 }
 
 model Conflict {
