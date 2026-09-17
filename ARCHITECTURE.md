@@ -231,6 +231,22 @@ migration described later in this file.
   — the first group filters at the DB level against the suggestion
   snapshot below; duplicate likelihood/sort apply in memory after the
   live per-item computation.
+- **Admin event-matching UX** (spec's "event-matching UX" stage,
+  building on the duplicate-candidate engine above): opening Review and
+  expanding a candidate shows "Likely existing event — N%" (the
+  collapsed card's own badge keeps the shorter "Possible duplicate —
+  N%" wording — they're two different UI surfaces, only the expanded
+  one was in scope for the wording spec named), plus the matched
+  event's type/country-or-region/relative time on one line (e.g. "Drone
+  · UA · just now", via `getEventTypeLabel()`) and every entry of
+  `DuplicateCandidateDTO.reasons` as its own chip. The two reviewer
+  actions are "Attach to this event" (same `POST .../merge` endpoint
+  Phase 2c built — retains the incoming report with `processingStatus:
+  "merged"`, its original URL/title, links it to the existing event as
+  a new `EventSource`, increments `sourceCount`, creates no second
+  public event) and "Create new event" (the existing Publish flow,
+  unchanged). Neither action is ever taken automatically from the
+  score alone.
 - **Automated processing at ingestion time** (spec "Processing"): for
   sources with `autoProcessing: true`, `pollSource()` calls
   `extractDraft()` once for every newly created item and persists the
@@ -339,10 +355,13 @@ migration described later in this file.
     region/country, not the same conflict — a real penalty applies
     instead of leaving distance at a bare 0 contribution.
 
-  The review UI shows each as "Possible duplicate — N% / title / N min
-  apart / N km away" with three actions:
-  **View existing event** (opens `/event/[slug]`), **Merge into event**
-  (`POST /api/admin/incoming/[id]/merge`), and **Ignore suggestion**
+  The review UI shows each as "Likely existing event — N%" plus the
+  matched event's title, an event type/country-or-region/relative time
+  line, and every `reasons` entry as a chip (e.g. "12 min apart", "0.3
+  km away", "same event type", "62% title overlap") — see the admin
+  event-matching UX bullet above — with three actions: **View existing
+  event** (opens `/event/[slug]`), **Attach to this event** (`POST
+  /api/admin/incoming/[id]/merge`), and **Ignore suggestion**
   (client-side only — removes it from that review session's list without
   touching the database, so a re-check or page reload can surface it
   again). Re-scoring after a manual edit (location, type, conflict) goes

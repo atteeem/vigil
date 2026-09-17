@@ -334,7 +334,7 @@ test.describe.serial("Classification & scale milestone", () => {
     // candidate specifically rather than assuming it's the only one.
     const kyivCandidate = card.getByTestId(`duplicate-candidate-${kyivEventId}`);
     await expect(kyivCandidate).toBeVisible();
-    await expect(kyivCandidate.getByText(/Possible duplicate/)).toBeVisible();
+    await expect(kyivCandidate.getByText(/Likely existing event/)).toBeVisible();
 
     await kyivCandidate.getByRole("button", { name: "Ignore suggestion" }).click();
     await expect(kyivCandidate).toHaveCount(0);

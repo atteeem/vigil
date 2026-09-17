@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LocationPicker } from "@/components/admin/location-picker";
 import { EVENT_TYPES, SEVERITY_LEVELS, REGIONS } from "@/lib/types";
-import { EVENT_TYPE_LABEL } from "@/components/events/event-type-icon";
+import { EVENT_TYPE_LABEL, getEventTypeLabel } from "@/components/events/event-type-icon";
 import {
   DB_VERIFICATION_STATUSES,
   PROCESSING_STATUSES,
@@ -737,12 +737,26 @@ export default function AdminIncomingPage() {
                             data-testid={`duplicate-candidate-${d.eventId}`}
                             className="rounded-lg border border-border px-3 py-2 text-xs"
                           >
-                            <p className="font-medium text-ink">Possible duplicate — {d.score}%</p>
+                            <p className="font-medium text-ink">Likely existing event — {d.score}%</p>
                             <p className="mt-0.5 text-ink-dim">{d.title}</p>
                             <p className="mt-0.5 text-ink-faint">
-                              {d.minutesApart !== null ? `${d.minutesApart} min apart` : "time unknown"}
-                              {d.distanceKm !== null ? ` · ${d.distanceKm} km away` : ""}
+                              {getEventTypeLabel(d.eventType)}
+                              {d.countryCode || d.region ? ` · ${d.countryCode ?? d.region}` : ""}
+                              {" · "}
+                              {timeAgo(d.occurredAt)}
                             </p>
+                            {d.reasons.length > 0 && (
+                              <div className="mt-1.5 flex flex-wrap gap-1">
+                                {d.reasons.map((reason, i) => (
+                                  <span
+                                    key={i}
+                                    className="rounded-full bg-white/5 px-1.5 py-0.5 text-[10px] text-ink-faint"
+                                  >
+                                    {reason}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                             <div className="mt-1.5 flex flex-wrap gap-1.5">
                               <a
                                 href={`/event/${d.slug}`}
@@ -756,7 +770,7 @@ export default function AdminIncomingPage() {
                                 onClick={() => mergeIntoEvent(item.id, d.eventId)}
                                 className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent-dim px-2 py-1 text-accent hover:bg-accent/20"
                               >
-                                <GitMerge className="h-3 w-3" /> Merge into event
+                                <GitMerge className="h-3 w-3" /> Attach to this event
                               </button>
                               <button
                                 onClick={() => ignoreDuplicate(item.id, d.eventId)}

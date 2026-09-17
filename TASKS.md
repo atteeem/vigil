@@ -169,6 +169,17 @@ the same engine instead of a redundant one.
 | 84 | `tests/event-matching.spec.ts` (9 tests × 2 projects) proves every scenario the spec names: obvious same event, same location substantially different time, same event type in a different country, same place/time but incompatible event type, similar wording but geographically unrelated, generic-headline false-positive protection, a boundary case just under `MIN_SCORE`, and the no-candidate case. Publishes one reference event via the real publish API, then calls the existing `POST /api/admin/incoming/[id]/duplicates` directly with synthetic candidates | DONE |
 | 85 | Full re-verification: typecheck / lint / production build clean; new suite passes 18/18; `classification.spec.ts` + `multi-source-ingestion.spec.ts` (both exercise the same scoring function) re-run clean, 54/54, confirming no regression from the hardening | DONE |
 
+### Phase 2h — Stage 4: admin event-matching UX
+
+| # | Task | Status |
+|---|---|---|
+| 86 | `/admin/incoming`'s expanded duplicate-candidate view now surfaces the existing event's context, not just a score: `getEventTypeLabel()` + country/region + relative event time (e.g. "Drone · UA · just now"), and every `reasons` entry from `lib/ingestion/duplicates.ts` as a chip row. Heading changed from "Possible duplicate — N%" to "Likely existing event — N%" per the spec's exact example text | DONE |
+| 87 | Reviewer actions relabeled/clarified: the existing merge button is now "Attach to this event" (functionality unchanged — still `POST /api/admin/incoming/[id]/merge`), alongside the existing "View existing event" and "Ignore suggestion." "Create new event" is the existing Publish flow, unchanged — both paths were already correct from Phase 2c, this stage is the UI making the choice and its reasoning legible | DONE |
+| 88 | `tests/admin-event-matching-ux.spec.ts` (4 tests × 2 projects, serial): publishes a reference event via the real publish workflow, then verifies (1) the enriched candidate display (heading, event type/location/time line, reasons chip), (2) "Attach to this event" retains the incoming report (status `merged`, original URL/title preserved), increments `sourceCount` with no duplicate public event, and appears as a source on the event detail page, (3) "Create new event" remains available and produces a distinct event id for a non-duplicate report | DONE |
+| 89 | Fixed a regression in `tests/classification.spec.ts` from the heading-text change ("Possible duplicate" → "Likely existing event"); no other test referenced the old wording | DONE |
+| 90 | Fixed a cross-test contamination bug the new suite itself introduced: its "Create new event" test originally published the shared `feed-a` fixture's bakery article under its unmodified original title, which collided with `classification.spec.ts`/`multi-source-ingestion.spec.ts` assertions that that exact title is never published anywhere in the live `/api/events` feed (their own no-auto-publish proof). Fixed by overriding the title before publish, same pattern already used for the Kyiv reference event | DONE |
+| 91 | Full re-verification on a reset DB: typecheck / lint clean; `admin-event-matching-ux.spec.ts` (8/8), `classification.spec.ts` (34/34), `multi-source-ingestion.spec.ts` (20/20), `event-matching.spec.ts` (18/18) all pass together, 80/80, with no cross-test interference | DONE |
+
 ## Beyond the Phase 1 floor (built ahead of schedule)
 
 The spec listed these as later-phase, but they were straightforward
@@ -438,3 +449,27 @@ rather than left as stubs:
   the match threshold on their own — geographic proximity is the
   spec's first-listed signal precisely because it has to gate the
   result, not just be one more additive term among several.
+
+### Phase 2h decisions
+
+- **The admin UI is a thin, legible layer over Phase 2g's scoring
+  engine, not a new decision-maker.** Every field the expanded
+  candidate view shows (event type, location, time, score, reasons)
+  already existed on `DuplicateCandidateDTO`; Stage 4 added no new
+  scoring logic, only display and the two reviewer actions the spec
+  named. "Attach to this event" / "Create new event" were already the
+  merge/publish endpoints from Phase 2c — nothing about the underlying
+  audit trail, source counting, or duplicate-public-event prevention
+  changed.
+- **Test fixtures shared across suites must not publish their exact
+  original title as a real event.** `tests/admin-event-matching-ux.spec.ts`
+  reuses the `feed-a` fixture's bakery article (already used by
+  `classification.spec.ts`/`multi-source-ingestion.spec.ts`) to exercise
+  "Create new event." Because `/api/events` is a single global,
+  cross-test feed, publishing that article under its unmodified title
+  would permanently satisfy those other suites' "this exact title is
+  never published" assertions for the rest of the shared DB's
+  lifetime. Any future test that publishes a shared fixture's article
+  as a real event must override its title first (as already done for
+  the Kyiv reference event) to avoid this class of cross-test
+  contamination.
