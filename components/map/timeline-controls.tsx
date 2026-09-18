@@ -9,15 +9,6 @@ import { TIMELINE_RANGE_PRESETS, type TimelinePresetKey } from "@/lib/utils/worl
 
 const PRESET_OPTIONS = [{ value: "live" as const, label: "Live" }, ...TIMELINE_RANGE_PRESETS.map((r) => ({ value: r, label: r }))];
 
-/** "YYYY-MM-DDTHH:mm" in local time, for a datetime-local input's `max`
- * — the browser expects local wall-clock time with no timezone suffix. */
-function nowForDatetimeLocalMax(): string {
-  const now = new Date();
-  now.setSeconds(0, 0);
-  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-  return now.toISOString().slice(0, 16);
-}
-
 /**
  * Global Timeline / Historical Playback (spec §1/§4/§5): the /world
  * map's time selector — deliberately a SEPARATE control from the
@@ -105,7 +96,13 @@ export function TimelineControls({
           <input
             type="datetime-local"
             value={customValue}
-            max={nowForDatetimeLocalMax()}
+            // No `max` clamp to "now": a future timestamp is harmless
+            // (it just degrades to the current state — see
+            // reconstructEventState/reconstructWorldStateAt, already
+            // covered by tests/world-timeline-api.spec.ts), and skipping
+            // the clamp avoids a real class of picker edge cases (a
+            // value a few seconds/minutes ahead of a fast-moving "now"
+            // being silently rejected) for no real correctness benefit.
             onChange={(e) => setCustomValue(e.target.value)}
             className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-ink"
             data-testid="timeline-custom-input"

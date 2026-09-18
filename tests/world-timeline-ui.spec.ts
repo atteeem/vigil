@@ -85,9 +85,22 @@ test("3. A custom timestamp can be selected via the date/time picker and produce
   const timeline = page.getByTestId("timeline-controls");
   await timeline.getByTestId("timeline-custom-toggle").click();
 
-  const nowLocal = new Date(Date.now() + 5 * 60_000);
-  nowLocal.setMinutes(nowLocal.getMinutes() - nowLocal.getTimezoneOffset());
-  await page.getByTestId("timeline-custom-input").fill(nowLocal.toISOString().slice(0, 16));
+  // Computed INSIDE the page (not in the test-runner's own Node process)
+  // so the timezone used to build this "local wall clock" string is
+  // guaranteed to be the same one the browser's datetime-local input
+  // parses it back with — the test runner and the launched browser are
+  // separate processes that don't necessarily share a timezone. A full
+  // hour ahead (the input has no `max` clamp — see TimelineControls —
+  // so a future value is fine) comfortably clears
+  // resolveTimelineTimestamp's own round-down-to-the-minute behavior,
+  // which a same-minute "now" could otherwise land on the wrong side of
+  // relative to the event's createdAt.
+  const nowLocalValue = await page.evaluate(() => {
+    const d = new Date(Date.now() + 60 * 60_000);
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 16);
+  });
+  await page.getByTestId("timeline-custom-input").fill(nowLocalValue);
   await page.getByTestId("timeline-custom-apply").click();
 
   await expect(page.getByTestId("historical-indicator")).toBeVisible();
