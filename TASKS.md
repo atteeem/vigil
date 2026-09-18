@@ -452,6 +452,59 @@ their publication time explicitly.
   job, and building it now would be scope creep this spec explicitly
   called out to avoid.
 
+### Phase 2q — Global Timeline / Historical Playback
+
+| # | Task | Status |
+|---|---|---|
+| 147 | `GET /api/events` gained an optional `?at=<ISO>` query param (backward compatible — omitted, byte-identical to before) that switches from "current published events" to "the world as it was known/published at that moment", via a new `reconstructWorldStateAt()` (`lib/db/repositories/event-reconstruction.ts`) — 2 batched queries regardless of event count, no per-event round-trip | DONE |
+| 148 | `reconstructWorldStateAt()` reuses the exact same pure `reconstructEventState()` replay logic Event Version History already built (no second reconstruction implementation), overlays reconstructed field values onto a shallow copy of each event's row, filters `sources` to links attached by T, keeps only events published as of T, and feeds the result through the existing `dbEventToConflictEvent()` converter unchanged | DONE |
+| 149 | `lib/utils/world-timeline.ts` (NEW, pure): `resolveTimelineTimestamp()` maps a preset (Live/1H/6H/24H/7D/30D/Custom — 1H-30D reusing the EXISTING `TimeRange` type/values) to an "as of" timestamp or null for Live, rounded down to the minute so repeat preset selections within a session hit the events cache | DONE |
+| 150 | `hooks/use-world-timeline.ts` (NEW): all timeline state is a single `asOf: Date \| null` — the "playback foundation" (spec §6) a later Play/Pause feature can drive by just advancing that one value on an interval, with no other state or rendering code needing to change shape | DONE |
+| 151 | `hooks/use-world-events.ts` (NEW): the `/world` page's single data source for both modes — 20s polling when Live (identical to the pre-existing `useLiveEvents`), a one-shot fetch per distinct historical timestamp with an in-memory exact-timestamp cache otherwise (spec "do not create expensive per-frame historical queries") | DONE |
+| 152 | `components/map/timeline-controls.tsx` (NEW): Live/1H/6H/24H/7D/30D/Custom… control, a persistent "Viewing {timestamp} · Return to Live" banner while historical, always shown in UTC to avoid a timezone hydration mismatch. Deliberately a separate, distinctly-labeled control from the pre-existing recency filter (same 1H/6H/24H/7D button labels, different meaning) — caught and fixed a real `aria-label` substring collision ("Timeline" contains "Time") that broke two pre-existing tests before it shipped | DONE |
+| 153 | `/world` page wiring: historical mode swaps in the reconstructed event set (mock events excluded — they have no history to reconstruct from), skips the recency filter (would otherwise filter out nearly everything relative to *now*), adds an accent ring around the map viewport and swaps the sidebar heading to "Historical Event Feed" so historical data can't be mistaken for live — markers, heatmap, and cluster counts update with zero changes to `WorldMap` itself, since they were already pure functions of the `events` array | DONE |
+| 154 | `tests/world-timeline.spec.ts` (6 pure checks) + `tests/world-timeline-api.spec.ts` (7 API checks) + `tests/world-timeline-ui.spec.ts` (3 real-browser checks): preset resolution/monotonicity/rounding, historical timestamps hiding future events, publication-state-at-T, field/source reconstruction correctness, Live restoring current state unaffected by prior historical queries, invalid and far-future timestamps handled cleanly, the two time controls operating independently, and the custom date/time picker end-to-end | DONE |
+| 155 | Full re-verification on a reset DB: typecheck/lint/build clean; full Playwright suite (see commit for exact count) — 0 failed. Manually verified in-browser: selected historical presets and a custom timestamp, confirmed reconstructed severity/source-count changed correctly across a real merge+accept sequence, confirmed clicking a map marker in historical mode opens the inline detail panel with reconstructed (not live) data, confirmed cluster counts visibly differ between historical and Live, and confirmed Return to Live restores the full current feed — zero console errors throughout | DONE |
+
+### Phase 2q decisions
+
+- **Extend the existing public endpoint, don't add a parallel one.**
+  `GET /api/events` already returns exactly the shape the map needs;
+  adding an optional `?at=` param keeps `hooks/use-world-events.ts` from
+  needing two different response shapes to handle, and every existing
+  caller (which never passes `at`) is unaffected byte-for-byte.
+- **The two time controls needed to be visibly and semantically
+  distinct, not merged.** The pre-existing recency filter ("only show
+  events from the last N hours," relative to now) and this milestone's
+  new timeline ("show me the world as it was N hours ago," a fixed past
+  moment) share the same button labels by coincidence of both using
+  1H/6H/24H/7D, but answer different questions — conflating them into
+  one control would give it two meanings. Keeping them separate is also
+  what caught a real bug before shipping: an `aria-label="Timeline"`
+  turned out to be a substring of the pre-existing group's
+  `aria-label="Time"`, which broke two unrelated tests via Playwright's
+  substring name matching. Renamed to `"Playback"` rather than papering
+  over it with `exact: true` in the existing tests, since the
+  underlying ambiguity (two controls a screen reader user could
+  genuinely confuse) was the real problem.
+- **Historical mode excludes mock events entirely, rather than treating
+  them as always-present.** Mock/seed events have no `createdAt` or
+  history to replay — including them in "the world as it was at T"
+  would be presenting fabricated-consistency data with no real
+  historical grounding. Live mode still merges them with published DB
+  events exactly as before; only the historical branch is stricter.
+- **The recency filter is skipped, not disabled, while historical.**
+  It's still there and still works the instant the user returns to
+  Live — it just doesn't apply to a historical query, because "only
+  show events from the last N hours relative to right now" is close to
+  meaningless when "right now" isn't what's being viewed.
+- **No animated playback was built.** Spec explicitly scoped this to a
+  foundation a LATER Play/Pause feature can build on without a redesign
+  — `asOf: Date | null` being the entire piece of driving state is that
+  foundation. Building the animation loop itself now would be the kind
+  of scope creep the spec's own "do not build... unless trivial"
+  called out.
+
 ## Beyond the Phase 1 floor (built ahead of schedule)
 
 The spec listed these as later-phase, but they were straightforward

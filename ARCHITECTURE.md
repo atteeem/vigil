@@ -229,6 +229,68 @@ Next.js Route Handlers / Server Actions
   soft; three rings of decreasing radius/increasing opacity make the
   transparent-edge-to-strong-center gradient unambiguous regardless of
   how many neighboring glows overlap it.
+- **Global Timeline / Historical Playback** (`hooks/use-world-timeline.ts`,
+  `hooks/use-world-events.ts`, `components/map/timeline-controls.tsx`,
+  spec "use the existing event reconstruction/history APIs to let users
+  view the world as it was at a selected time"): `/world`'s markers,
+  heatmap, clusters, and event-detail panel all already derive purely
+  from whatever `events` array they're handed — this feature adds a
+  second array (reconstructed-as-of-T) and a control to switch which one
+  is in play, without touching a single line of the rendering code above.
+  - **Data source**: `GET /api/events` gained an optional `?at=<ISO>`
+    query param (backward compatible — omitted, it's byte-identical to
+    before). With it, the route calls `reconstructWorldStateAt()`
+    (`lib/db/repositories/event-reconstruction.ts`), which batches
+    (exactly 2 queries regardless of event count — no per-event
+    round-trip) then replays each candidate event through the SAME pure
+    `reconstructEventState()` Event Version History already built,
+    overlays the reconstructed field values onto a shallow copy of that
+    event's row, filters `sources` down to links attached by `T`, and
+    only keeps events that were published as of `T` — then feeds the
+    result through the EXISTING `dbEventToConflictEvent()` converter
+    unchanged. No second DTO mapper, no duplicated reconstruction logic
+    — spec "reuse existing APIs/data services rather than duplicating
+    logic," taken literally.
+  - **Timeline state**: `useWorldTimeline()`'s entire state is one
+    `asOf: Date | null` (null = Live). Playback foundation (spec §6): a
+    later Play/Pause feature only needs to call the existing custom-
+    timestamp setter on an interval to advance `asOf` — nothing else in
+    the system needs to change shape, since every consumer downstream is
+    already just reacting to whatever `events` array
+    `hooks/use-world-events.ts` currently holds.
+  - **Fetching, not polling, for historical timestamps**: `useWorldEvents(asOf)`
+    keeps the original `useLiveEvents()` 20s-poll behavior when
+    `asOf === null`, but for a historical `asOf` fetches exactly once per
+    distinct timestamp (a past moment's reconstructed state never changes
+    on its own) with a small in-memory cache keyed by the exact ISO
+    string — `resolveTimelineTimestamp()` (`lib/utils/world-timeline.ts`)
+    rounds every resolved timestamp down to the minute specifically so
+    repeat visits to the same preset within a session actually hit that
+    cache instead of missing on sub-second jitter. Together this is the
+    "avoid expensive per-frame historical queries" requirement.
+  - **A deliberately separate control from the pre-existing recency
+    filter** (`MapFilters`'s own "Time" segmented control — same
+    1H/6H/24H/7D button labels, but a different concept: "only show
+    events from the last N hours" vs. this control's "show me the world
+    as it was N hours ago"). Kept as two visibly distinct rows (own
+    icon/label, own "Viewing ..." banner) rather than merged, since
+    conflating them would give one control two meanings; the recency
+    filter is skipped entirely while historical (it would otherwise
+    filter out nearly everything relative to *now*, defeating the point
+    of viewing a specific past moment).
+  - **Avoiding "mistaken for live"** (spec §4): an accent ring around the
+    map viewport itself (not just banner text, so it's visible even if
+    the overlay scrolls off on mobile), the sidebar heading switching to
+    "Historical Event Feed," and a persistent "Viewing {timestamp} · Return
+    to Live" banner, shown in UTC specifically to avoid a server/client
+    timezone hydration mismatch on first paint (the same class of problem
+    `EventDetailPanel`'s own timezone handling works around with a
+    mount-guard — this sidesteps it instead of repeating that pattern).
+  - **Mock events are excluded from historical mode.** They have no
+    `createdAt`/history to reconstruct from, so including them in "the
+    world as it was at T" would show data with no real historical
+    grounding; Live mode still merges them with published DB events
+    exactly as before.
 
 ## Data model → see `DATA_MODEL.md`
 

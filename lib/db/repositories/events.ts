@@ -26,7 +26,10 @@ export type EventWithSources = Event & {
   sources: (EventSource & { rawIngestionItem: RawIngestionItem & { source: Source } })[];
 };
 
-const WITH_SOURCES = { sources: { include: { rawIngestionItem: { include: { source: true } } } } } as const;
+// Exported so lib/db/repositories/event-reconstruction.ts's world-state
+// query can reuse the exact same include shape rather than a second,
+// possibly-drifting copy.
+export const WITH_SOURCES = { sources: { include: { rawIngestionItem: { include: { source: true } } } } } as const;
 
 /** Every event regardless of lifecycle status — the admin list needs
  * drafts/unpublished events too, unlike the public GET /api/events. */
