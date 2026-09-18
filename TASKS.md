@@ -506,6 +506,55 @@ their publication time explicitly.
   of scope creep the spec's own "do not build... unless trivial"
   called out.
 
+### Phase 2r — Animated Global Timeline Playback
+
+| # | Task | Status |
+|---|---|---|
+| 157 | `lib/utils/world-timeline.ts` gained pure playback math: `playbackStepMs()` (step size scales with the range's own span — `max(60s, span/60)`), `advancePlaybackTimestamp()` (one step/tick, clamped to the range), `clampToPlaybackRange()`, `playbackProgress()`/`timestampAtProgress()` (0-1 fraction ↔ timestamp, inverse of each other), plus `PLAYBACK_SPEEDS = [0.5,1,2,4]` and a fixed `PLAYBACK_TICK_MS = 500` — the previously-private `roundDownToMinute()` was exported so callers share one rounding convention | DONE |
+| 158 | `hooks/use-world-timeline.ts` extended (not replaced) with `rangeStart`/`rangeEnd`/`isPlaying`/`speed`/`play`/`pause`/`stepForward`/`stepBackward`/`setSpeed`/`scrubTo`/`scrubToProgress`/`previewNextAsOf` — the range is implicit from whatever preset/custom selection is active (no new range-picker UI), ticking runs on a fixed 500ms `setInterval` reading a "latest asOf" ref (not `asOf` itself, to avoid tearing the interval down every tick) so tick FREQUENCY never changes with speed, only how far each tick jumps | DONE |
+| 159 | `hooks/use-world-events.ts` upgraded from the prior milestone's "ignore late results via a `cancelled` flag" to a real per-fetch `AbortController`, aborted on cleanup — an `asOf` change mid-flight genuinely cancels the in-flight request now. Added a second, independent effect that prefetches `previewNextAsOf` into the same cache Map (own `AbortController`, never touches displayed `events`/`loading`/`error` state) | DONE |
+| 160 | `components/map/timeline-controls.tsx`: Play/Pause toggle, step forward/backward, 4 speed buttons, a progress-percentage label, and a drag-to-scrub range input — rendered only when a historical range is active, all with stable `data-testid`s for testing | DONE |
+| 161 | `app/world/page.tsx` wiring: `useWorldEvents(timeline.asOf, timeline.previewNextAsOf)`; a new `selectEvent()` pauses playback before setting the selected event (spec "opening event details during playback must show data for the current historical timestamp") — resolved by pausing rather than keeping a live-syncing reference, avoiding the "event no longer exists at the new asOf" case entirely; all `TimelineControls` playback props wired through | DONE |
+| 162 | `tests/world-playback.spec.ts` (NEW, 15 pure checks): step sizing for short vs. long ranges, zero/negative-span safety, forward/backward advancement and speed proportionality, clamping at both range boundaries, progress/timestampAtProgress round-trip and out-of-range clamping | DONE |
+| 163 | `tests/world-playback-ui.spec.ts` (NEW, 8 real-browser checks, desktop-only): play advances/pause holds exactly, step forward/backward symmetry, 4x advances further than 1x over the same wait, Return to Live stops playback and removes the controls, dragging the scrubber pauses cleanly with no drift, network request count stays bounded (<20) over a 3s playback window, rapid preset-switching settles on the last selection with no late-arriving stale overwrite, zero console errors across a full play/speed/pause/step/return cycle | DONE |
+| 164 | Found and fixed a real rounding-consistency bug during test development: `rangeEnd` was captured via raw (unrounded) `new Date()` while `rangeStart` was already minute-rounded, so `rangeEnd − rangeStart` wasn't a clean multiple of 60,000ms — combined with each step's own minute-rounding, this produced asymmetric drift (forward/forward/backward not landing back where naive percentage math predicted). Fixed at the source by exporting `roundDownToMinute()` and applying it to `rangeEnd`'s capture in both `selectPreset` and `selectCustomTimestamp`, not by loosening the test's tolerance | DONE |
+| 165 | Full re-verification on a reset DB: typecheck/lint/build clean; full Playwright suite run; targeted 46-test re-run (all timeline/playback/map/event specs together) passed 46/46. Manually verified in-browser: Play/Pause/step/speed/scrub/Return to Live all behave correctly, markers/heatmap/cluster counts/event feed update smoothly during playback, zero console errors | DONE |
+
+### Phase 2r decisions
+
+- **Fixed tick rate, speed-scaled step size — not the other way around.**
+  Speed (0.5/1/2/4x) only changes how far `asOf` jumps per tick;
+  `PLAYBACK_TICK_MS = 500` never changes. This single choice satisfies
+  both "avoid per-frame backend calls" and "prevent request buildup at
+  higher speeds" at once — the fetch rate is capped by a constant no
+  matter how fast playback runs, with no separate throttling code
+  needed.
+- **No new range-picker UI.** Spec explicitly said to preserve the
+  existing Live/1H/6H/24H/7D/30D/Custom controls; the playback range is
+  derived from whichever of those is already selected (`rangeStart` =
+  its resolved timestamp, `rangeEnd` = "now" frozen at selection time),
+  rather than adding a second way to pick a time window.
+- **Pause-on-select over a live-syncing event reference.** Keeping a
+  selected event in sync with a still-advancing `asOf` would need to
+  handle "the event no longer exists at the new asOf" as a real case.
+  Pausing playback the instant an event is selected sidesteps that
+  entirely — `asOf` stops moving, so the already-captured event snapshot
+  stays correct by construction. Simpler and more robust than the
+  alternative, chosen deliberately over it.
+- **Real `AbortController` cancellation over the prior "ignore stale
+  results" flag.** The prior milestone's boolean-flag approach let a
+  superseded request complete and simply discarded its result; playback
+  ticks fire often enough (every 500ms while playing) that genuinely
+  cancelling the in-flight request, not just its eventual response,
+  matters more here than it did before.
+- **Rounding bug fixed at its source, not with a looser test tolerance.**
+  When a specific test's expected progress value was off by ~1%, the
+  cause (mismatched rounding granularity between `rangeStart` and
+  `rangeEnd`) was root-caused and fixed in `lib/utils/world-timeline.ts`
+  / `hooks/use-world-timeline.ts` rather than widening the assertion —
+  consistent with this project's established practice of fixing real
+  bugs found by tests instead of loosening the tests around them.
+
 ## Beyond the Phase 1 floor (built ahead of schedule)
 
 The spec listed these as later-phase, but they were straightforward

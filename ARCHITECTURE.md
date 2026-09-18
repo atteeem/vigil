@@ -291,6 +291,64 @@ Next.js Route Handlers / Server Actions
     world as it was at T" would show data with no real historical
     grounding; Live mode still merges them with published DB events
     exactly as before.
+- **Animated Global Timeline Playback** (`lib/utils/world-timeline.ts`,
+  `hooks/use-world-timeline.ts`, `hooks/use-world-events.ts`,
+  `components/map/timeline-controls.tsx`, spec "turn the existing
+  historical timeline into smooth Play/Pause playback without changing
+  the underlying reconstruction architecture"): playback is just one
+  more way to move the SAME `asOf: Date | null` the Global Timeline
+  feature above already introduced — no new consumer-facing shape, no
+  second data path.
+  - **Implicit range, no new picker UI** (spec "preserve existing
+    Live/1H/6H/24H/7D/30D/Custom controls"): the playback range is
+    derived from whatever historical selection is already active —
+    `rangeStart` is that selection's own resolved timestamp (already
+    frozen via the existing `useMemo`), `rangeEnd` is "now" captured
+    (and minute-rounded) at the moment of selection, itself frozen so
+    the range/progress-bar denominator doesn't keep growing mid-session.
+  - **Step size scales with range span, tick rate never does**: one
+    formula, `playbackStepMs = max(60s, round(span / 60))`, gives a 1H
+    range ~1-minute steps and a 30D range ~12-hour steps (spec "short
+    ranges → smaller steps, long ranges → larger steps"). Separately,
+    the `setInterval` driving playback always fires at a fixed
+    `PLAYBACK_TICK_MS = 500`, regardless of speed — speed (0.5/1/2/4x)
+    only scales how far `asOf` jumps per tick, never how often a tick
+    happens. This one decision satisfies both "avoid per-frame backend
+    calls" (ticks, not animation frames) and "prevent request buildup at
+    higher speeds" (fetch rate is capped by tick rate, which speed can't
+    change) at once, with no separate throttling logic.
+  - **Real cancellation, not just ignoring stale responses**:
+    `useWorldEvents` upgraded from the prior milestone's "ignore late
+    results via a `cancelled` flag" to a per-fetch `AbortController`,
+    aborted in the effect's cleanup — an `asOf` change mid-flight (e.g.
+    every playback tick) now genuinely cancels the in-flight request
+    instead of letting it complete and discarding the result.
+  - **One-tick-ahead prefetch**: `useWorldTimeline()` exposes
+    `previewNextAsOf` (null unless playing), and `useWorldEvents` has a
+    second, independent effect that fetches it straight into the same
+    cache Map without touching displayed `events`/`loading`/`error`
+    state — warms the cache for the next tick ahead of when it's shown,
+    with its own `AbortController` so a superseded prefetch can never
+    race the user-visible display fetch.
+  - **Pause-on-select instead of a live-syncing event reference**:
+    opening event details during playback needed to "show data for the
+    current historical timestamp" (spec §6). Rather than keeping a
+    reference to the selected event in sync with a still-advancing
+    `asOf` (which needs handling for "the event no longer exists at the
+    new asOf"), selecting an event simply pauses playback first — `asOf`
+    stops moving, so the already-captured event snapshot stays correct
+    by construction. Simpler and more robust than the live-sync
+    alternative.
+  - **Rounding-consistency bug found via testing**: `rangeStart` was
+    already minute-rounded (via `resolveTimelineTimestamp`), but
+    `rangeEnd` was originally captured via raw `new Date()` — a span not
+    a clean multiple of 60,000ms, which combined with each step's own
+    minute-rounding produced asymmetric drift (forward/forward/backward
+    not landing back where naive percentage math predicted). Fixed by
+    exporting the previously-private `roundDownToMinute()` and applying
+    it to `rangeEnd`'s capture too, so both range boundaries share one
+    rounding convention — fixed at the source rather than loosening test
+    tolerances.
 
 ## Data model → see `DATA_MODEL.md`
 
