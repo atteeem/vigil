@@ -10,7 +10,15 @@ export interface SourceRef {
    * value always falls back to a generic source icon, never a blank one. */
   sourceRole?: string | null;
   url: string;
-  publishedAt: string; // ISO datetime
+  publishedAt: string; // ISO datetime — the report's own timestamp
+  /** ISO datetime this source was actually ATTACHED to this event
+   * (EventSource.createdAt) — distinct from `publishedAt` above, since a
+   * report can be ingested well before it's reviewed and merged. Powers
+   * the admin history timeline's "New source attached" entries and Event
+   * Version History's point-in-time reconstruction (spec "known/attached
+   * sources at that point in time"). Optional only because mock events
+   * have no real attachment event to record. */
+  attachedAt?: string;
   note?: string;
 }
 

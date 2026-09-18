@@ -14,6 +14,7 @@ import { MOCK_NOW } from "@/lib/data/constants";
 import { getCountryByCode } from "@/lib/data/mock-countries";
 import { getConflictById } from "@/lib/data/mock-conflicts";
 import { useAppStore } from "@/hooks/use-app-store";
+import { describeHistoryEntry } from "@/lib/data/event-history-description";
 
 export function EventDetailPanel({
   event,
@@ -121,7 +122,7 @@ export function EventDetailPanel({
           <ul className="mt-2 space-y-1.5">
             {event.updateHistory.map((h, i) => (
               <li key={i} className="text-xs text-ink-dim">
-                <span className="text-ink-faint">{timeAgo(h.changedAt, MOCK_NOW)}</span> — {h.newValue}
+                <span className="text-ink-faint">{timeAgo(h.changedAt, MOCK_NOW)}</span> — {describeHistoryEntry(h)}
               </li>
             ))}
           </ul>

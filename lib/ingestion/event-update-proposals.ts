@@ -56,7 +56,7 @@ const LIST_FIELDS: ExtractedFactField[] = ["actor", "infrastructureDamage"];
 // pending proposals rather than one silently picked.
 const CASUALTY_FIELDS: ExtractedFactField[] = ["casualtiesKilled", "casualtiesInjured"];
 
-function currentScalarValue(event: Event, field: ExtractedFactField): string | null {
+export function currentScalarValue(event: Event, field: ExtractedFactField): string | null {
   switch (field) {
     case "eventType":
       return event.eventType;
@@ -99,9 +99,23 @@ function currentListValue(event: Event, field: "actor" | "infrastructureDamage")
   return parseJsonArray(field === "actor" ? event.actors : event.infrastructureDamage);
 }
 
-function currentCasualtyValue(event: Event, field: "casualtiesKilled" | "casualtiesInjured"): string | null {
+export function currentCasualtyValue(event: Event, field: "casualtiesKilled" | "casualtiesInjured"): string | null {
   const value = field === "casualtiesKilled" ? event.casualtiesKilled : event.casualtiesInjured;
   return value === null ? null : String(value);
+}
+
+/** The event's TRUE current value for a field, for history-writing
+ * purposes (see lib/db/repositories/event-updates.ts's acceptProposal) —
+ * distinct from EventUpdateProposalDraft.currentValue, which is a
+ * snapshot taken when the proposal was CREATED and can go stale if a
+ * different proposal for the same field is accepted first while this one
+ * is still pending. List fields (actor/infrastructureDamage) have no
+ * scalar "old value" concept — each accepted entry is an addition, not a
+ * replacement — so they always return null here. */
+export function currentFieldValueForHistory(event: Event, field: ExtractedFactField): string | null {
+  if (field === "actor" || field === "infrastructureDamage") return null;
+  if (field === "casualtiesKilled" || field === "casualtiesInjured") return currentCasualtyValue(event, field);
+  return currentScalarValue(event, field);
 }
 
 /** Builds every proposal draft this report's facts justify against this

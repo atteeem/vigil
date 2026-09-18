@@ -619,6 +619,92 @@ migration described later in this file.
     label. The public page's "Recent Updates" section (spec "optionally
     show a concise update history") reuses the same `EventHistory` data,
     capped at 5 rows, through `getDbEventBySlug()`.
+- **Event Version History / Timeline Backbone** (`lib/data/event-
+  reconstruction.ts`, `lib/db/repositories/event-reconstruction.ts`, spec
+  "make every accepted event change historically reconstructable"): the
+  milestone that turns `EventHistory` — already an append-only change-
+  log from Live Event Updates — into an actual point-in-time state
+  service, per spec's own "avoid duplicating full event snapshots
+  unnecessarily if a clean change-log/version model fits" — no new
+  snapshot table, `EventHistory` already IS that model; this milestone
+  only adds the replay logic over it.
+  - **A real correctness bug, found and fixed before reconstruction
+    could work at all.** `EventUpdateProposal.currentValue` is a
+    snapshot taken when the proposal was CREATED (documented, deliberate
+    — see Live Event Updates' own reasoning: it keeps what an admin sees
+    on a pending card stable even if a sibling proposal for the same
+    field gets accepted first). `acceptProposal()` used to copy that
+    same snapshot straight into `EventHistory.oldValue` — which is fine
+    for display, but wrong for reconstruction: if two proposals for the
+    same field are both pending and get accepted in sequence, the
+    SECOND accept's history row would record the field's value from
+    when IT was proposed, not the value immediately before ITS OWN
+    accept (which may have moved in between, because the first proposal
+    was accepted). Fixed by having `acceptProposal()` read the event's
+    TRUE live value at accept time (`currentFieldValueForHistory()`,
+    `lib/ingestion/event-update-proposals.ts`) for `EventHistory.oldValue`
+    specifically, leaving `EventUpdateProposalDTO.currentValue`
+    untouched for its original display purpose — the two fields now
+    answer genuinely different questions and are allowed to diverge.
+    Covered by `tests/event-reconstruction-api.spec.ts`'s out-of-order-
+    accept test, which reproduces the exact scenario.
+  - **Reconstruction algorithm** (`reconstructEventState()`, pure, no
+    Prisma — same "extraction/comparison separate from persistence"
+    split as `extract-facts.ts`/`event-update-proposals.ts`): starts
+    from the event's CURRENT row (the only place full state lives —
+    history rows are per-field diffs, not snapshots) and walks
+    `EventHistory` newest-first, restoring `oldValue` for every entry
+    whose `createdAt` is after the target timestamp. Two or more
+    rollbacks to the same field collapse correctly because they're
+    applied strictly newest-to-oldest — each overwrite is superseded by
+    the next, older one, ending on the oldValue that genuinely predates
+    every after-timestamp change to that field. `actor`/
+    `infrastructureDamage` (list-valued columns) skip rollback entirely
+    and are rebuilt by accumulation instead — every accepted entry for
+    those fields is an ADDITION, never a replacement, so "the state at
+    T" is just every such entry with `createdAt <= T`.
+  - **Source attachment is now independently timestamped.**
+    `EventSource` gained its own `createdAt` (additive migration) —
+    distinct from the linked report's own `publishedAt`/`receivedAt`,
+    since a report can sit in the queue for a while before actually
+    being reviewed and merged onto a specific event. "Known/attached
+    sources at time T" filters on this attachment timestamp, not the
+    report's own timestamp — the only way "what did we know as of T"
+    can be answered correctly. Exposed on the public `SourceRef` type
+    too (`attachedAt`, optional — mock events have no real attachment
+    event) since it also powers the admin history timeline's "New
+    source attached" entries.
+  - **Publication state at T is best-effort, by design.** `Event.
+    publishedAt` is set once on first publish and never cleared by an
+    unpublish (existing lifecycle rule, unchanged) — reconstruction
+    reports `published: publishedAt !== null && publishedAt <= T`,
+    which answers "had this event ever been published by T," not a full
+    publish/unpublish toggle history (none is tracked, and this
+    milestone doesn't add one — spec "deleting/unpublishing should
+    follow existing lifecycle rules without corrupting history").
+  - **Historical query foundation** (spec §5, "do not build the full
+    global time-slider UI yet"): two new, deliberately minimal
+    endpoints for the next (global timeline) milestone to build on —
+    `GET /api/admin/events/known-at?at=<ISO>` (lightweight id/slug/title
+    list of every event that existed by T, intentionally NOT filtered by
+    current publish status — a caller wanting "published as of T" should
+    reconstruct each candidate and check ITS OWN `published` field,
+    since an event's publish state at T can differ from its current
+    one) and `GET /api/admin/events/[id]/reconstruct?at=<ISO>` (full
+    state for one event). Neither is wired into any new UI.
+  - **Admin history UI** (`/admin/events/[id]`'s History panel):
+    replaced the previous raw field-diff list with a merged
+    chronological timeline (spec "Event created, New source attached,
+    Location refined, Casualties: 4 → 6, Severity changed, Conflict
+    association updated") built client-side from three sources — a
+    synthetic "Event created" entry (from `event.createdAt`, never
+    stored, since there's no dedicated history row for creation itself),
+    synthetic "New source attached" entries (from each source's new
+    `attachedAt`), and real `EventHistory` rows run through
+    `describeHistoryEntry()` (`lib/data/event-history-description.ts`, a
+    small pure field→copy formatter, reused by the public page's
+    "Recent Updates" section too) — sorted newest-first. Because "Event
+    created" is always present, the panel is never empty.
 - **Geocoding abstraction** (`lib/geocoding/`, spec §4): `GeocodingProvider`
   is a one-method interface (`search(query): Promise<GeocodeCandidate[]>`)
   behind `getGeocodingProvider()`, so the concrete provider can change

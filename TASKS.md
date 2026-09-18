@@ -398,6 +398,60 @@ their publication time explicitly.
   Borders/Labels off forever, silently, which is exactly the "enabled in
   config but not in a real browser" failure mode the spec called out.
 
+### Phase 2p — Event Version History / Timeline Backbone
+
+| # | Task | Status |
+|---|---|---|
+| 139 | Found and fixed a real correctness bug before reconstruction could work at all: `acceptProposal()` was writing `EventHistory.oldValue` from the proposal's CREATION-time snapshot (`EventUpdateProposal.currentValue`), which goes stale when a sibling proposal for the same field is accepted first. Fixed by reading the event's TRUE live value at accept time (`currentFieldValueForHistory()`); `EventUpdateProposalDTO.currentValue` is untouched (it still serves its original UI-display purpose) | DONE |
+| 140 | `EventSource.createdAt` (additive migration) — attachment timestamp, distinct from the linked report's own publishedAt/receivedAt, needed to answer "known/attached sources at time T" correctly | DONE |
+| 141 | `EventHistory.confidence` (additive migration) — carried over from the accepted proposal's own confidence, per spec "confidence/provenance where available" | DONE |
+| 142 | `lib/data/event-reconstruction.ts` (NEW, pure): `reconstructEventState(event, history, sources, timestamp)` — rolls back scalar/casualty fields from the current row using EventHistory, accumulates list fields (actors/infrastructure damage) from additive entries, filters sources by attachment time, and derives best-effort publication state at T | DONE |
+| 143 | `lib/db/repositories/event-reconstruction.ts` (NEW): `reconstructEventStateAt(eventId, timestamp)` and `listEventIdsKnownAt(timestamp)` — the "historical query foundation" (spec §5), backing two new admin API routes (`GET .../events/[id]/reconstruct?at=`, `GET .../events/known-at?at=`) with no new UI wired to them yet | DONE |
+| 144 | `/admin/events/[id]`'s History panel replaced with a merged chronological timeline — synthetic "Event created" and "New source attached" entries alongside real accepted changes, each described in plain language (`lib/data/event-history-description.ts`: "Killed: 4 → 6", "Severity changed: ...", "Location refined", "Conflict association updated") — reused by the public page's "Recent Updates" section too | DONE |
+| 145 | `tests/event-reconstruction.spec.ts` (10 pure checks) + `tests/event-history-description.spec.ts` (6 pure checks) + `tests/event-reconstruction-api.spec.ts` (7 API checks): current/earlier-state reconstruction, multiple sequential updates, source-attachment timestamps, casualty/location/severity rollback, list-field accumulation, publication state, the out-of-order-accept staleness fix (reproduced end-to-end), rejected proposals create no history, ordinary manual edits never destroy existing history, known-at-T query correctness, pre-creation timestamp returns 404 | DONE |
+| 146 | Full re-verification on a reset DB: typecheck/lint/build clean; full Playwright suite (346 tests across Desktop + Mobile) — 341 passed, 5 pre-existing skips, 0 failed. Manually verified in-browser: merged reports into a published event, accepted severity and casualty proposals, confirmed the admin History panel showed "Event created" → "New source attached" ×2 → "Severity changed: elevated → high" → "Killed: unknown → 7" in correct reverse-chronological order with provenance/confidence; called the reconstruct API directly and confirmed a pre-change timestamp correctly recovered severity "elevated", casualtiesKilled null, only the first attached source, and published:false; confirmed the public event page's "Updated X ago" and "Recent Updates" reflected the same accepted changes with zero console errors | DONE |
+
+### Phase 2p decisions
+
+- **`EventHistory` is the version model — no separate snapshot table.**
+  Spec explicitly allowed skipping full-snapshot storage "if a clean
+  change-log/version model fits the architecture," and the one built for
+  Live Event Updates already does: replaying old/new field diffs
+  backward from the current row reconstructs any prior state without
+  ever storing a second copy of the event. The only genuinely new
+  concept this milestone adds is the replay function itself.
+- **A stale `oldValue` isn't just a display quirk once reconstruction
+  exists — it corrupts every earlier timestamp.** This was caught
+  before it could ship: writing an out-of-order-accept test against the
+  reconstruction API surfaced that `EventHistory.oldValue` and
+  `EventUpdateProposal.currentValue` had been treated as
+  interchangeable, when only the latter is allowed to go stale (by
+  original design, for good reason — see Live Event Updates'
+  Decisions.md entry). The fix reads the event's live value at the
+  moment of accept specifically for the history row, leaving the
+  proposal's own display snapshot alone.
+- **List-valued fields don't roll back — they're rebuilt by
+  accumulation.** Every accepted `actor`/`infrastructureDamage` entry
+  is additive by construction (Live Event Updates never proposes
+  "replace the actor list," only "add this new actor"), so their state
+  at any timestamp T is simply every such entry with `createdAt <= T` —
+  no oldValue/rollback logic needed or meaningful for these two fields.
+- **`EventSource` needed its own timestamp.** The report's own
+  `publishedAt`/`receivedAt` (already used for corroboration's "first
+  reported"/"last corroborated" metadata) answers "when was this
+  reported," not "when did we learn it belonged to this event" — a
+  report can sit in the incoming queue for a while before an admin
+  reviews and merges it. Reconstructing "known sources at T" needed the
+  latter, so `EventSource.createdAt` was added rather than
+  approximating with a timestamp that answers a different question.
+- **No new admin/public UI for browsing arbitrary timestamps.** Spec
+  explicitly scoped this milestone to backend/data-layer foundation
+  (§5) plus the existing history panel's presentation — the two new
+  API routes (`known-at`, `[id]/reconstruct`) are deliberately not
+  wired into any time-picker or slider; that's the next milestone's
+  job, and building it now would be scope creep this spec explicitly
+  called out to avoid.
+
 ## Beyond the Phase 1 floor (built ahead of schedule)
 
 The spec listed these as later-phase, but they were straightforward

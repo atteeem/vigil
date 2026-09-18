@@ -43,6 +43,7 @@ export function dbEventToConflictEvent(event: EventWithSources & { history?: Eve
     sourceRole: link.rawIngestionItem.source.sourceRole,
     url: link.rawIngestionItem.originalUrl ?? "",
     publishedAt: (link.rawIngestionItem.publishedAt ?? link.rawIngestionItem.receivedAt).toISOString(),
+    attachedAt: link.createdAt.toISOString(),
     note: link.relationship === "relay" ? "Relay — not an independent confirmation of the originating source." : undefined,
   }));
 

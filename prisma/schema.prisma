@@ -320,6 +320,12 @@ model EventHistory {
   rawIngestionItemId String?  @map("raw_ingestion_item_id")
   rawIngestionItem   RawIngestionItem? @relation(fields: [rawIngestionItemId], references: [id], onDelete: SetNull)
   source             String   // provenance, carried over from the accepted proposal
+  // Event Version History (spec "confidence/provenance where available"):
+  // carried over from the accepted EventUpdateProposal's own confidence.
+  // Nullable for the same forward-compatibility reason as
+  // rawIngestionItemId — a hypothetical future non-report-driven change
+  // path might have no meaningful confidence to record.
+  confidence         Float?
   // Always false for now — every change this milestone produces goes
   // through explicit admin accept (including the "accept all safe/
   // high-confidence updates" bulk action, which is still an admin click,
@@ -345,6 +351,15 @@ model EventSource {
   rawIngestionItem   RawIngestionItem @relation(fields: [rawIngestionItemId], references: [id], onDelete: Cascade)
   relationship       String   @default("originating") // "originating" | "relay" | "corroborating"
   isOriginatingSource Boolean @default(true) @map("is_originating_source")
+  // Event Version History (spec "known/attached sources at that point in
+  // time"): when THIS link was created, distinct from the underlying
+  // report's own publishedAt/receivedAt (a report can be ingested well
+  // before it's reviewed and attached to a specific event) — reconstructing
+  // "what sources did we know about as of timestamp T" needs the
+  // attachment time, not the report's own timestamp. linkEventSource's
+  // upsert only sets this on create, never touches it on a relationship
+  // update, so it's a true one-time attachment timestamp.
+  createdAt          DateTime @default(now()) @map("created_at")
 
   @@unique([eventId, rawIngestionItemId])
   @@map("event_sources")

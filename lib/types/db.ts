@@ -406,6 +406,10 @@ export interface EventHistoryEntryDTO {
   newValue: string;
   rawIngestionItemId: string | null;
   source: string;
+  /** Carried over from the accepted proposal's own confidence — spec
+   * "confidence/provenance where available." Null only for a
+   * hypothetical future non-report-driven change path. */
+  confidence: number | null;
   automatic: boolean;
   createdAt: string;
 }

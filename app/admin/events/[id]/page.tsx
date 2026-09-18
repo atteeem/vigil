@@ -15,6 +15,7 @@ import { timeAgo } from "@/lib/utils";
 import { EVENT_TYPES, SEVERITY_LEVELS } from "@/lib/types";
 import { DB_VERIFICATION_STATUSES, type EventStatus, type EventUpdateProposalDTO, type EventHistoryEntryDTO } from "@/lib/types/db";
 import { EXTRACTED_FACT_FIELD_LABEL } from "@/lib/ingestion/field-labels";
+import { describeHistoryEntry } from "@/lib/data/event-history-description";
 import type { ConflictEvent } from "@/lib/types";
 
 type EventAdminDetail = ConflictEvent & { locationName: string | null; status: EventStatus; publishedAt: string | null; createdAt: string; updatedAt: string };
@@ -212,6 +213,44 @@ export default function AdminEventDetailPage() {
   }
 
   const corroboration = getEventCorroboration(event);
+
+  // Chronological update/history section (spec "Event created, New
+  // source attached, Location refined, Casualties: 4 → 6, Severity
+  // changed, Conflict association updated"). Merges three things that
+  // live in three different places: a synthetic "created" entry (derived
+  // from event.createdAt, never stored — there's no dedicated history
+  // row for creation itself), synthetic "source attached" entries (from
+  // each EventSource's own createdAt, not the report's publishedAt —
+  // see lib/types/event.ts's SourceRef.attachedAt comment), and the real
+  // accepted-change rows from EventHistory. Newest first, matching the
+  // Pending Updates panel's own ordering above.
+  interface TimelineEntry {
+    key: string;
+    timestamp: string;
+    description: string;
+    detail: string | null;
+    confidence?: number | null;
+    automatic?: boolean;
+  }
+  const timelineEntries: TimelineEntry[] = [
+    { key: "created", timestamp: event.createdAt, description: "Event created", detail: null },
+    ...event.sources
+      .filter((s) => s.attachedAt)
+      .map((s, i): TimelineEntry => ({
+        key: `source-${s.id}-${i}`,
+        timestamp: s.attachedAt!,
+        description: "New source attached",
+        detail: s.name,
+      })),
+    ...history.map((h): TimelineEntry => ({
+      key: h.id,
+      timestamp: h.createdAt,
+      description: describeHistoryEntry(h),
+      detail: h.source,
+      confidence: h.confidence,
+      automatic: h.automatic,
+    })),
+  ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
   return (
     <div data-testid="admin-event-detail">
@@ -548,29 +587,19 @@ export default function AdminEventDetailPage() {
           <History className="h-3.5 w-3.5" />
           History
         </div>
-        {history.length === 0 ? (
-          <p className="text-xs text-ink-faint">No accepted changes yet.</p>
-        ) : (
-          <ul className="space-y-2">
-            {history.map((h) => (
-              <li key={h.id} data-testid={`history-${h.id}`} className="rounded-lg border border-border px-3 py-2 text-xs">
-                <p className="font-medium text-ink">{EXTRACTED_FACT_FIELD_LABEL[h.field]}</p>
-                <p className="mt-0.5 text-ink-dim">
-                  {h.oldValue !== null && (
-                    <>
-                      <span className="text-ink-faint line-through">{h.oldValue}</span>
-                      {" → "}
-                    </>
-                  )}
-                  <span>{h.newValue}</span>
-                </p>
-                <p className="mt-0.5 text-[10px] text-ink-faint">
-                  {timeAgo(h.createdAt)} · {h.automatic ? "automatic" : "admin-approved"}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
+        <ul className="space-y-2">
+          {timelineEntries.map((entry) => (
+            <li key={entry.key} data-testid={`history-${entry.key}`} className="rounded-lg border border-border px-3 py-2 text-xs">
+              <p className="font-medium text-ink">{entry.description}</p>
+              {entry.detail && <p className="mt-0.5 text-ink-dim">{entry.detail}</p>}
+              <p className="mt-0.5 text-[10px] text-ink-faint">
+                {timeAgo(entry.timestamp)}
+                {entry.automatic !== undefined && <> · {entry.automatic ? "automatic" : "admin-approved"}</>}
+                {entry.confidence != null && <> · {Math.round(entry.confidence * 100)}% confidence</>}
+              </p>
+            </li>
+          ))}
+        </ul>
       </Card>
     </div>
   );
