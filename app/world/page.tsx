@@ -39,7 +39,19 @@ export default function WorldPage() {
   // selected — see hooks/use-world-timeline.ts for why that single value
   // is enough state for a later Play/Pause animation too.
   const timeline = useWorldTimeline();
-  const { events: historicalEvents, loading: historicalLoading } = useWorldEvents(timeline.asOf);
+  const { events: historicalEvents, loading: historicalLoading } = useWorldEvents(timeline.asOf, timeline.previewNextAsOf);
+
+  // Animated playback (spec "opening event details during playback must
+  // show data for the current historical timestamp"): pausing first
+  // means the selected event's data can never drift out from under the
+  // open detail panel — `asOf` stops advancing the instant something is
+  // selected, so whatever was current at that moment stays current for
+  // as long as the panel is open. Simpler and more robust than trying to
+  // keep a live-updating reference in sync with a still-animating asOf.
+  function selectEvent(event: ConflictEvent) {
+    if (timeline.isPlaying) timeline.pause();
+    setSelected(event);
+  }
 
   // Published admin events are merged in alongside the mock-data set, so
   // /world keeps working exactly as before with zero live events (e.g. a
@@ -84,7 +96,7 @@ export default function WorldPage() {
           </p>
           <div className="space-y-3">
             {filteredEvents.slice(0, 40).map((e) => (
-              <button key={e.id} onClick={() => setSelected(e)} className="block w-full text-left">
+              <button key={e.id} onClick={() => selectEvent(e)} className="block w-full text-left">
                 <EventCard event={e} compact />
               </button>
             ))}
@@ -100,7 +112,7 @@ export default function WorldPage() {
             events={filteredEvents}
             viewMode={viewMode}
             basemapMode={basemapMode}
-            onSelectEvent={setSelected}
+            onSelectEvent={selectEvent}
             className={cn(
               "absolute inset-0 h-full w-full",
               // Avoid users mistaking historical data for live data: a
@@ -115,9 +127,19 @@ export default function WorldPage() {
               <TimelineControls
                 preset={timeline.preset}
                 asOf={timeline.asOf}
+                rangeStart={timeline.rangeStart}
+                rangeEnd={timeline.rangeEnd}
+                isPlaying={timeline.isPlaying}
+                speed={timeline.speed}
                 onSelectPreset={timeline.selectPreset}
                 onSelectCustom={timeline.selectCustomTimestamp}
                 onReturnToLive={timeline.returnToLive}
+                onPlay={timeline.play}
+                onPause={timeline.pause}
+                onStepForward={timeline.stepForward}
+                onStepBackward={timeline.stepBackward}
+                onSetSpeed={timeline.setSpeed}
+                onScrubProgress={timeline.scrubToProgress}
               />
             </div>
             <div className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-border bg-surface/80 p-3 backdrop-blur-xl">
