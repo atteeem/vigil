@@ -76,6 +76,32 @@
     color-scheme: dark;
   }
 
+  /* MobileTopBar and MobileTabBar (components/layout/mobile-top-bar.tsx,
+     mobile-tab-bar.tsx) are fixed, opaque bars rendered on every route
+     below the `sm` breakpoint (matching their own `sm:hidden`) — ~52px
+     and ~62px tall respectively. Neither is part of normal document
+     flow, so nothing about a given page's own layout naturally keeps
+     scrollable content clear of them: an interactive element that a
+     native or Playwright scrollIntoView lands at the very top or bottom
+     edge of the viewport ends up physically underneath one of them,
+     which is genuinely on top (z-40/z-50) and therefore receives the
+     click instead of the element under it — on ANY route, not just
+     admin ones, and regardless of how much bottom padding that one page
+     happens to reserve on its own. scroll-padding-{top,bottom} is the
+     browser's own mechanism for "keep this much clearance from a fixed
+     bar when scrolling something into view," and it's respected by both
+     native scrollIntoView and Playwright's pre-click auto-scroll — set
+     once here, it's the shared fix for every current and future route,
+     not something each page has to account for individually. Values are
+     the bars' own measured heights (mobile-tab-bar ~62px, mobile-top-bar
+     ~52px) plus a small margin. */
+  @media (max-width: 639.98px) {
+    html {
+      scroll-padding-top: 68px;
+      scroll-padding-bottom: 78px;
+    }
+  }
+
   body {
     background-color: var(--color-bg);
     color: var(--color-ink);

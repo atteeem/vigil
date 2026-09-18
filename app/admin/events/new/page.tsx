@@ -110,7 +110,15 @@ export default function NewEventPage() {
   }
 
   return (
-    <div>
+    // Extra bottom room on mobile only: this form embeds its own
+    // MapLibre instance (LocationPicker) directly above the Save/Publish
+    // row, and that map's own layout settling interacts with the shared
+    // scroll-padding-bottom fix (app/globals.css) in a way that can land
+    // a scroll-into-view a few pixels short of full clearance from the
+    // fixed MobileTabBar — extra real space here is a small, page-local
+    // safety margin for that one interaction, not a duplicate of the
+    // shared fix itself.
+    <div className="pb-12 sm:pb-0">
       <Link href="/admin/events" className="mb-4 inline-flex items-center gap-1 text-xs text-accent hover:underline">
         <ArrowLeft className="h-3.5 w-3.5" /> Back to Events
       </Link>
