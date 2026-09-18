@@ -555,6 +555,72 @@ their publication time explicitly.
   consistent with this project's established practice of fixing real
   bugs found by tests instead of loosening the tests around them.
 
+### Phase 2s — Territorial Control Mode
+
+| # | Task | Status |
+|---|---|---|
+| 166 | `prisma/schema.prisma`: new `ConflictActor` (per-conflict, stable palette color) and `ConflictTerritory` (versioned by whole-row supersession — `validFrom`/`validTo`, `validTo: null` = active) models; migration `20260918122108_territorial_control` | DONE |
+| 167 | `lib/data/territorial-control.ts` (pure): `deriveDisplayStatus()` derives "recently_changed" at read time from how close `validFrom` is to the timestamp being viewed (never stored); `isValidTerritorialGeometry()`/`parseTerritorialGeometry()` validate/parse GeoJSON Polygon/MultiPolygon | DONE |
+| 168 | `lib/db/repositories/territorial-control.ts`: `listTerritoriesAt(timestamp)` — the public "state as of T" query, a single indexed `validFrom`/`validTo` bound (Live = T=now, historical = any past T, playback = every tick) — plus full draft CRUD (`createTerritoryDraft`/`updateTerritoryDraft`/`deleteTerritoryDraft`, draft-only), `publishTerritory`, and `supersedeTerritory` (one transaction: closes the current row's `validTo`, creates the new published row) | DONE |
+| 169 | `GET /api/territorial-control` (public, `?at=` mirrors `/api/events`) and the `/api/admin/territorial-control` + `/api/admin/actors` CRUD/publish/supersede routes | DONE |
+| 170 | `components/map/world-map.tsx`: `territory-fill`/`territory-contested-hatch`/`territory-outline`/`territory-outline-dashed`/`territory-recently-changed-highlight` layers, added FIRST so they render beneath markers/heat; status encoded via fill-opacity + a generated diagonal-hatch `fill-pattern` (`lib/map/territorial-pattern.ts`) + dashed/dotted outline texture, never color alone; a click-priority guard yields to markers stacked on top | DONE |
+| 171 | `components/map/map-filters.tsx` + `app/world/page.tsx`: an independent "Territorial Control" toggle (not a third `viewMode` value) that composes with either Markers or Heatmap — Heatmap + ON is spec's "Both"; `hooks/use-territorial-control.ts` mirrors `use-world-events.ts`'s live-poll/historical-cache/AbortController/prefetch design exactly, driven by the same `timeline.asOf` | DONE |
+| 172 | `components/map/territory-legend.tsx` (actor names actually on screen, plus a status key) and `components/map/territory-detail-panel.tsx` (click-to-inspect, reads straight off the clicked feature's own properties — no second fetch — shows status/confidence/effective-since/last-updated/source, with an explicit "not a legal determination of sovereignty" line) | DONE |
+| 173 | `app/admin/territorial-control/page.tsx`: create/edit(draft-only)/publish/supersede/delete(draft-only) admin workflow; geometry entered as GeoJSON in a textarea with a live preview map (`components/admin/territory-geometry-preview.tsx`) rather than a full drawing tool (deferred — see decisions below) | DONE |
+| 174 | `tests/territorial-control.spec.ts` (13 pure), `tests/territorial-control-api.spec.ts` (11 API/reconstruction), `tests/territorial-control-ui.spec.ts` (8 real-browser: mode toggle, legend, click-to-inspect, marker-priority-over-polygon, future-hidden, historical control-change reconstruction, Both mode, status key), `tests/admin-territorial-control.spec.ts` (5: create/publish/supersede/delete/action-visibility) | DONE |
+| 175 | Dev/test-only `window.__vigilMap` hook in `world-map.tsx` (outside production builds) so Playwright can compute exact click pixels via `map.project()` and confirm paint-readiness via `queryRenderedFeatures()` before clicking — floating overlay panels made canvas-coordinate guessing unreliable | DONE |
+| 176 | Full re-verification on a reset DB: typecheck/lint/build clean; targeted territorial suite 37/37 (Desktop) + 24/24 pure+API (Mobile, 13 UI tests correctly skipped); full regression pass across existing map/timeline/playback/admin specs — 58/58, no regressions. Manually verified in-browser: mode toggle, Both mode, hatch/highlight/dash patterns rendering correctly, click-to-inspect panel, admin create → publish → supersede workflow, and historical playback correctly reconstructing a control change before/after | DONE |
+
+### Phase 2s decisions
+
+- **Versioned by whole-row supersession, not a field-diff change-log.**
+  Unlike Event Version History's `EventHistory`, a control change is
+  naturally "this whole polygon/actor/status is superseded by that one,"
+  not a per-field diff — so `validFrom`/`validTo` bounds on each row make
+  "reconstruct at T" a single indexed query, simpler and a better fit
+  than replaying a ledger.
+- **A published territory version is immutable — supersede, don't edit.**
+  `PATCH`/`DELETE` are scoped to drafts only; the only way to change a
+  published, currently-active row's control is `supersedeTerritory`,
+  which creates a new row and closes the old one's `validTo` in one
+  transaction. This is what makes "preserve previous historical state"
+  a guarantee of the data model, not a convention admins have to follow.
+- **Territorial Control is an independent toggle, not a third `viewMode`.**
+  Spec listed "Heatmap / Territorial Control / Both" as three modes, but
+  also said "preserve existing Heatmap, markers... behavior" and "keep
+  these layers architecturally independent" — squeezing a third value
+  into the existing binary `viewMode` would have broken that
+  independence and forced a choice between Markers+Territorial and
+  Heatmap+Territorial. A standalone boolean composes with either.
+- **"Recently changed" is derived at read time, never stored.** Storing
+  it as an assignable status would require a background job to expire it
+  and would desync from what's actually true "as of T" during historical
+  playback; deriving it from `validFrom` vs. the viewed timestamp means
+  it replays correctly automatically — playback shows the same brief
+  highlight a change had when it actually happened.
+- **No drawing tool for admin geometry entry — a GeoJSON textarea with a
+  live preview instead.** Spec's own phrasing ("prefer... if compatible")
+  was a preference, not a requirement; integrating a full draw tool
+  (e.g. mapbox-gl-draw) was judged out of proportion to this milestone's
+  scope. The preview map still gives a concrete, honest "preview" step
+  before publish — flagged as a follow-up enhancement, not silently
+  dropped.
+- **Public detail panel reads the clicked feature's own properties —
+  no second fetch.** Since `listTerritoriesAt` already decides which
+  version is historically correct for the active `asOf` before the
+  FeatureCollection ever reaches the map, the feature the user clicked
+  IS the correct version already; fetching it again by id would be
+  redundant and could theoretically race a fast playback tick.
+- **A dev/test-only `window.__vigilMap` hook was added to `world-map.tsx`.**
+  Floating overlay panels (timeline/filters/legend) cover enough of the
+  canvas at common viewport sizes that guessing click coordinates from a
+  screenshot proved unreliable during test development; exposing the
+  live map instance (guarded to non-production) let tests compute exact
+  pixels via `map.project()` and confirm a feature is actually paintable
+  via `queryRenderedFeatures()` before clicking — eliminating an entire
+  category of click-timing flakiness, not just Territorial Control's own
+  tests.
+
 ## Beyond the Phase 1 floor (built ahead of schedule)
 
 The spec listed these as later-phase, but they were straightforward

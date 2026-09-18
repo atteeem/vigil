@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutGrid, Flame } from "lucide-react";
+import { LayoutGrid, Flame, Flag } from "lucide-react";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { EVENT_TYPE_LABEL } from "@/components/events/event-type-icon";
 import { EVENT_TYPES, REGIONS, type EventType, type Region, type TimeRange } from "@/lib/types";
@@ -29,6 +29,8 @@ export function MapFilters({
   onViewMode,
   basemapMode,
   onBasemapMode,
+  showTerritorial,
+  onToggleTerritorial,
   className,
 }: {
   typeFilter: TypeFilter;
@@ -41,6 +43,12 @@ export function MapFilters({
   onViewMode: (v: ViewMode) => void;
   basemapMode: MapBasemapMode;
   onBasemapMode: (v: MapBasemapMode) => void;
+  // Territorial Control Mode — an independent toggle, not a third
+  // mutually-exclusive viewMode value (see world-map.tsx's own comment):
+  // it composes with either Markers or Heatmap, so ON + Heatmap is spec's
+  // "Both" mode.
+  showTerritorial: boolean;
+  onToggleTerritorial: (v: boolean) => void;
   className?: string;
 }) {
   return (
@@ -98,6 +106,17 @@ export function MapFilters({
             <Flame className="h-3.5 w-3.5" /> Heatmap
           </button>
         </div>
+        <button
+          onClick={() => onToggleTerritorial(!showTerritorial)}
+          aria-pressed={showTerritorial}
+          data-testid="territorial-toggle"
+          className={cn(
+            "flex items-center gap-1.5 rounded-full border p-1 px-3 py-1.5 text-xs font-medium transition-colors",
+            showTerritorial ? "border-accent/40 bg-accent-dim text-accent" : "border-border-strong text-ink-dim hover:text-ink",
+          )}
+        >
+          <Flag className="h-3.5 w-3.5" /> Territorial Control
+        </button>
       </div>
     </div>
   );

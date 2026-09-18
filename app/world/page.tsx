@@ -17,7 +17,11 @@ import { useAppStore } from "@/hooks/use-app-store";
 import { useLiveEvents } from "@/hooks/use-live-events";
 import { useWorldTimeline } from "@/hooks/use-world-timeline";
 import { useWorldEvents } from "@/hooks/use-world-events";
+import { useTerritorialControl } from "@/hooks/use-territorial-control";
 import { TimelineControls } from "@/components/map/timeline-controls";
+import { TerritoryLegend } from "@/components/map/territory-legend";
+import { TerritoryDetailPanel } from "@/components/map/territory-detail-panel";
+import type { TerritoryFeatureProperties } from "@/lib/types/territorial-control";
 
 const WorldMap = dynamic(() => import("@/components/map/world-map").then((m) => m.WorldMap), {
   ssr: false,
@@ -30,6 +34,8 @@ export default function WorldPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>("24H");
   const [viewMode, setViewMode] = useState<ViewMode>("markers");
   const [selected, setSelected] = useState<ConflictEvent | null>(null);
+  const [showTerritorial, setShowTerritorial] = useState(false);
+  const [selectedTerritory, setSelectedTerritory] = useState<TerritoryFeatureProperties | null>(null);
   const basemapMode = useAppStore((s) => s.mapBasemapMode);
   const setBasemapMode = useAppStore((s) => s.setMapBasemapMode);
   const liveEvents = useLiveEvents();
@@ -40,6 +46,11 @@ export default function WorldPage() {
   // is enough state for a later Play/Pause animation too.
   const timeline = useWorldTimeline();
   const { events: historicalEvents, loading: historicalLoading } = useWorldEvents(timeline.asOf, timeline.previewNextAsOf);
+  // Territorial Control Mode: the SAME asOf/previewNextAsOf drives
+  // territorial polygons too (spec §5 "do not create a second timeline
+  // system") — Live and historical/playback both flow through this one
+  // hook exactly like useWorldEvents above.
+  const { featureCollection: territorialFeatures } = useTerritorialControl(timeline.asOf, timeline.previewNextAsOf);
 
   // Animated playback (spec "opening event details during playback must
   // show data for the current historical timestamp"): pausing first
@@ -50,7 +61,14 @@ export default function WorldPage() {
   // keep a live-updating reference in sync with a still-animating asOf.
   function selectEvent(event: ConflictEvent) {
     if (timeline.isPlaying) timeline.pause();
+    setSelectedTerritory(null);
     setSelected(event);
+  }
+
+  function selectTerritory(properties: TerritoryFeatureProperties) {
+    if (timeline.isPlaying) timeline.pause();
+    setSelected(null);
+    setSelectedTerritory(properties);
   }
 
   // Published admin events are merged in alongside the mock-data set, so
@@ -113,6 +131,9 @@ export default function WorldPage() {
             viewMode={viewMode}
             basemapMode={basemapMode}
             onSelectEvent={selectEvent}
+            territorialFeatures={territorialFeatures}
+            showTerritorial={showTerritorial}
+            onSelectTerritory={selectTerritory}
             className={cn(
               "absolute inset-0 h-full w-full",
               // Avoid users mistaking historical data for live data: a
@@ -154,12 +175,19 @@ export default function WorldPage() {
                 onViewMode={setViewMode}
                 basemapMode={basemapMode}
                 onBasemapMode={setBasemapMode}
+                showTerritorial={showTerritorial}
+                onToggleTerritorial={setShowTerritorial}
               />
             </div>
+            {showTerritorial && (
+              <div className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-border bg-surface/80 p-3 backdrop-blur-xl">
+                <TerritoryLegend featureCollection={territorialFeatures} />
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Desktop selected-event panel */}
+        {/* Desktop selected-event/territory panel */}
         <aside className="hidden h-full overflow-y-auto border-l border-border bg-surface/60 p-5 pt-24 sm:block">
           {selected ? (
             <>
@@ -170,6 +198,16 @@ export default function WorldPage() {
                 <X className="h-3.5 w-3.5" /> Close
               </button>
               <EventDetailPanel event={selected} />
+            </>
+          ) : selectedTerritory ? (
+            <>
+              <button
+                onClick={() => setSelectedTerritory(null)}
+                className="mb-3 inline-flex items-center gap-1 text-xs text-ink-faint hover:text-ink"
+              >
+                <X className="h-3.5 w-3.5" /> Close
+              </button>
+              <TerritoryDetailPanel territory={selectedTerritory} />
             </>
           ) : (
             <p className="mt-8 text-center text-sm text-ink-faint">
@@ -182,6 +220,13 @@ export default function WorldPage() {
       {/* Mobile bottom sheet */}
       <BottomSheet open={!!selected} onClose={() => setSelected(null)} label={selected?.title}>
         {selected && <EventDetailPanel event={selected} />}
+      </BottomSheet>
+      <BottomSheet
+        open={!!selectedTerritory}
+        onClose={() => setSelectedTerritory(null)}
+        label={selectedTerritory?.actorName ?? undefined}
+      >
+        {selectedTerritory && <TerritoryDetailPanel territory={selectedTerritory} />}
       </BottomSheet>
     </main>
   );

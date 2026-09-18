@@ -203,8 +203,80 @@ model Conflict {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   events      Event[]
+  actors      ConflictActor[]
+  territories ConflictTerritory[]
 
   @@map("conflicts")
+}
+
+// Territorial Control Mode: a controlling actor is scoped to ONE conflict
+// (the same faction can appear under a different name/color in an
+// unrelated conflict, so this is deliberately not a single global actor
+// registry) — not the free-text Event.actors list or the
+// lib/ingestion/actors.ts alias table used for report-text matching,
+// which stay exactly as they are. `color` is assigned once, at creation,
+// from a fixed palette (lib/map/territorial-colors.ts) so an actor's
+// polygons/legend swatch stay visually stable for the life of the
+// conflict rather than shifting color if unrelated actors are added or
+// removed later.
+model ConflictActor {
+  id         String   @id @default(cuid())
+  conflictId String   @map("conflict_id")
+  conflict   Conflict @relation(fields: [conflictId], references: [id], onDelete: Cascade)
+  name       String
+  color      String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  territories ConflictTerritory[]
+
+  @@unique([conflictId, name])
+  @@map("conflict_actors")
+}
+
+// Territorial Control Mode — one row per CONTROL-STATE VERSION, not one
+// row per area. Versioned by whole-row supersession (validFrom/validTo),
+// deliberately NOT a field-diff change-log like EventHistory: a control
+// change is naturally "this whole polygon/actor/status is superseded by
+// that one," so "reconstruct state as of T" is a single indexed query —
+// `validFrom <= T AND (validTo IS NULL OR validTo > T)` — never a replay
+// loop. `validTo: null` marks the currently active version. A row is
+// immutable once `published`; changing control creates a NEW row (see
+// supersedeTerritory in lib/db/repositories/territorial-control.ts) and
+// closes the old one's validTo rather than overwriting it — "must remain
+// historically reconstructable" per spec.
+model ConflictTerritory {
+  id         String   @id @default(cuid())
+  conflictId String   @map("conflict_id")
+  conflict   Conflict @relation(fields: [conflictId], references: [id], onDelete: Cascade)
+  // Nullable: "uncertain" or "contested-with-no-clear-controller" areas
+  // may have no single controlling actor.
+  actorId    String?  @map("actor_id")
+  actor      ConflictActor? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  // "controlled" | "contested" | "uncertain" | "recently_changed" — see
+  // lib/types/territorial-control.ts TERRITORIAL_STATUSES.
+  status     String
+  // 0-1, confidence in this control assessment — never legal sovereignty,
+  // only a claim about de facto/reported control (spec §2/§9).
+  confidence Float
+  // GeoJSON Polygon or MultiPolygon, JSON-encoded string (SQLite has no
+  // JSON/geometry column type — same convention as every other
+  // JSON-in-String field in this schema).
+  geometry   String
+  sourceName String?  @map("source_name")
+  sourceUrl  String?  @map("source_url")
+  validFrom  DateTime @map("valid_from")
+  // null = still the current/active version.
+  validTo    DateTime? @map("valid_to")
+  // Draft rows (published: false) are never returned by the public
+  // reconstruction query and may be freely edited/deleted; once
+  // published, a row is immutable — see the model's own comment above.
+  published  Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([conflictId, validFrom])
+  @@index([published, validFrom, validTo])
+  @@map("conflict_territories")
 }
 
 model Event {

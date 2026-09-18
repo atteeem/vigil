@@ -349,6 +349,70 @@ Next.js Route Handlers / Server Actions
     it to `rangeEnd`'s capture too, so both range boundaries share one
     rounding convention — fixed at the source rather than loosening test
     tolerances.
+- **Territorial Control Mode** (`prisma/schema.prisma` `ConflictActor`/
+  `ConflictTerritory`, `lib/db/repositories/territorial-control.ts`,
+  `components/map/world-map.tsx`, spec "DeepState-style territorial-control
+  visualization... fully compatible with the current timeline/playback
+  system"): adds de facto control polygons to `/world`, respecting the
+  same `asOf` the map's events already use — no second timeline.
+  - **Versioned by whole-row supersession, not a field-diff ledger.**
+    Unlike Event Version History's `EventHistory` change-log,
+    `ConflictTerritory` is one row per CONTROL-STATE VERSION with its own
+    `validFrom`/`validTo` (`validTo: null` = currently active) — a
+    control change creates a new published row and closes the old one's
+    `validTo`, in one transaction (`supersedeTerritory`), rather than
+    replaying diffs. "State as of T" is one indexed query —
+    `validFrom <= T AND (validTo IS NULL OR validTo > T) AND published` —
+    never a replay loop, and works identically for Live (T = now) and any
+    historical/playback T.
+  - **A published row is immutable.** `PATCH`/`DELETE` only work on
+    drafts (`published: false`); once published, the only way to change
+    control is `supersedeTerritory`, which never mutates the row it
+    replaces — "must remain historically reconstructable" holds by
+    construction, not by convention.
+  - **Actors are scoped per-conflict** (`ConflictActor.conflictId`), not a
+    global registry — the same faction can appear differently across
+    unrelated conflicts. Color is assigned once at creation from a fixed
+    10-color palette (`lib/map/territorial-colors.ts`), by the actor's
+    position among that conflict's existing actors, so it stays stable
+    for the conflict's life regardless of who's added/removed later.
+  - **Status is encoded on more than color** (spec "do not rely on color
+    alone for meaning"): fill-opacity, a diagonal-hatch `fill-pattern`
+    for "contested", and a dashed/dotted outline texture for
+    contested/uncertain all vary by status independently of the
+    actor-color fill — a "recently_changed" status is never stored,
+    always DERIVED at read time (`deriveDisplayStatus`,
+    `lib/data/territorial-control.ts`) from how close `validFrom` is to
+    the timestamp being viewed, so it replays correctly during historical
+    playback too, not just live.
+  - **Territorial Control is an independent toggle, not a third `viewMode`
+    value** (spec "keep these layers architecturally independent") — the
+    existing Markers/Heatmap radio group is untouched; a separate
+    `showTerritorial` boolean composes with either, so Heatmap + ON is
+    spec's "Both". The territory GeoJSON source/layers are added FIRST in
+    `addEventLayers` (MapLibre stacks by call order) so they always
+    render beneath markers/heat; a click-priority guard in the
+    `territory-fill` click handler queries the marker layers first and
+    yields if one's hit, so a marker stacked over a polygon stays
+    clickable (spec §8).
+  - **Public detail needs no second fetch.** Since each polygon *is*
+    already the historically-correct version for the active `asOf` (the
+    reconstruction query itself decides which version is in the response),
+    the click-to-inspect panel reads straight off the clicked GeoJSON
+    feature's own properties — no `GET .../:id` round-trip.
+  - **Admin geometry entry is a GeoJSON textarea with a live preview map**,
+    not a drawing tool — spec's "prefer... if compatible" was explicitly
+    a preference, and a full draw-tool integration (e.g. mapbox-gl-draw)
+    was deferred as an enhancement given the milestone's scope; the
+    preview (`components/admin/territory-geometry-preview.tsx`) still
+    lets an admin visually verify placement/shape before publishing.
+  - **Dev/test-only map instance hook**: `world-map.tsx` sets
+    `window.__vigilMap` to the live MapLibre instance outside production
+    builds specifically so Playwright can compute exact click pixels via
+    `map.project()`/confirm paint-readiness via
+    `queryRenderedFeatures()` — floating overlay panels (timeline/
+    filters/legend) make eyeballing canvas coordinates unreliable across
+    viewport sizes. Referenced by no production code path.
 
 ## Data model → see `DATA_MODEL.md`
 
