@@ -215,7 +215,10 @@ test.describe.serial("Stage 1: end-to-end pipeline integrity", () => {
     });
 
     await page.goto("/admin/sources");
-    const row = page.locator(`[data-testid^="source-row-"]`, { hasText: noRoleName });
+    // Source rows render as a <tr> on desktop and a separate <div> card
+    // list on mobile (only one is visible at a given viewport); :visible
+    // avoids a strict-mode violation from matching both.
+    const row = page.locator(`[data-testid^="source-row-"]:visible`, { hasText: noRoleName });
     await expect(row).toBeVisible();
     await expect(row.getByText("Unclassified", { exact: true })).toBeVisible();
     // The fallback icon is an <svg>, same as every classified role's icon

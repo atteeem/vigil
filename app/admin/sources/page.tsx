@@ -165,7 +165,17 @@ export default function AdminSourcesPage() {
   }
 
   return (
-    <div>
+    // This page polls (`refetchInterval: 15_000` above) and, per source,
+    // renders a MUCH taller mobile card than the old fixed-width table
+    // row — the combination means a background refetch (a legitimate
+    // data update, not a bug) can land while a user/test is scrolled far
+    // down a long list, and the browser's own scroll-anchoring would
+    // otherwise silently nudge the scroll position to compensate for any
+    // upstream row's re-render, invalidating an in-flight click's
+    // already-computed coordinates purely because of where the click
+    // happens to be, not because anything is actually unreachable.
+    // overflow-anchor: none opts this page out of that adjustment.
+    <div style={{ overflowAnchor: "none" }}>
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-ink">Source Manager</h1>
         <div className="flex items-center gap-2">
@@ -321,7 +331,16 @@ export default function AdminSourcesPage() {
         </Card>
       )}
 
-      <Card className="overflow-x-auto">
+      {/* Two genuinely separate renderings rather than one table whose
+          cells are CSS-overridden to behave like a card on mobile: the
+          desktop <table> below is completely unchanged from before this
+          milestone (spec "preserve desktop table behavior"), and a plain
+          <div>-based card list (SourcesMobileList) covers mobile with its
+          own independent markup — avoiding any table/row/cell display
+          overrides entirely. Both share the same data-testid convention
+          per source, so existing selectors keep working regardless of
+          which one is visible at a given viewport. */}
+      <Card className="hidden overflow-x-auto sm:block">
         <table className="w-full min-w-[1300px] text-left text-sm">
           <thead>
             <tr className="border-b border-border text-xs uppercase tracking-wide text-ink-faint">
@@ -478,6 +497,106 @@ export default function AdminSourcesPage() {
           </tbody>
         </table>
       </Card>
+
+      {/* pb-20 (80px) of real bottom space keeps the last card clear of
+          the fixed MobileTabBar (~62px) regardless of scroll position. */}
+      <div className="space-y-3 pb-20 sm:hidden">
+        {loading && <p className="py-8 text-center text-sm text-ink-faint">Loading…</p>}
+        {!loading && sources.length === 0 && (
+          <p className="py-8 text-center text-sm text-ink-faint">No sources yet. Add one to get started.</p>
+        )}
+        {sources.map((source) => {
+          const test = testResults[source.id];
+          const fetchResult = fetchResults[source.id];
+          const health = source.health ?? (source.enabled ? (source.lastError ? "error" : "live") : "disabled");
+          return (
+            <div
+              key={source.id}
+              data-testid={`source-row-${source.id}`}
+              className="rounded-xl border border-border bg-surface/40 p-2.5"
+            >
+              <div className="truncate font-medium text-ink">{source.name}</div>
+
+              {/* One compact meta line instead of a stacked field grid
+                  keeps each card short, so more rows fit on screen at
+                  once. */}
+              <div className="mt-1 flex items-center gap-1 truncate text-xs text-ink-dim">
+                <SourceRoleIcon sourceRole={source.sourceRole} className="h-3 w-3 shrink-0" />
+                <span className="truncate">
+                  {source.type} ·{" "}
+                  <span>{source.sourceRole ? SOURCE_ROLE_LABEL[source.sourceRole] : "Unclassified"}</span>
+                  {source.region ? ` · ${source.region}` : ""}
+                  {source.reliabilityTier ? ` · ${source.reliabilityTier}` : ""} · {source.permissionStatus}
+                </span>
+              </div>
+
+              <div className="mt-1.5 flex items-center justify-between gap-2">
+                <span
+                  className={cn(
+                    "flex shrink-0 items-center gap-1 text-xs",
+                    health === "live" ? "text-elevated" : health === "error" ? "text-high" : "text-ink-faint",
+                  )}
+                >
+                  <Radio className="h-3 w-3" />
+                  {health === "live" ? "Live" : health === "error" ? "Error" : "Disabled"}
+                </span>
+                <span className="truncate text-xs text-ink-faint">
+                  {source.itemsToday ?? 0} received, {source.newItemsToday ?? 0} new
+                  {(source.errorsToday ?? 0) > 0 && (
+                    <span className="text-high"> · {source.errorsToday} error{source.errorsToday === 1 ? "" : "s"}</span>
+                  )}
+                </span>
+              </div>
+              {(test?.message || source.lastError) && (
+                <div className="mt-1 text-[11px] text-ink-faint">{test?.message ?? source.lastError}</div>
+              )}
+              {fetchResult && (
+                <div className="mt-1 text-[11px] text-ink-faint">
+                  {fetchResult.fetched} fetched · {fetchResult.alreadyKnown} already known · {fetchResult.new} new ·{" "}
+                  {fetchResult.errors} error{fetchResult.errors === 1 ? "" : "s"}
+                  {fetchResult.error && <span className="text-high"> — {fetchResult.error}</span>}
+                </div>
+              )}
+
+              <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-border/60 pt-2">
+                <button
+                  onClick={() => toggleEnabled(source)}
+                  className={cn(
+                    "shrink-0 rounded-full px-2 py-1.5 text-xs",
+                    source.enabled ? "bg-elevated-dim text-elevated" : "bg-white/5 text-ink-faint",
+                  )}
+                >
+                  {source.enabled ? "On" : "Off"}
+                </button>
+                <Button size="sm" variant="ghost" onClick={() => fetchNow(source.id)} disabled={fetchingId === source.id}>
+                  {fetchingId === source.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <>
+                      <Download className="h-3.5 w-3.5" /> Fetch Now
+                    </>
+                  )}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => testSource(source.id)} disabled={testingId === source.id}>
+                  {testingId === source.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Test"}
+                </Button>
+                <Button size="icon" variant="ghost" onClick={() => startEdit(source)} aria-label="Edit source" className="h-11 w-11">
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => removeSource(source.id)}
+                  aria-label="Delete source"
+                  className="h-11 w-11"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
