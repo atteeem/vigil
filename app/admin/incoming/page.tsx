@@ -96,6 +96,7 @@ interface PublishDraft {
   locationName: string;
   latitude: string;
   longitude: string;
+  locationPrecision: string;
   countryCode: string;
   region: string;
   occurredAt: string;
@@ -114,6 +115,7 @@ function draftFromItem(item: RawIngestionItemWithSourceDTO): PublishDraft {
     locationName: "",
     latitude: "",
     longitude: "",
+    locationPrecision: "unknown",
     countryCode: "",
     region: "",
     occurredAt: new Date(occurred).toISOString().slice(0, 16),
@@ -133,6 +135,7 @@ function draftFromSuggestion(item: RawIngestionItemWithSourceDTO, s: DraftSugges
     locationName: s.locationName ?? "",
     latitude: s.latitude !== null ? String(s.latitude) : "",
     longitude: s.longitude !== null ? String(s.longitude) : "",
+    locationPrecision: s.locationPrecision ?? "unknown",
     countryCode: s.countryCode ?? "",
     region: s.region ?? "",
     occurredAt: new Date(occurred).toISOString().slice(0, 16),
@@ -294,6 +297,7 @@ export default function AdminIncomingPage() {
         locationName: draft.locationName || undefined,
         latitude: Number(draft.latitude),
         longitude: Number(draft.longitude),
+        locationPrecision: draft.locationPrecision,
         countryCode: draft.countryCode || undefined,
         region: draft.region || undefined,
         occurredAt: new Date(draft.occurredAt).toISOString(),
@@ -854,6 +858,8 @@ export default function AdminIncomingPage() {
                           setDraft(item.id, {
                             ...(patch.lat !== undefined ? { latitude: patch.lat } : {}),
                             ...(patch.lng !== undefined ? { longitude: patch.lng } : {}),
+                            // A place-search pick is a settlement centroid, not the reported spot.
+                            ...(patch.lat !== undefined && patch.lng !== undefined ? { locationPrecision: "approximate" } : {}),
                             ...(patch.locationName !== undefined ? { locationName: patch.locationName } : {}),
                             ...(patch.countryCode !== undefined ? { countryCode: patch.countryCode } : {}),
                             ...(patch.region !== undefined ? { region: patch.region } : {}),
@@ -878,6 +884,20 @@ export default function AdminIncomingPage() {
                             onChange={(e) => setDraft(item.id, { longitude: e.target.value })}
                             placeholder="required"
                           />
+                        </label>
+                        <label className="text-xs text-ink-faint">
+                          Location precision
+                          <select
+                            className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+                            value={draft.locationPrecision}
+                            onChange={(e) => setDraft(item.id, { locationPrecision: e.target.value })}
+                            data-testid="location-precision-select"
+                          >
+                            <option value="exact">Exact</option>
+                            <option value="approximate">Approximate</option>
+                            <option value="area_level">Area-level</option>
+                            <option value="unknown">Unknown</option>
+                          </select>
                         </label>
                         <label className="text-xs text-ink-faint">
                           Country code

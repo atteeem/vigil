@@ -720,6 +720,30 @@ model TerritorialChangeCandidate {
   reviewedAt       DateTime? @map("reviewed_at")
   createdAt        DateTime @default(now()) @map("created_at")
 
+  // Territorial Change Intelligence — see lib/territory/change-types.ts for
+  // the vocabularies. Statuses widen to
+  // pending|uncertain|approved|rejected|merged (legacy reviewed|dismissed
+  // stay valid). `confidence` is the CLAIM's confidence, never conflict
+  // severity, and never derived from report count alone.
+  changeType       String   @default("captured") @map("change_type")
+  confidence       Float    @default(0.4)
+  // Extracted reason: matched rule id + the full sentence.
+  evidence         String?
+  // Normalized (conflict|location|changeType|claimed actor) key — the
+  // identity of the underlying claim, used to suppress duplicate proposals.
+  claimKey         String?  @map("claim_key")
+  rawIngestionItemId String? @map("raw_ingestion_item_id")
+  // JSON array of additional {sourceName, sourceUrl, observedAt} reports
+  // that restate the same claim (corroboration / merged candidates).
+  corroboration    String?
+  mergedIntoId     String?  @map("merged_into_id")
+  // Set once an approval superseded/created a ConflictTerritory row.
+  appliedTerritoryId String? @map("applied_territory_id")
+  // Approved as a verified territorial-change record, but no geometry was
+  // available to apply: surfaced separately until an admin adds geometry.
+  geometryPending  Boolean  @default(false) @map("geometry_pending")
+
   @@index([conflictId, status])
+  @@index([claimKey])
   @@map("territorial_change_candidates")
 }

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { propagateUnitLinksToEvent } from "@/lib/db/repositories/military";
 import type { EventType, Severity } from "@/lib/types";
 import type { DbVerificationStatus } from "@/lib/types/db";
+import { LOCATION_PRECISIONS } from "@/lib/types/db";
 
 interface PublishBody {
   title: string;
@@ -17,6 +18,7 @@ interface PublishBody {
   occurredAt: string;
   severity: Severity;
   importance?: number;
+  locationPrecision?: string;
   verificationStatus?: DbVerificationStatus;
 }
 
@@ -57,6 +59,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         locationName: body.locationName,
         latitude: body.latitude,
         longitude: body.longitude,
+        // Recorded as given; never assumed exact when the reviewer didn't say.
+        locationPrecision: LOCATION_PRECISIONS.includes(body.locationPrecision as never) ? body.locationPrecision : "unknown",
         countryCode: body.countryCode,
         region: body.region,
         conflictId: body.conflictId ?? null,

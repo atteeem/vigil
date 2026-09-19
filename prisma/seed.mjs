@@ -733,39 +733,53 @@ async function seedMyanmarReference() {
       claimed: tatmadaw,
       previous: mndaa,
       description: "Reported April 2025: the MNDAA handed Lashio back to the Tatmadaw under a China-brokered arrangement.",
-      lat: 22.94, lng: 97.75, precision: "approximate", observedAt: new Date("2025-04-15"),
+      changeType: "transferred", lat: 22.94, lng: 97.75, precision: "approximate", observedAt: new Date("2025-04-15"),
     },
     {
       locationName: "Nawnghkio",
       claimed: tatmadaw,
       previous: tnla,
       description: "Reported July 2025: the Tatmadaw retook Nawnghkio town from the TNLA.",
-      lat: 22.05, lng: 96.67, precision: "approximate", observedAt: new Date("2025-07-15"),
+      changeType: "recaptured", lat: 22.05, lng: 96.67, precision: "approximate", observedAt: new Date("2025-07-15"),
     },
     {
       locationName: "Moebye",
       claimed: tatmadaw,
       previous: kndf,
       description: "Reported early July 2025: the Tatmadaw retook Moebye from the KNDF.",
-      lat: null, lng: null, precision: "unknown", observedAt: new Date("2025-07-05"),
+      changeType: "recaptured", lat: null, lng: null, precision: "unknown", observedAt: new Date("2025-07-05"),
     },
     {
       locationName: "Demoso",
       claimed: tatmadaw,
       previous: kndf,
       description: "Reported August 2025: the Tatmadaw retook Demoso from the KNDF.",
-      lat: null, lng: null, precision: "unknown", observedAt: new Date("2025-08-15"),
+      changeType: "recaptured", lat: null, lng: null, precision: "unknown", observedAt: new Date("2025-08-15"),
     },
   ];
+  // Same normalization as lib/territory/change-detection.ts claimKeyFor.
+  const norm = (v) => (v ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   for (const c of candidates) {
+    const claimKey = [conflict.id, norm(c.locationName), c.changeType, norm(c.claimed.name)].join("|");
     const existing = await prisma.territorialChangeCandidate.findFirst({
       where: { conflictId: conflict.id, locationName: c.locationName, sourceUrl: IISS_URL },
     });
-    if (existing) continue;
+    if (existing) {
+      // Backfill the Territorial Change Intelligence fields on earlier seeds.
+      if (!existing.claimKey) {
+        await prisma.territorialChangeCandidate.update({ where: { id: existing.id }, data: { claimKey, changeType: c.changeType } });
+      }
+      continue;
+    }
     await prisma.territorialChangeCandidate.create({
       data: {
         conflictId: conflict.id,
         description: c.description,
+        changeType: c.changeType,
+        // Secondary analysis of an ACLED-derived map: moderate, not certain.
+        confidence: 0.5,
+        claimKey,
+        evidence: "seed: cited from IISS analysis (not a detected phrase)",
         claimedActorId: c.claimed.id,
         previousActorId: c.previous.id,
         locationName: c.locationName,

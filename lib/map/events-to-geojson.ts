@@ -8,6 +8,8 @@ export interface EventFeatureProps {
   eventType: string;
   severity: string;
   importance: number;
+  /** "exact" | "approximate" | "area_level" | "unknown" | "" (not recorded). */
+  precision: string;
 }
 
 export function eventsToGeoJSON(
@@ -26,6 +28,7 @@ export function eventsToGeoJSON(
         eventType: e.eventType,
         severity: e.severity,
         importance: e.importance,
+        precision: e.locationPrecision ?? "",
       },
     })),
   };

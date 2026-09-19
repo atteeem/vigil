@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { EVENT_TYPES, SEVERITY_LEVELS } from "@/lib/types";
-import { DB_VERIFICATION_STATUSES } from "@/lib/types/db";
+import { DB_VERIFICATION_STATUSES, LOCATION_PRECISIONS } from "@/lib/types/db";
 
 const eventFields = z.object({
   title: z.string().trim().min(1),
@@ -11,6 +11,7 @@ const eventFields = z.object({
   region: z.string().nullable().optional(),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
+  locationPrecision: z.enum(LOCATION_PRECISIONS).nullable().optional(),
   occurredAt: z.string().datetime({ offset: true }),
   severity: z.enum(SEVERITY_LEVELS),
   importance: z.number().int().min(0).max(100).optional(),

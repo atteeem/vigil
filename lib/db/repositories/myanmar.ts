@@ -2,9 +2,12 @@ import { prisma } from "@/lib/db/client";
 import type {
   AreaOfOperationDTO,
   TerritorialChangeCandidateDTO,
+  TerritorialChangeCorroborationDTO,
   LocationPrecision,
   TerritorialChangeCandidateStatus,
 } from "@/lib/types/db";
+import { TERRITORIAL_CHANGE_CANDIDATE_STATUSES } from "@/lib/types/db";
+import { isChangeType } from "@/lib/territory/change-types";
 
 // Myanmar Specialist Source Integration — repository layer for Areas of
 // Operation and territorial-change candidates. Deliberately separate
@@ -91,6 +94,11 @@ export async function createAreaOfOperation(input: AreaOfOperationInput): Promis
 export interface TerritorialChangeCandidateInput {
   conflictId: string;
   description: string;
+  changeType?: string;
+  confidence?: number;
+  evidence?: string | null;
+  claimKey?: string | null;
+  rawIngestionItemId?: string | null;
   claimedActorId?: string | null;
   previousActorId?: string | null;
   locationName?: string | null;
@@ -102,11 +110,24 @@ export interface TerritorialChangeCandidateInput {
   observedAt?: Date | null;
 }
 
-function toCandidateDTO(row: {
+export function parseCorroboration(json: string | null): TerritorialChangeCorroborationDTO[] {
+  if (!json) return [];
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? (parsed as TerritorialChangeCorroborationDTO[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export interface CandidateRow {
   id: string;
   conflictId: string;
   conflict?: { name: string };
   description: string;
+  changeType: string;
+  confidence: number;
+  evidence: string | null;
   claimedActorId: string | null;
   claimedActor?: { name: string } | null;
   previousActorId: string | null;
@@ -122,12 +143,22 @@ function toCandidateDTO(row: {
   reviewNote: string | null;
   reviewedAt: Date | null;
   createdAt: Date;
-}): TerritorialChangeCandidateDTO {
+  rawIngestionItemId: string | null;
+  corroboration: string | null;
+  mergedIntoId: string | null;
+  appliedTerritoryId: string | null;
+  geometryPending: boolean;
+}
+
+export function toCandidateDTO(row: CandidateRow): TerritorialChangeCandidateDTO {
   return {
     id: row.id,
     conflictId: row.conflictId,
     conflictName: row.conflict?.name,
     description: row.description,
+    changeType: isChangeType(row.changeType) ? row.changeType : "captured",
+    confidence: row.confidence,
+    evidence: row.evidence,
     claimedActorId: row.claimedActorId,
     claimedActorName: row.claimedActor?.name ?? null,
     previousActorId: row.previousActorId,
@@ -139,14 +170,19 @@ function toCandidateDTO(row: {
     sourceName: row.sourceName,
     sourceUrl: row.sourceUrl,
     observedAt: row.observedAt ? row.observedAt.toISOString() : null,
-    status: (row.status === "reviewed" || row.status === "dismissed" ? row.status : "pending") as TerritorialChangeCandidateStatus,
+    status: ((TERRITORIAL_CHANGE_CANDIDATE_STATUSES as readonly string[]).includes(row.status) ? row.status : "pending") as TerritorialChangeCandidateStatus,
     reviewNote: row.reviewNote,
     reviewedAt: row.reviewedAt ? row.reviewedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
+    rawIngestionItemId: row.rawIngestionItemId,
+    corroboration: parseCorroboration(row.corroboration),
+    mergedIntoId: row.mergedIntoId,
+    appliedTerritoryId: row.appliedTerritoryId,
+    geometryPending: row.geometryPending,
   };
 }
 
-const CANDIDATE_INCLUDE = {
+export const CANDIDATE_INCLUDE = {
   conflict: { select: { name: true } },
   claimedActor: { select: { name: true } },
   previousActor: { select: { name: true } },
@@ -164,11 +200,10 @@ export async function listTerritorialChangeCandidates(filter?: {
   return rows.map(toCandidateDTO);
 }
 
-/** Always creates a new "pending" row — a candidate is never upserted onto
- * an existing one, since each is a distinct reported claim (spec "flag it
- * as a potential... candidate", plural claims about the same place over
- * time are each their own reviewable row, same as EventUpdateProposal
- * never overwriting a prior proposal). */
+/** Always creates a new "pending" row. Duplicate suppression for the SAME
+ * underlying claim is the caller's job (lib/db/repositories/
+ * territorial-changes.ts proposeTerritorialChange) — this stays the raw
+ * insert, also used by seed-style callers. */
 export async function createTerritorialChangeCandidate(
   input: TerritorialChangeCandidateInput,
 ): Promise<TerritorialChangeCandidateDTO> {
@@ -176,6 +211,11 @@ export async function createTerritorialChangeCandidate(
     data: {
       conflictId: input.conflictId,
       description: input.description,
+      changeType: input.changeType ?? "captured",
+      confidence: input.confidence ?? 0.4,
+      evidence: input.evidence ?? null,
+      claimKey: input.claimKey ?? null,
+      rawIngestionItemId: input.rawIngestionItemId ?? null,
       claimedActorId: input.claimedActorId ?? null,
       previousActorId: input.previousActorId ?? null,
       locationName: input.locationName ?? null,
@@ -192,11 +232,10 @@ export async function createTerritorialChangeCandidate(
 }
 
 /**
- * Marks a candidate reviewed or dismissed — an explicit admin action,
- * purely a status/note update on THIS row. Never touches ConflictTerritory
- * (spec "do NOT automatically modify published control polygons") — an
- * admin who agrees with a candidate creates/supersedes a territory
- * separately, the normal way.
+ * Legacy Myanmar-milestone review: marks a candidate reviewed or dismissed —
+ * purely a status/note update on THIS row. Never touches ConflictTerritory.
+ * The Territorial Change Intelligence workflow (approve/reject/uncertain/
+ * merge) lives in lib/db/repositories/territorial-changes.ts.
  */
 export async function reviewTerritorialChangeCandidate(
   id: string,

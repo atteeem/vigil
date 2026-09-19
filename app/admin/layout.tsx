@@ -47,6 +47,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             Territorial Control
           </Link>
           <Link
+            href="/admin/territorial-changes"
+            className="rounded-full px-3 py-1.5 text-sm font-medium text-ink-dim hover:bg-white/5 hover:text-ink"
+          >
+            Territorial Changes
+          </Link>
+          <Link
             href="/admin/military"
             className="rounded-full px-3 py-1.5 text-sm font-medium text-ink-dim hover:bg-white/5 hover:text-ink"
           >

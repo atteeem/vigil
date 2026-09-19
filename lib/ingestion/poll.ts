@@ -26,8 +26,9 @@ import {
   linkArticleToEquipment,
   linkArticleToCommander,
 } from "@/lib/db/repositories/military";
-import { detectTerritorialChangeMentions } from "@/lib/myanmar/territorial-change-detection";
-import { createTerritorialChangeCandidate } from "@/lib/db/repositories/myanmar";
+import { detectTerritorialChangeMentions, baseConfidenceFor } from "@/lib/territory/change-detection";
+import { resolveLocationPrecision } from "@/lib/territory/location-precision";
+import { proposeTerritorialChange } from "@/lib/db/repositories/territorial-changes";
 import { findConflictByCountryCode } from "@/lib/db/repositories/conflicts";
 
 export interface FetchResult {
@@ -157,16 +158,19 @@ async function computeAndStoreMilitaryEntities(item: RawIngestionItemDTO): Promi
   }
 }
 
-/** Myanmar Specialist Source Integration (spec §7): flags reported control
- * changes ("X recaptured Y from Z") as pending TerritorialChangeCandidate
- * rows. Review-queue only — nothing here reads or writes ConflictTerritory.
- * Needs a conflict to attach to: the draft snapshot's suggested conflict if
- * one resolved, else the conflict matching the source's own country. */
+/** Territorial Change Intelligence: flags reported control changes (captured /
+ * recaptured / lost / withdrew / handed over / contested / uncertain) as
+ * pending TerritorialChangeCandidate rows via the central phrase normalizer.
+ * Review-queue only — nothing here writes ConflictTerritory. Needs a
+ * conflict to attach to: the draft snapshot's suggested conflict if one
+ * resolved, else the conflict matching the source's own country. Location
+ * precision is preserved: only a gazetteer-resolved place gets (approximate)
+ * coordinates; area-level and unknown claims never get a point. */
 async function computeAndStoreTerritorialChangeCandidates(item: RawIngestionItemDTO, source: Source): Promise<void> {
   try {
     const text = [item.originalTitle, item.originalText].filter(Boolean).join("\n");
     if (!text) return;
-    const mentions = detectTerritorialChangeMentions(text);
+    const mentions = detectTerritorialChangeMentions(text,{ countryCode: source.country });
     if (mentions.length === 0) return;
 
     const fresh = await prisma.rawIngestionItem.findUnique({ where: { id: item.id }, select: { suggestedConflictId: true } });
@@ -182,17 +186,21 @@ async function computeAndStoreTerritorialChangeCandidates(item: RawIngestionItem
       // carries them onto the event (actor -> events).
       if (claimed) await linkArticleToUnit(item.id, claimed.id);
       if (previous) await linkArticleToUnit(item.id, previous.id);
-      const already = await prisma.territorialChangeCandidate.findFirst({
-        where: { conflictId, sourceUrl: provenance.sourceUrl ?? null, locationName: m.locationName },
-      });
-      if (already) continue;
-      await createTerritorialChangeCandidate({
+      const location = resolveLocationPrecision(m.locationName, m.locationSuffix);
+      await proposeTerritorialChange({
         conflictId,
         description: m.description,
+        changeType: m.changeType,
+        confidence: baseConfidenceFor(m, location.precision !== "unknown"),
+        evidence: `rule:${m.ruleId} | ${m.sentence}`,
+        rawIngestionItemId: item.id,
         claimedActorId: claimed?.id,
+        claimedActorName: claimed?.name ?? null,
         previousActorId: previous?.id,
         locationName: m.locationName,
-        precision: "unknown",
+        lat: location.lat,
+        lng: location.lng,
+        precision: location.precision,
         observedAt: item.publishedAt ?? item.receivedAt,
         ...provenance,
       });

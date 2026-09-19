@@ -41,6 +41,11 @@ export interface ConflictEvent {
   eventType: EventType;
   lat: number;
   lng: number;
+  // How precisely lat/lng locates the event: "exact" | "approximate" |
+  // "area_level" | "unknown" (see lib/territory/location-precision.ts).
+  // Optional/null for mock events and pre-precision rows — the map only
+  // draws an uncertainty halo for an explicit non-exact value.
+  locationPrecision?: string | null;
   countryCode: string;
   region: string;
   conflictId: string | null;

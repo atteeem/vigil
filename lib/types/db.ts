@@ -176,6 +176,9 @@ export interface DraftSuggestionDTO {
    * "ambiguous": multiple candidates found — never auto-picked, human must
    * choose (spec §4). "none": no place name recognized in the text. */
   locationSource: "resolved" | "ambiguous" | "none";
+  /** Precision of latitude/longitude: a gazetteer match is a settlement
+   * centroid ("approximate"); no match/ambiguous leaves it "unknown". */
+  locationPrecision?: "exact" | "approximate" | "area_level" | "unknown";
   locationCandidates: LocationCandidateDTO[];
   duplicates: DuplicateCandidateDTO[];
 }
@@ -228,6 +231,7 @@ export interface EventAdminDTO {
   eventType: string;
   countryCode: string;
   region: string;
+  locationPrecision: string | null;
   occurredAt: string;
   status: EventStatus;
   publishedAt: string | null;
@@ -522,18 +526,55 @@ export interface AreaOfOperationDTO {
   updatedAt: string;
 }
 
-export const TERRITORIAL_CHANGE_CANDIDATE_STATUSES = ["pending", "reviewed", "dismissed"] as const;
+// Legacy "reviewed"/"dismissed" (the Myanmar-milestone PATCH route) stay
+// valid; the Territorial Change Intelligence workflow adds
+// uncertain/approved/rejected/merged. "pending" and "uncertain" are the OPEN
+// statuses — everything else is resolved.
+export const TERRITORIAL_CHANGE_CANDIDATE_STATUSES = [
+  "pending",
+  "uncertain",
+  "approved",
+  "rejected",
+  "merged",
+  "reviewed",
+  "dismissed",
+] as const;
 export type TerritorialChangeCandidateStatus = (typeof TERRITORIAL_CHANGE_CANDIDATE_STATUSES)[number];
+export const OPEN_CANDIDATE_STATUSES: readonly TerritorialChangeCandidateStatus[] = ["pending", "uncertain"];
+
+export interface TerritorialChangeComparisonDTO {
+  outcome: "genuine_change" | "already_known" | "conflicting_claim" | "insufficient_evidence";
+  /** Human-readable reason for the outcome. */
+  reason: string;
+  currentTerritoryId: string | null;
+  currentActorName: string | null;
+  currentStatus: string | null;
+  proposedActorName: string | null;
+  proposedStatus: "controlled" | "contested" | "uncertain";
+  /** True when approval can safely supersede exactly one existing polygon,
+   * reusing its geometry. False -> approval records "pending geometry". */
+  canReuseGeometry: boolean;
+  conflictingCandidateIds: string[];
+}
+
+export interface TerritorialChangeCorroborationDTO {
+  sourceName: string | null;
+  sourceUrl: string | null;
+  observedAt: string | null;
+}
 
 // spec §7 "flag it as a potential territorial-change candidate... do NOT
 // automatically modify published control polygons" — a pure review-queue
 // row (see the model's own schema comment); nothing reads this DTO to
-// mutate a ConflictTerritory.
+// mutate a ConflictTerritory except the explicit admin approval action.
 export interface TerritorialChangeCandidateDTO {
   id: string;
   conflictId: string;
   conflictName?: string;
   description: string;
+  changeType: string;
+  confidence: number;
+  evidence: string | null;
   claimedActorId: string | null;
   claimedActorName?: string | null;
   previousActorId: string | null;
@@ -549,4 +590,13 @@ export interface TerritorialChangeCandidateDTO {
   reviewNote: string | null;
   reviewedAt: string | null;
   createdAt: string;
+  rawIngestionItemId: string | null;
+  corroboration: TerritorialChangeCorroborationDTO[];
+  mergedIntoId: string | null;
+  appliedTerritoryId: string | null;
+  geometryPending: boolean;
+  /** Present on the list/detail responses of the review workflow. */
+  comparison?: TerritorialChangeComparisonDTO;
+  report?: { title: string | null; url: string | null; publishedAt: string | null } | null;
+  event?: { id: string; slug: string; title: string } | null;
 }

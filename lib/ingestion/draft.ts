@@ -84,6 +84,7 @@ export async function extractDraft(item: RawIngestionItemDTO, source: Source): P
     importance,
     severity,
     locationSource,
+    locationPrecision: resolved ? "approximate" : "unknown",
     locationCandidates: candidates,
     duplicates,
   };

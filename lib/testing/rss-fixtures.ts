@@ -132,6 +132,80 @@ const FEEDS: Record<string, string> = {
 </item>
 </channel>
 </rss>`,
+  // Territorial Change Intelligence tests (tests/territorial-changes.spec.ts) —
+  // original text. Feed A: a capture with a named previous controller, a
+  // withdrawal, a "fighting for control" contested case, an area-level
+  // (township) capture, and two non-territorial sentences that must NOT
+  // produce candidates. Feed B (separate URLs): restates the Paletwa capture
+  // (corroboration) and makes a CONFLICTING claim about the same town.
+  "territorial-change-feed": `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+<title>Vigil Test Fixture — Territorial Change Feed A</title>
+<item>
+<title>Arakan Army says it now holds Paletwa</title>
+<link>https://fixture.test/territorial/paletwa-captured</link>
+<guid>fixture-territorial-paletwa-captured</guid>
+<pubDate>Wed, 01 Jan 2026 08:00:00 GMT</pubDate>
+<description>The Arakan Army seized control of Paletwa from the Tatmadaw after several days of fighting, local residents said.</description>
+</item>
+<item>
+<title>Junta pulls out of Buthidaung</title>
+<link>https://fixture.test/territorial/buthidaung-withdrawal</link>
+<guid>fixture-territorial-buthidaung-withdrawal</guid>
+<pubDate>Wed, 01 Jan 2026 09:00:00 GMT</pubDate>
+<description>The Tatmadaw withdrew from Buthidaung amid clashes with Arakan Army fighters.</description>
+</item>
+<item>
+<title>Battle for Kyaukphyu drags on</title>
+<link>https://fixture.test/territorial/kyaukphyu-contested</link>
+<guid>fixture-territorial-kyaukphyu-contested</guid>
+<pubDate>Wed, 01 Jan 2026 10:00:00 GMT</pubDate>
+<description>Fighting for control of Kyaukphyu continues between the Tatmadaw and the Arakan Army.</description>
+</item>
+<item>
+<title>KNLA fighters reportedly enter Myawaddy township</title>
+<link>https://fixture.test/territorial/myawaddy-township</link>
+<guid>fixture-territorial-myawaddy-township</guid>
+<pubDate>Wed, 01 Jan 2026 11:00:00 GMT</pubDate>
+<description>KNLA fighters took control of Myawaddy township, reportedly after the Tatmadaw garrison left.</description>
+</item>
+<item>
+<title>Documentary about the war wins acclaim</title>
+<link>https://fixture.test/territorial/documentary</link>
+<guid>fixture-territorial-documentary</guid>
+<pubDate>Wed, 01 Jan 2026 12:00:00 GMT</pubDate>
+<description>A new documentary captured the imagination of viewers across Myanmar. Its director seized the opportunity to speak about the war.</description>
+</item>
+<item>
+<title>Training accident reported</title>
+<link>https://fixture.test/territorial/training-accident</link>
+<guid>fixture-territorial-training-accident</guid>
+<pubDate>Wed, 01 Jan 2026 13:00:00 GMT</pubDate>
+<description>A Tatmadaw pilot lost control of the aircraft during a training flight near the airbase.</description>
+</item>
+</channel>
+</rss>`,
+  "territorial-change-feed-b": `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+<title>Vigil Test Fixture — Territorial Change Feed B</title>
+<item>
+<title>Paletwa taken, residents say</title>
+<link>https://fixture.test/territorial/paletwa-second-report</link>
+<guid>fixture-territorial-paletwa-second-report</guid>
+<pubDate>Wed, 01 Jan 2026 14:00:00 GMT</pubDate>
+<description>The Arakan Army took control of Paletwa on Tuesday, according to residents and fighters in the area.</description>
+</item>
+<item>
+<title>State media disputes Paletwa claim</title>
+<link>https://fixture.test/territorial/paletwa-counterclaim</link>
+<guid>fixture-territorial-paletwa-counterclaim</guid>
+<pubDate>Wed, 01 Jan 2026 15:00:00 GMT</pubDate>
+<description>The Tatmadaw seized control of Paletwa from Arakan Army fighters, state media claimed.</description>
+</item>
+</channel>
+</rss>`,
 };
 
 export function getRssFixture(name: string): string | null {

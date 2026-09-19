@@ -235,6 +235,25 @@ function addEventLayers(
     },
     paint: { "text-color": "#F3F5F7" },
   });
+  // Location-precision uncertainty: an event whose position is only
+  // approximate / area-level / unknown gets a soft, oversized halo instead
+  // of looking like an exact pin. Only an explicit non-exact precision draws
+  // one (mock/legacy events with no precision are unchanged).
+  map.addLayer({
+    id: "unclustered-point-uncertainty",
+    type: "circle",
+    source: "events",
+    filter: ["all", ["!", ["has", "point_count"]], ["in", ["get", "precision"], ["literal", ["approximate", "area_level", "unknown"]]]],
+    paint: {
+      "circle-radius": ["match", ["get", "precision"], "approximate", 16, "area_level", 30, "unknown", 24, 0],
+      "circle-color": SEVERITY_COLOR_MATCH,
+      "circle-opacity": 0.12,
+      "circle-blur": 0.5,
+      "circle-stroke-width": 1,
+      "circle-stroke-color": SEVERITY_COLOR_MATCH,
+      "circle-stroke-opacity": 0.4,
+    },
+  });
   map.addLayer({
     id: "unclustered-point",
     type: "circle",
@@ -445,7 +464,7 @@ export function WorldMap({
   const applyViewModeVisibility = (map: MapLibreMap) => {
     const markerVis = viewModeRef.current === "markers" ? "visible" : "none";
     const heatVis = viewModeRef.current === "heatmap" ? "visible" : "none";
-    ["clusters", "cluster-count", "unclustered-point", "unclustered-point-icon"].forEach((id) => {
+    ["clusters", "cluster-count", "unclustered-point-uncertainty", "unclustered-point", "unclustered-point-icon"].forEach((id) => {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", markerVis);
     });
     HEAT_LAYER_IDS.forEach((id) => {

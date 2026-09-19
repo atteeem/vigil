@@ -71,6 +71,7 @@ export async function POST(request: Request) {
         locationName: body.locationName || null,
         latitude: body.latitude,
         longitude: body.longitude,
+        locationPrecision: body.locationPrecision ?? null,
         countryCode: body.countryCode || null,
         region: body.region || null,
         conflictId: body.conflictId || null,
