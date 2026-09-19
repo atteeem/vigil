@@ -7,6 +7,7 @@ import {
   config as maplibreConfig,
   type GeoJSONSource,
   type MapLayerMouseEvent,
+  type ExpressionSpecification,
   type DataDrivenPropertyValueSpecification,
 } from "maplibre-gl";
 import type { ConflictEvent } from "@/lib/types";
@@ -14,6 +15,7 @@ import { EVENT_TYPES } from "@/lib/types";
 import { getMapStyle, getMapTilerKey, type MapBasemapMode } from "@/lib/map/style";
 import { eventsToGeoJSON, type EventFeatureProps } from "@/lib/map/events-to-geojson";
 import { eventsToHeatGeoJSON, conflictBaseGeoJSON } from "@/lib/map/heat-layers";
+import { aggregateReportBuckets, formatReportCount, REPORT_COUNT_CAP } from "@/lib/map/report-counts";
 import { createEventIconImageData } from "@/lib/map/event-icons";
 import { createContestedPatternImageData } from "@/lib/map/territorial-pattern";
 import { SEVERITY_HEX } from "@/lib/utils/severity";
@@ -200,7 +202,14 @@ function addEventLayers(
     cluster: true,
     clusterMaxZoom: 7,
     clusterRadius: 46,
+    // A cluster's number is the SUM of its events' supporting reports, not
+    // how many event points it swallowed (lib/map/report-counts.ts).
+    clusterProperties: { reports: ["+", ["get", "reportCount"]] },
   });
+  // Hotspot report-count labels for heatmap mode — pre-aggregated by
+  // geographic bucket per zoom (see refreshReportHeatLabels), so the label
+  // count stays small however many events exist.
+  map.addSource("report-heat-labels", { type: "geojson", data: EMPTY_FEATURE_COLLECTION });
   // Separate, uncluster-ed sources for heatmap mode — clustering the
   // "events" source above is specifically for the marker-mode point/icon
   // layers (grouping nearby pins at low zoom); the heat visualization
@@ -229,9 +238,10 @@ function addEventLayers(
     source: "events",
     filter: ["has", "point_count"],
     layout: {
-      "text-field": "{point_count_abbreviated}",
+      "text-field": REPORT_LABEL_EXPRESSION(["get", "reports"]),
       "text-font": ["Noto Sans Regular"],
       "text-size": 12,
+      "text-allow-overlap": true,
     },
     paint: { "text-color": "#F3F5F7" },
   });
@@ -263,7 +273,8 @@ function addEventLayers(
     // dot, ceding to the full icon layer once zoomed in past ICON_DETAIL_ZOOM.
     maxzoom: ICON_DETAIL_ZOOM,
     paint: {
-      "circle-radius": ["interpolate", ["linear"], ["get", "importance"], 40, 5, 100, 9],
+      // Big enough to hold the report-count label drawn on top of it.
+      "circle-radius": ["interpolate", ["linear"], ["get", "importance"], 40, 8, 100, 11],
       "circle-color": SEVERITY_COLOR_MATCH,
       "circle-stroke-width": 1.5,
       "circle-stroke-color": "rgba(8,10,13,0.85)",
@@ -419,9 +430,67 @@ function addEventLayers(
       },
     });
   }
+
+  // Report count on every individual marker (marker mode): the supporting
+  // reports of THAT event, capped at "99+". Sits on the dot at medium zoom
+  // and as a small badge beside the category icon at high zoom.
+  map.addLayer({
+    id: "unclustered-report-count",
+    type: "symbol",
+    source: "events",
+    filter: ["!", ["has", "point_count"]],
+    layout: {
+      "text-field": REPORT_LABEL_EXPRESSION(["get", "reportCount"]),
+      "text-font": ["Noto Sans Regular"],
+      "text-size": 10,
+      "text-allow-overlap": true,
+      "text-ignore-placement": true,
+      "text-offset": ["step", ["zoom"], ["literal", [0, 0]], ICON_DETAIL_ZOOM, ["literal", [1.3, -1.3]]],
+    },
+    paint: { "text-color": "#F3F5F7", "text-halo-color": "rgba(8,10,13,0.85)", "text-halo-width": 1.2 },
+  });
+
+  // Heatmap mode: unobtrusive count at each hotspot bucket's centre.
+  map.addLayer({
+    id: "report-heat-label",
+    type: "symbol",
+    source: "report-heat-labels",
+    layout: {
+      visibility: "none",
+      "text-field": ["get", "label"],
+      "text-font": ["Noto Sans Regular"],
+      "text-size": 12,
+    },
+    paint: { "text-color": "#F3F5F7", "text-halo-color": "rgba(8,10,13,0.9)", "text-halo-width": 1.5, "text-opacity": 0.9 },
+  });
+}
+
+/** "99+"-capped display text for a numeric report-count expression. */
+function REPORT_LABEL_EXPRESSION(value: ExpressionSpecification): ExpressionSpecification {
+  return ["case", [">", value, REPORT_COUNT_CAP], `${REPORT_COUNT_CAP}+`, ["to-string", value]];
+}
+
+/** Rebuilds the heatmap hotspot labels for the current zoom (grid-bucketed,
+ * capped — see lib/map/report-counts.ts aggregateReportBuckets). */
+function refreshReportHeatLabels(map: MapLibreMap, events: ConflictEvent[]) {
+  const source = map.getSource("report-heat-labels") as GeoJSONSource | undefined;
+  if (!source) return;
+  const buckets = aggregateReportBuckets(
+    events.map((e) => ({ id: e.id, lat: e.lat, lng: e.lng, sources: e.sources, sourceCount: e.sourceCount })),
+    map.getZoom(),
+  );
+  source.setData({
+    type: "FeatureCollection",
+    features: buckets.map((b) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [b.lng, b.lat] },
+      properties: { reports: b.reports, label: formatReportCount(b.reports), eventCount: b.eventCount },
+    })),
+  });
 }
 
 const HEAT_LAYER_IDS = [
+  "report-heat-label",
   "conflict-base-heat-outer",
   "conflict-base-heat-mid",
   "conflict-base-heat-core",
@@ -464,7 +533,7 @@ export function WorldMap({
   const applyViewModeVisibility = (map: MapLibreMap) => {
     const markerVis = viewModeRef.current === "markers" ? "visible" : "none";
     const heatVis = viewModeRef.current === "heatmap" ? "visible" : "none";
-    ["clusters", "cluster-count", "unclustered-point-uncertainty", "unclustered-point", "unclustered-point-icon"].forEach((id) => {
+    ["clusters", "cluster-count", "unclustered-point-uncertainty", "unclustered-point", "unclustered-point-icon", "unclustered-report-count"].forEach((id) => {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", markerVis);
     });
     HEAT_LAYER_IDS.forEach((id) => {
@@ -497,6 +566,8 @@ export function WorldMap({
     });
     mapRef.current = map;
     appliedModeRef.current = basemapMode;
+    // Hotspot labels regroup with zoom (registered once; style.load re-adds sources).
+    map.on("zoomend", () => refreshReportHeatLabels(map, eventsRef.current));
     // Dev/test-only escape hatch: exposes the live map instance so
     // Playwright tests can compute an exact click pixel for a given
     // lng/lat via map.project(...) instead of guessing screen
@@ -533,6 +604,7 @@ export function WorldMap({
         conflictBaseGeoJSON(eventsRef.current),
         territorialFeaturesRef.current,
       );
+      refreshReportHeatLabels(map, eventsRef.current);
       applyViewModeVisibility(map);
       applyTerritorialVisibility(map);
 
@@ -614,6 +686,7 @@ export function WorldMap({
     (map.getSource("events") as GeoJSONSource | undefined)?.setData(eventsToGeoJSON(events));
     (map.getSource("events-heat") as GeoJSONSource | undefined)?.setData(eventsToHeatGeoJSON(events, MOCK_NOW));
     (map.getSource("conflict-bases") as GeoJSONSource | undefined)?.setData(conflictBaseGeoJSON(events));
+    refreshReportHeatLabels(map, events);
   }, [events]);
 
   // Territorial polygons update the same way playback updates events — a
@@ -627,15 +700,22 @@ export function WorldMap({
     (map.getSource("territory") as GeoJSONSource | undefined)?.setData(territorialFeatures);
   }, [territorialFeatures]);
 
+  // Visibility is applied whenever the toggle changes — deliberately NOT
+  // gated on map.isStyleLoaded(). That flag is false any time a source is
+  // still loading tiles/data (constantly, on a live map), so gating on it
+  // silently DROPPED the toggle: the legend (React state) said "Territorial
+  // Control on" while the layers stayed hidden and no polygon ever rendered.
+  // The helpers no-op for layers that don't exist yet, and the style.load
+  // handler re-applies the current refs once they do.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map) return;
     applyViewModeVisibility(map);
   }, [viewMode]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map) return;
     applyTerritorialVisibility(map);
   }, [showTerritorial]);
 

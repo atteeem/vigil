@@ -1,5 +1,6 @@
 import type { FeatureCollection, Point } from "geojson";
 import type { ConflictEvent } from "@/lib/types";
+import { reportCountOf } from "@/lib/map/report-counts";
 
 export interface EventFeatureProps {
   id: string;
@@ -10,6 +11,8 @@ export interface EventFeatureProps {
   importance: number;
   /** "exact" | "approximate" | "area_level" | "unknown" | "" (not recorded). */
   precision: string;
+  /** Supporting reports (uncapped) — summed by the cluster source, capped only for display. */
+  reportCount: number;
 }
 
 export function eventsToGeoJSON(
@@ -29,6 +32,7 @@ export function eventsToGeoJSON(
         severity: e.severity,
         importance: e.importance,
         precision: e.locationPrecision ?? "",
+        reportCount: reportCountOf(e),
       },
     })),
   };

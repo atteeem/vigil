@@ -1,10 +1,16 @@
 import type { ConflictEvent, Severity } from "@/lib/types";
 import { maxSeverity } from "@/lib/utils/severity";
+import { formatReportCount, reportCountOf } from "@/lib/map/report-counts";
 
 export interface EventCluster {
   lat: number;
   lng: number;
+  /** Number of EVENTS grouped here. */
   count: number;
+  /** SUM of the supporting reports of the grouped events (uncapped; the
+   * label is what gets capped, via formatClusterCount). This is the number
+   * the marker displays — never the event count. */
+  reportCount: number;
   /** Worst (max-ranked) severity among the cluster's events — same
    * "max, never an average or the count" reduction the heatmap's conflict
    * base layer uses (lib/map/heat-layers.ts), so a cluster of mostly-minor
@@ -36,10 +42,11 @@ export function clusterEvents(events: ConflictEvent[], radiusDegrees: number): E
       existing.lat = (existing.lat * n + e.lat) / (n + 1);
       existing.lng = (existing.lng * n + e.lng) / (n + 1);
       existing.count = n + 1;
+      existing.reportCount += reportCountOf(e);
       existing.ids.push(e.id);
       existing.severity = maxSeverity(existing.severity, e.severity) as Severity;
     } else {
-      clusters.push({ lat: e.lat, lng: e.lng, count: 1, severity: e.severity, ids: [e.id] });
+      clusters.push({ lat: e.lat, lng: e.lng, count: 1, reportCount: reportCountOf(e), severity: e.severity, ids: [e.id] });
     }
   }
   return clusters;
@@ -59,8 +66,8 @@ export function clusterRadiusForAltitude(altitude: number): number {
   return 0.4 + ((clamped - 0.3) / (4 - 0.3)) * 9.6;
 }
 
-/** Formats a cluster's count for display, capping the label (not the
- * underlying count) at "99+" per spec. */
+/** Formats a report count for display, capping the label (not the
+ * underlying count) at "99+". */
 export function formatClusterCount(count: number): string {
-  return count > 99 ? "99+" : String(count);
+  return formatReportCount(count);
 }

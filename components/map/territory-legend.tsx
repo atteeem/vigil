@@ -26,7 +26,11 @@ export function TerritoryLegend({ featureCollection }: { featureCollection: GeoJ
   }, [featureCollection]);
 
   if (actors.list.length === 0 && !actors.hasNoActor) {
-    return <p className="text-xs text-ink-faint">No territorial control data for this view.</p>;
+    return (
+      <p className="text-xs text-ink-faint" data-testid="territory-empty-state">
+        No territorial control data available.
+      </p>
+    );
   }
 
   return (

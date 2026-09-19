@@ -1,120 +1,77 @@
+import { feature, mesh } from "topojson-client";
 import type { Feature, MultiPolygon, Polygon, Position } from "geojson";
-import countryBordersGeo from "@/public/globe/country-borders.json";
+import { countriesObject, worldTopology } from "@/lib/globe/world-topology";
 
 /**
- * Political country boundaries (Natural Earth 1:110m admin-0 countries,
- * public domain), bundled as an example asset inside our own `three-globe`
- * dependency and re-served from /public — no external request, no
- * third-party map product's visual asset. Used for the globe's toggleable
- * "Borders" and "Labels" layers, independent of the continental landmass
- * fill used in Intel mode.
+ * Country BORDER LINES and labels for the globe, derived from the single
+ * authoritative topology in lib/globe/world-topology.ts.
+ *
+ * Borders are topojson's `mesh` of the INTERIOR boundaries only
+ * (`a !== b`: an arc shared by two countries). Consequences, all deliberate:
+ *  - each shared border is emitted exactly ONCE (no doubled lines from both
+ *    neighbours tracing it);
+ *  - coastlines are NOT traced at all — the landmass fill's own edge is the
+ *    coastline, so there is no second, misaligned coast outline;
+ *  - full source resolution, no stride decimation (the old 34-points-per-ring
+ *    decimation cut corners and pulled lines off the coast), and every ring
+ *    of every country is used, not just its largest;
+ *  - one uniform style: there is no per-country metadata to inherit
+ *    "disputed"/other styling from. This dataset carries no disputed-boundary
+ *    attribute, so disputed lines are intentionally not drawn until a
+ *    dedicated, explicitly sourced disputed layer exists.
  */
 
-interface CountryBorderFeature {
-  name: string;
-  labelRank: number;
-  // Natural Earth's own TYPE field — "Disputed" (e.g. Palestine, per its
-  // SOVEREIGNT vs. ADMIN split) or "Indeterminate" (e.g. Western Sahara,
-  // Somaliland: no internationally settled sovereign) get a visually
-  // distinct outline instead of rendering as an ordinary undisputed
-  // border (spec "distinguish disputed-boundary metadata"). Everything
-  // else ("Sovereign country", "Country", "Dependency") renders as normal.
-  disputed: boolean;
-  geometry: Polygon | MultiPolygon;
-}
-
-const DISPUTED_TYPES = new Set(["Disputed", "Indeterminate"]);
-
-let cachedFeatures: CountryBorderFeature[] | null = null;
-
-function getFeatures(): CountryBorderFeature[] {
-  if (cachedFeatures) return cachedFeatures;
-  const collection = countryBordersGeo as unknown as {
-    features: Feature<Polygon | MultiPolygon, { NAME?: string; LABELRANK?: number; TYPE?: string }>[];
-  };
-  cachedFeatures = collection.features.map((f) => ({
-    name: f.properties?.NAME ?? "",
-    labelRank: f.properties?.LABELRANK ?? 6,
-    disputed: DISPUTED_TYPES.has(f.properties?.TYPE ?? ""),
-    geometry: f.geometry,
-  }));
-  return cachedFeatures;
-}
-
 export interface GlobePath {
+  /** [lat, lng] pairs, the order three-globe's pathPoints accessor expects. */
   points: [number, number][];
-  disputed: boolean;
+}
+
+let cachedPaths: GlobePath[] | null = null;
+
+export function getCountryBorderPaths(): GlobePath[] {
+  if (cachedPaths) return cachedPaths;
+  const interior = mesh(worldTopology, countriesObject, (a, b) => a !== b);
+  const paths: GlobePath[] = [];
+  for (const line of interior.coordinates) {
+    // Split where a line jumps across the antimeridian so it never streaks
+    // across the whole globe.
+    let current: [number, number][] = [];
+    let prevLng: number | null = null;
+    for (const pos of line) {
+      const lng = pos[0];
+      const lat = pos[1];
+      if (typeof lng !== "number" || typeof lat !== "number") continue;
+      if (prevLng !== null && Math.abs(lng - prevLng) > 180) {
+        if (current.length > 1) paths.push({ points: current });
+        current = [];
+      }
+      current.push([lat, lng]);
+      prevLng = lng;
+    }
+    if (current.length > 1) paths.push({ points: current });
+  }
+  cachedPaths = paths;
+  return cachedPaths;
 }
 
 function polygonsOf(geometry: Polygon | MultiPolygon): Position[][][] {
   return geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
 }
 
-// Cap points per ring: three-globe builds a real tube-geometry mesh per
-// path with Frenet-frame math, so 289 rings at full Natural Earth 110m
-// density (~10.6k points total) is enough to visibly stall the main thread
-// when the Borders layer toggles on/off, especially on weaker GPUs. Simple
-// stride decimation (always keeping the first/last point so rings stay
-// closed) is visually indistinguishable at globe scale and cuts that cost
-// substantially. 34 (up from an earlier, more aggressive 22) keeps large
-// countries' outlines fitting their actual coastline/border shape closely
-// enough at globe zoom to not read as "cutting corners," while still
-// cutting mesh point count by ~85% versus full density.
-const MAX_POINTS_PER_RING = 34;
-
-function decimateRing(ring: Position[]): [number, number][] {
-  const points: [number, number][] = [];
-  const stride = Math.max(1, Math.ceil(ring.length / MAX_POINTS_PER_RING));
-  for (let i = 0; i < ring.length; i += stride) {
-    const pos = ring[i];
-    const lng = pos?.[0];
-    const lat = pos?.[1];
-    if (typeof lng === "number" && typeof lat === "number") points.push([lat, lng]);
-  }
-  const last = ring[ring.length - 1];
-  const lastLng = last?.[0];
-  const lastLat = last?.[1];
-  if (typeof lastLng === "number" && typeof lastLat === "number") {
-    const tail = points[points.length - 1];
-    if (!tail || tail[0] !== lastLat || tail[1] !== lastLng) points.push([lastLat, lastLng]);
-  }
-  return points;
+function ringCentroid(input: Position[]): { lat: number; lng: number; area: number } | null {
+  // A ring that crosses the antimeridian (Russia's Chukotka, Fiji) has
+  // longitudes jumping between about -180 and +180; a shoelace centroid over
+  // those raw values lands on the wrong side of the globe. Unwrap onto a
+  // continuous range for the maths, then wrap the result back.
+  const lngs = input.map((p) => p[0]).filter((v): v is number => typeof v === "number");
+  const crosses = lngs.length > 0 && Math.max(...lngs) - Math.min(...lngs) > 180;
+  const ring = crosses ? input.map((p): Position => [typeof p[0] === "number" && p[0] < 0 ? p[0] + 360 : (p[0] as number), p[1] as number]) : input;
+  const result = ringCentroidRaw(ring);
+  if (result && result.lng > 180) result.lng -= 360;
+  return result;
 }
 
-let cachedPaths: GlobePath[] | null = null;
-
-/**
- * One outline per country — its single largest ring by point count, as a
- * proxy for "main landmass" (drops small outlying islands' separate
- * rings). three-globe renders each `pathsData` entry as its own tube mesh
- * (Frenet-frame math, no batching/merging support), so mesh COUNT, not
- * point count, is what makes toggling this layer expensive: the raw data
- * has 289 rings across 177 countries, and even after point-decimation that
- * was still slow enough to be a real "excellent mobile performance"
- * concern (see TASKS.md). Capping at one ring per country cuts mesh count
- * by ~40% and keeps every country's principal outline intact; the layer
- * still defaults off (see use-app-store.ts) so this cost is only ever
- * paid when a user opts in.
- */
-export function getCountryBorderPaths(): GlobePath[] {
-  if (cachedPaths) return cachedPaths;
-  const paths: GlobePath[] = [];
-  for (const { geometry, disputed } of getFeatures()) {
-    let largest: Position[] | null = null;
-    for (const rings of polygonsOf(geometry)) {
-      const outer = rings[0];
-      if (outer && (!largest || outer.length > largest.length)) largest = outer;
-    }
-    if (largest) {
-      const points = decimateRing(largest);
-      if (points.length > 1) paths.push({ points, disputed });
-    }
-  }
-  cachedPaths = paths;
-  return cachedPaths;
-}
-
-function ringCentroid(ring: Position[]): { lat: number; lng: number; area: number } | null {
+function ringCentroidRaw(ring: Position[]): { lat: number; lng: number; area: number } | null {
   // Shoelace-formula centroid, in lng/lat space (good enough at this scale
   // for label placement — not a geodesic centroid).
   let area = 0;
@@ -166,11 +123,20 @@ interface RankedCountryLabel extends CountryLabel {
 
 let cachedLabels: RankedCountryLabel[] | null = null;
 
-/** One label point per country, placed at the centroid of its largest ring (handles multi-island countries reasonably). */
+// Natural Earth's 110m countries here carry no label-rank attribute, so the
+// prominence tier comes from land area (largest ring): the biggest countries
+// are always labelled, small ones only when zoomed in / on desktop.
+const TIER_1_COUNT = 24;
+const TIER_2_COUNT = 60;
+const TIER_3_COUNT = 110;
+
+/** One label per country, at the centroid of its largest ring, from the same geometry the borders and fill use. */
 export function getCountryLabels(maxLabelRank: number): CountryLabel[] {
   if (!cachedLabels) {
-    cachedLabels = getFeatures()
-      .filter((f) => f.name)
+    const collection = feature(worldTopology, countriesObject) as unknown as {
+      features: Feature<Polygon | MultiPolygon, { name?: string }>[];
+    };
+    const measured = collection.features
       .map((f) => {
         let best: { lat: number; lng: number; area: number } | null = null;
         for (const rings of polygonsOf(f.geometry)) {
@@ -179,9 +145,16 @@ export function getCountryLabels(maxLabelRank: number): CountryLabel[] {
           const c = ringCentroid(outer);
           if (c && (!best || c.area > best.area)) best = c;
         }
-        return best ? { name: f.name, lat: best.lat, lng: best.lng, rank: f.labelRank } : null;
+        return best && f.properties?.name ? { name: f.properties.name, ...best } : null;
       })
-      .filter((x): x is RankedCountryLabel => x !== null);
+      .filter((x): x is { name: string; lat: number; lng: number; area: number } => x !== null)
+      .sort((a, b) => b.area - a.area);
+    cachedLabels = measured.map((m, i) => ({
+      name: m.name,
+      lat: m.lat,
+      lng: m.lng,
+      rank: i < TIER_1_COUNT ? 1 : i < TIER_2_COUNT ? 2 : i < TIER_3_COUNT ? 3 : 4,
+    }));
   }
   return cachedLabels.filter((l) => l.rank <= maxLabelRank);
 }

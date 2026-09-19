@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { getCountryBorderPaths } from "@/lib/globe/country-borders";
 import { getCityLabels, cityLabelTierForAltitude } from "@/lib/globe/city-labels";
-import { LAND_FILL_COLOR, BORDER_COLOR, DISPUTED_BORDER_COLOR, colorDistance } from "@/lib/globe/globe-colors";
+import { LAND_FILL_COLOR, BORDER_COLOR, colorDistance } from "@/lib/globe/globe-colors";
 
 // Deterministic coverage for the globe-readability fix (borders were
 // enabled by default but invisible against the landmass fill; city
@@ -20,27 +20,8 @@ test.describe("Globe border/label readability (lib/globe/*)", () => {
     expect(colorDistance(BORDER_COLOR, LAND_FILL_COLOR)).toBeGreaterThan(40);
   });
 
-  test("2. Disputed-boundary color is distinct from the ordinary border color", () => {
-    expect(DISPUTED_BORDER_COLOR).not.toBe(BORDER_COLOR);
-    expect(colorDistance(DISPUTED_BORDER_COLOR, BORDER_COLOR)).toBeGreaterThan(40);
-  });
-
   test("3. colorDistance treats identical colors as zero distance", () => {
     expect(colorDistance(BORDER_COLOR, BORDER_COLOR)).toBe(0);
-  });
-
-  test("4. Real disputed/indeterminate territories (e.g. Western Sahara, Palestine) are flagged in the bundled border data", () => {
-    const paths = getCountryBorderPaths();
-    const disputed = paths.filter((p) => p.disputed);
-    expect(disputed.length).toBeGreaterThan(0);
-    // Every path still has real, renderable points regardless of flag.
-    for (const p of disputed) expect(p.points.length).toBeGreaterThan(1);
-  });
-
-  test("5. Most country borders are NOT flagged disputed — the flag is selective, not blanket", () => {
-    const paths = getCountryBorderPaths();
-    const disputed = paths.filter((p) => p.disputed).length;
-    expect(disputed).toBeLessThan(paths.length / 4);
   });
 
   test("6. City labels: higher maxTier always returns a superset of a lower maxTier", () => {

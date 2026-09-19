@@ -22,11 +22,6 @@ export const LAND_FILL_COLOR = "rgba(141, 150, 165, 0.4)";
 // gray-blue landmass fill above.
 export const BORDER_COLOR = "rgba(210, 218, 230, 0.65)";
 
-// Distinct amber tint for disputed/indeterminate boundaries (Natural
-// Earth's own TYPE field — see lib/globe/country-borders.ts), rendered
-// dashed as well as differently colored.
-export const DISPUTED_BORDER_COLOR = "rgba(228, 196, 65, 0.85)";
-
 interface RGBA {
   r: number;
   g: number;

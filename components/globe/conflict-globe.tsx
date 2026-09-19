@@ -7,13 +7,14 @@ import dynamic from "next/dynamic";
 import type { Conflict, ConflictEvent } from "@/lib/types";
 import { SEVERITY_HEX } from "@/lib/utils/severity";
 import { getLandFeatures } from "@/lib/globe/land-geo";
+import { reportCountOf } from "@/lib/map/report-counts";
 import { clusterEvents, clusterRadiusForAltitude, formatClusterCount, type EventCluster } from "@/lib/globe/event-clusters";
 import { ENERGY_ARCS, TRADE_ARCS, type GlobeArc } from "@/lib/globe/arcs";
 import type { MapLayer, GlobeViewMode, GlobeLayerVisibility, ContentSensitivity } from "@/hooks/use-app-store";
 import type { GlobePath, CountryLabel } from "@/lib/globe/country-borders";
 import type { CityLabel } from "@/lib/globe/city-labels";
 import { cityLabelTierForAltitude } from "@/lib/globe/city-labels";
-import { LAND_FILL_COLOR, BORDER_COLOR, DISPUTED_BORDER_COLOR } from "@/lib/globe/globe-colors";
+import { LAND_FILL_COLOR, BORDER_COLOR } from "@/lib/globe/globe-colors";
 import { GlobeLoading, GlobeUnavailable } from "./globe-loading";
 
 function detectWebGL(): boolean {
@@ -75,7 +76,7 @@ function preloadSatelliteTextures(isMobile: boolean) {
 }
 
 type GlobeMarker =
-  | { kind: "conflict"; lat: number; lng: number; conflict: Conflict }
+  | { kind: "conflict"; lat: number; lng: number; conflict: Conflict; reports: number }
   | { kind: "cluster"; lat: number; lng: number; cluster: EventCluster };
 
 // Country-name labels and city-name labels share three-globe's single
@@ -259,6 +260,16 @@ export function ConflictGlobe({
     // mobile to keep the point mesh cheap for "excellent mobile performance".
     return events.slice(0, isMobile ? 25 : 70);
   }, [events, globeLayers.events, isMobile]);
+  // A conflict hotspot's number is the SUM of supporting reports across that
+  // conflict's events (independent of the Events layer toggle and of any
+  // territorial data), so the default globe's dots carry a report count too.
+  const conflictReportCounts = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const e of events) {
+      if (e.conflictId) totals.set(e.conflictId, (totals.get(e.conflictId) ?? 0) + reportCountOf(e));
+    }
+    return totals;
+  }, [events]);
   const eventClusters = useMemo(
     () => clusterEvents(eventPoints, clusterRadiusForAltitude(cameraAltitude)),
     [eventPoints, cameraAltitude],
@@ -268,10 +279,10 @@ export function ConflictGlobe({
   // one htmlElement factory can render each its own way.
   const globeMarkers = useMemo<GlobeMarker[]>(
     () => [
-      ...conflictHotspots.map((c): GlobeMarker => ({ kind: "conflict", lat: c.lat, lng: c.lng, conflict: c })),
+      ...conflictHotspots.map((c): GlobeMarker => ({ kind: "conflict", lat: c.lat, lng: c.lng, conflict: c, reports: conflictReportCounts.get(c.id) ?? 0 })),
       ...eventClusters.map((c): GlobeMarker => ({ kind: "cluster", lat: c.lat, lng: c.lng, cluster: c })),
     ],
-    [conflictHotspots, eventClusters],
+    [conflictHotspots, eventClusters, conflictReportCounts],
   );
 
   // City-label tier reveal (spec "world view: capitals + major global
@@ -329,18 +340,11 @@ export function ConflictGlobe({
           polygonsData={isSatellite ? [] : landFeatures}
           polygonCapColor={() => LAND_FILL_COLOR}
           polygonSideColor={() => "rgba(20, 24, 30, 0.35)"}
-          // Barely-there — just enough to stop the fill's own edge from
-          // aliasing against the ocean, not a visible line. This used to be
-          // a fairly strong accent-blue (0.28 alpha) stroke traced around
-          // world-atlas's own coastline geometry, which is a DIFFERENT
-          // (coarser, continent-merged) dataset from the actual country
-          // border layer below (lib/globe/country-borders.ts's Natural
-          // Earth per-country data) — with the Borders layer also on, that
-          // put two independently-sourced outlines along nearly the same
-          // coastline at once, reading as duplicated/misaligned lines.
-          // pathsData below is now the one and only "border" line a user
-          // ever sees.
-          polygonStrokeColor={() => "rgba(76, 194, 255, 0.05)"}
+          // No stroke on the fill: the fill's edge IS the coastline, and the
+          // border layer below draws interior borders only (see
+          // lib/globe/country-borders.ts) — so there is exactly one line
+          // layer and no second coast outline.
+          polygonStrokeColor={() => null}
           polygonAltitude={0.006}
           polygonsTransitionDuration={0}
           // Spec "normal globe borders": subtle country outlines on the
@@ -350,19 +354,9 @@ export function ConflictGlobe({
           // (Layers popover) is checked.
           pathsData={globeLayers.borders && !isSatellite ? borderPaths : []}
           pathPoints={(d: object) => (d as GlobePath).points}
-          // A light, cool neutral with real contrast against BOTH the dark
-          // ocean and the landmass fill's own gray-blue cap color just
-          // above (rgba(141,150,165,0.4)) — the two used to be the exact
-          // same color, which made borders invisible everywhere they
-          // crossed land instead of coastline (the whole point of a
-          // political border layer). Disputed/indeterminate boundaries
-          // (spec "distinguish disputed-boundary metadata" — Natural
-          // Earth's own TYPE field, see lib/globe/country-borders.ts) get
-          // a distinct amber tint instead of blending in as an ordinary
-          // undisputed border.
-          pathColor={(d: object) => ((d as GlobePath).disputed ? DISPUTED_BORDER_COLOR : BORDER_COLOR)}
-          pathDashLength={(d: object) => ((d as GlobePath).disputed ? 0.4 : 1)}
-          pathDashGap={(d: object) => ((d as GlobePath).disputed ? 0.25 : 0)}
+          // One neutral color for every border (BORDER_COLOR) — nothing here
+          // reads territorial-control, disputed or heat styling.
+          pathColor={() => BORDER_COLOR}
           // Above the landmass fill (0.006) so borders actually render on
           // top of it instead of being occluded by it, but still well
           // below htmlElements/markers (0.012) and labels (~0.0105-0.011)
@@ -378,9 +372,11 @@ export function ConflictGlobe({
           // the Borders toggle cheap — mesh/point-count reduction alone
           // did not (measured). Dashing (above) works fine on this cheap
           // renderer too — it's a shader uniform, not a fat-line feature.
-          // Higher = less great-circle interpolation between our already
-          // (deliberately coarse) border points — keeps the toggle cheap.
-          pathResolution={6}
+          // Border points are full-resolution Natural Earth 110m vertices
+          // (~1° apart), so interpolation is only a safety net for the long
+          // straight segments (e.g. 49th parallel) that must still follow
+          // the sphere.
+          pathResolution={2}
           pathTransitionDuration={0}
           labelsData={combinedLabels}
           labelLat={(d: object) => (d as GlobeLabel).lat}
@@ -414,7 +410,7 @@ export function ConflictGlobe({
           htmlElement={(d: object) => {
             const marker = d as GlobeMarker;
             return marker.kind === "conflict"
-              ? makeHotspotEl(marker.conflict, onSelectConflict, layer, contentSensitivity)
+              ? makeHotspotEl(marker.conflict, marker.reports, onSelectConflict, layer, contentSensitivity)
               : makeClusterEl(marker.cluster, layer);
           }}
           arcsData={arcs}
@@ -432,6 +428,7 @@ export function ConflictGlobe({
 
 function makeHotspotEl(
   conflict: Conflict,
+  reports: number,
   onSelect: (c: Conflict) => void,
   layer: MapLayer,
   contentSensitivity: ContentSensitivity,
@@ -440,8 +437,10 @@ function makeHotspotEl(
   wrapper.type = "button";
   wrapper.setAttribute(
     "aria-label",
-    `${conflict.shortName}, severity ${conflict.severity}, intensity ${conflict.intensity} of 100`,
+    `${conflict.shortName}, severity ${conflict.severity}, intensity ${conflict.intensity} of 100${reports > 0 ? `, ${reports} supporting reports` : ""}`,
   );
+  wrapper.setAttribute("data-testid", "globe-conflict-marker");
+  wrapper.setAttribute("data-report-count", String(reports));
   wrapper.style.pointerEvents = "auto";
   wrapper.style.cursor = "pointer";
   wrapper.style.border = "none";
@@ -451,7 +450,8 @@ function makeHotspotEl(
 
   const dimmed = layer === "energy" || layer === "trade";
   const color = SEVERITY_HEX[conflict.severity];
-  const scale = 0.55 + conflict.intensity / 130;
+  // Never smaller than a dot that can hold its report-count label.
+  const scale = Math.max(0.55 + conflict.intensity / 130, 0.95);
   const shouldPulse =
     contentSensitivity === "standard" &&
     (conflict.severity === "severe" || conflict.severity === "extreme");
@@ -463,7 +463,9 @@ function makeHotspotEl(
           ? `<span style="position:absolute;inset:-6px;border-radius:9999px;background:${color};opacity:0.35;animation:pulse-soft 2.4s ease-in-out infinite;"></span>`
           : ""
       }
-      <span style="position:relative;display:block;width:100%;height:100%;border-radius:9999px;background:${color};box-shadow:0 0 0 2px rgba(8,10,13,0.8);"></span>
+      <span style="position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;border-radius:9999px;background:${color};box-shadow:0 0 0 2px rgba(8,10,13,0.8);">
+        ${reports > 0 ? `<span style="font:700 ${formatClusterCount(reports).length > 2 ? 8 : 10}px system-ui, sans-serif;color:#F3F5F7;text-shadow:0 1px 2px rgba(8,10,13,0.9);">${formatClusterCount(reports)}</span>` : ""}
+      </span>
     </span>
   `;
 
@@ -475,38 +477,34 @@ function makeHotspotEl(
   return wrapper;
 }
 
-/** Spec "globe cluster counts": a single event renders as a plain
- * severity-colored dot (matching the old merged-points look); a group of
- * two or more (see clusterEvents) grows the same dot and overlays its
- * count, capped at "99+" — never the underlying number past that, per
- * spec. Color is the cluster's worst severity (see EventCluster's own
+/** Every marker shows its supporting REPORT count (the sum across the events
+ * grouped into it), capped at "99+" for display only — a lone event with 18
+ * reports reads "18", a cluster of three events with 1 + 3 + 18 reports
+ * reads "22". Color is the cluster's worst severity (see EventCluster's own
  * comment for why max, not an average or the count itself). */
 function makeClusterEl(cluster: EventCluster, layer: MapLayer): HTMLElement {
   const wrapper = document.createElement("div");
-  const count = cluster.count;
+  const reports = cluster.reportCount;
+  const label = formatClusterCount(reports);
+  wrapper.setAttribute("data-testid", "globe-marker");
+  wrapper.setAttribute("data-report-count", String(reports));
   wrapper.setAttribute(
     "aria-label",
-    count === 1
-      ? `1 report, severity ${cluster.severity}`
-      : `${count} reports in this area, worst severity ${cluster.severity}`,
+    `${reports} ${reports === 1 ? "report" : "reports"}${cluster.count > 1 ? ` across ${cluster.count} events` : ""}, worst severity ${cluster.severity}`,
   );
   wrapper.style.pointerEvents = "none";
   wrapper.style.transform = "translate(-50%, -50%)";
 
   const dimmed = layer === "energy" || layer === "trade";
   const color = SEVERITY_HEX[cluster.severity];
-  // Grows with count but caps out — a cluster of hundreds shouldn't
-  // dwarf the globe, just read as "a lot".
-  const size = count === 1 ? 10 : 16 + Math.min(count, 30) * 0.55;
+  // Big enough to hold the label; grows a little with the number of events
+  // grouped but caps out — a cluster of hundreds shouldn't dwarf the globe.
+  const size = Math.max(16 + (label.length - 1) * 4, 16 + Math.min(cluster.count - 1, 20) * 0.6);
 
   wrapper.innerHTML = `
     <span style="position:relative;display:flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;opacity:${dimmed ? 0.35 : 1};">
       <span style="position:absolute;inset:0;border-radius:9999px;background:${color};box-shadow:0 0 0 2px rgba(8,10,13,0.8);"></span>
-      ${
-        count > 1
-          ? `<span style="position:relative;font:600 ${Math.min(11, 8 + size / 10)}px system-ui, sans-serif;color:#F3F5F7;text-shadow:0 1px 2px rgba(8,10,13,0.9);">${formatClusterCount(count)}</span>`
-          : ""
-      }
+      <span style="position:relative;font:700 ${label.length > 2 ? 8 : 10}px system-ui, sans-serif;color:#F3F5F7;text-shadow:0 1px 2px rgba(8,10,13,0.9);">${label}</span>
     </span>
   `;
 
