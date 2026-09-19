@@ -354,19 +354,22 @@ function addEventLayers(
 
   // Scope (spec #3): importance is the existing "how significant is this
   // incident" scalar (already drives marker size in markers mode) —
-  // reused here, scaled far wider than the old fixed 26px heatmap-radius,
-  // so a major event visibly dominates its area while a minor one stays
-  // modest.
+  // reused here so a major event visibly dominates its area while a minor
+  // one stays modest. Kept well under conflictBaseRadius's own 110px floor
+  // (above) even at max importance, so a single local incident can never
+  // out-size the broad glow reserved for a genuinely regional/ongoing
+  // conflict — only spreadKm (a conflict's own geographic extent) earns
+  // that larger radius.
   const eventHeatRadius: DataDrivenPropertyValueSpecification<number> = [
     "interpolate",
     ["linear"],
     ["get", "importance"],
     20,
-    46,
+    16,
     55,
-    85,
+    32,
     100,
-    150,
+    58,
   ];
   // Opacity = corroboration x recency (spec #5/#6), multiplied rather than
   // added so neither factor alone can force full strength: a single-source

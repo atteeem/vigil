@@ -329,7 +329,18 @@ export function ConflictGlobe({
           polygonsData={isSatellite ? [] : landFeatures}
           polygonCapColor={() => LAND_FILL_COLOR}
           polygonSideColor={() => "rgba(20, 24, 30, 0.35)"}
-          polygonStrokeColor={() => "rgba(76, 194, 255, 0.28)"}
+          // Barely-there — just enough to stop the fill's own edge from
+          // aliasing against the ocean, not a visible line. This used to be
+          // a fairly strong accent-blue (0.28 alpha) stroke traced around
+          // world-atlas's own coastline geometry, which is a DIFFERENT
+          // (coarser, continent-merged) dataset from the actual country
+          // border layer below (lib/globe/country-borders.ts's Natural
+          // Earth per-country data) — with the Borders layer also on, that
+          // put two independently-sourced outlines along nearly the same
+          // coastline at once, reading as duplicated/misaligned lines.
+          // pathsData below is now the one and only "border" line a user
+          // ever sees.
+          polygonStrokeColor={() => "rgba(76, 194, 255, 0.05)"}
           polygonAltitude={0.006}
           polygonsTransitionDuration={0}
           // Spec "normal globe borders": subtle country outlines on the

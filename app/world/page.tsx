@@ -143,7 +143,7 @@ export default function WorldPage() {
               timeline.isHistorical && "ring-2 ring-inset ring-accent/50",
             )}
           />
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 px-4 pt-4 sm:pt-24">
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 px-4 pt-4 sm:pt-20">
             <div className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-border bg-surface/80 p-3 backdrop-blur-xl">
               <TimelineControls
                 preset={timeline.preset}

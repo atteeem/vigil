@@ -56,8 +56,11 @@ function polygonsOf(geometry: Polygon | MultiPolygon): Position[][][] {
 // when the Borders layer toggles on/off, especially on weaker GPUs. Simple
 // stride decimation (always keeping the first/last point so rings stay
 // closed) is visually indistinguishable at globe scale and cuts that cost
-// substantially.
-const MAX_POINTS_PER_RING = 22;
+// substantially. 34 (up from an earlier, more aggressive 22) keeps large
+// countries' outlines fitting their actual coastline/border shape closely
+// enough at globe zoom to not read as "cutting corners," while still
+// cutting mesh point count by ~85% versus full density.
+const MAX_POINTS_PER_RING = 34;
 
 function decimateRing(ring: Position[]): [number, number][] {
   const points: [number, number][] = [];

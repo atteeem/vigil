@@ -1,7 +1,7 @@
 import type { FeatureCollection, Point } from "geojson";
 import type { ConflictEvent } from "@/lib/types";
 import { distanceKm } from "@/lib/utils/geo";
-import { maxSeverity } from "@/lib/utils/severity";
+import { maxSeverity, severityRank } from "@/lib/utils/severity";
 
 // Heatmap-mode rendering data (world-map.tsx). Deliberately kept separate
 // from events-to-geojson.ts's marker-mode feature shape: the heat
@@ -40,18 +40,26 @@ export function eventsToHeatGeoJSON(
   const now = new Date(nowIso).getTime();
   return {
     type: "FeatureCollection",
-    features: events.map((e) => ({
-      type: "Feature",
-      id: e.id,
-      geometry: { type: "Point", coordinates: [e.lng, e.lat] },
-      properties: {
+    // MapLibre circle layers paint features in source-array order, later
+    // entries on top — sorting ascending by severity (least severe first)
+    // is what makes "severe never gets visually covered by a lower
+    // severity" deterministic, via plain render order rather than any
+    // opacity/z-index hack. Stable sort (Array.prototype.sort guarantees
+    // this) preserves relative order within the same severity.
+    features: [...events]
+      .sort((a, b) => severityRank(a.severity) - severityRank(b.severity))
+      .map((e) => ({
+        type: "Feature",
         id: e.id,
-        severity: e.severity,
-        ageHours: Math.max(0, (now - new Date(e.occurredAt).getTime()) / 3_600_000),
-        sourceCount: e.sourceCount,
-        importance: e.importance,
-      },
-    })),
+        geometry: { type: "Point", coordinates: [e.lng, e.lat] },
+        properties: {
+          id: e.id,
+          severity: e.severity,
+          ageHours: Math.max(0, (now - new Date(e.occurredAt).getTime()) / 3_600_000),
+          sourceCount: e.sourceCount,
+          importance: e.importance,
+        },
+      })),
   };
 }
 
@@ -104,5 +112,10 @@ export function conflictBaseGeoJSON(events: ConflictEvent[]): FeatureCollection<
       properties: { conflictId, severity: worst, spreadKm, eventCount: group.length },
     });
   }
+  // Same deterministic-stacking rationale as eventsToHeatGeoJSON above —
+  // least severe conflict base first, so a severe/extreme conflict's base
+  // glow is never painted over by a lower-severity one it happens to
+  // overlap.
+  features.sort((a, b) => severityRank(a.properties.severity) - severityRank(b.properties.severity));
   return { type: "FeatureCollection", features };
 }
