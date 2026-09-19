@@ -64,7 +64,7 @@ export function searchAll(query: string, limit = 8): SearchResult[] {
         type: "event",
         id: e.id,
         title: e.title,
-        subtitle: `${e.region} · ${new Date(e.occurredAt).toLocaleDateString()}`,
+        subtitle: `${e.region} · ${new Date(e.occurredAt).toLocaleDateString("en-US")}`,
         href: `/event/${e.slug}`,
       });
     }

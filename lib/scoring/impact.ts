@@ -50,22 +50,31 @@ export function computeImpactScore(input: ImpactScoreInput): ImpactScoreResult {
   const warLike = isWarLike(input.conflictStatus, input.severityScore);
 
   let floor = 0;
+  let hardFloor: ImpactScoreResult["hardFloor"] = null;
   if (sameCountry && warLike) {
     floor = 100;
+    hardFloor = "own_country_war";
     reasons.push("Active war is happening inside your country");
   } else if (bordering && warLike) {
     floor = BORDER_FLOOR;
+    hardFloor = "bordering_war";
     reasons.push("Conflict directly borders your country");
   }
 
   const distanceKmValue = countryDistanceKm(input.userCountryPoint, input.conflictPoint);
   const proximity = clamp(100 - distanceKmValue / 150, 0, 100);
 
-  let blended = input.severityScore * 0.5 + proximity * 0.3;
+  // Outside the hard rules, impact is severity SCALED BY RELEVANCE — how
+  // much this conflict actually reaches this country — not severity plus
+  // bonuses. (It used to add relevance terms onto half the severity, so a
+  // severity-100 war scored ~70 for a country on the other side of the
+  // world before any relevance at all.) A conflict with no proximity, no
+  // shared region and no economic channel is worth ~8% of its severity.
+  let relevance = 0.08 + 0.5 * (proximity / 100);
   if (proximity >= 40) reasons.push("Geographic proximity to the conflict");
 
   if (input.sameRegion) {
-    blended += 15;
+    relevance += 0.12;
     reasons.push("Shared regional security environment");
   }
 
@@ -91,18 +100,21 @@ export function computeImpactScore(input: ImpactScoreInput): ImpactScoreResult {
     exposureBonus += 5;
     reasons.push("Sanctions/economic exposure");
   }
-  blended += exposureBonus;
+  relevance += exposureBonus / 100;
 
   if (sameCountry && !warLike) reasons.push("Conflict is inside your country");
   else if (bordering && !warLike) reasons.push("Conflict is in a bordering country");
 
-  // Never 100 outside the explicit same-country-war hard rule, mirroring
-  // severity.ts's "100 is reserved" design — kept below floor's own value
-  // too so the floor is genuinely a floor, not silently overridden by clamp order.
-  const blendedScore = Math.round(clamp(blended, 0, 99));
+  // Without a hard rule a country can never score at or above the
+  // bordering-war floor: "directly bordering" must always outrank "nearby but
+  // not adjacent", and 100 stays reserved for the own-country rule. The cap
+  // sits BELOW the floor so the floor is genuinely a floor, not an artifact
+  // of clamp order.
+  const blended = input.severityScore * clamp(relevance, 0, 0.85);
+  const blendedScore = Math.round(clamp(blended, 0, BORDER_FLOOR - 1));
   const finalScore = Math.max(blendedScore, floor);
 
   if (reasons.length === 0) reasons.push("Limited geographic or economic exposure");
 
-  return { impactScore: finalScore, reasons };
+  return { impactScore: finalScore, hardFloor, reasons };
 }

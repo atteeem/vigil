@@ -77,7 +77,7 @@ export default async function CountryPage({
             value={c.value}
             change24h={exposure.change24h}
             topConflictName={c.drivers[0]?.label}
-            seedKey={`${country.code}:${c.dimension}`}
+            basis={c.basis}
           />
         ))}
       </div>

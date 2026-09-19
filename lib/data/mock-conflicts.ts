@@ -31,7 +31,7 @@ const MOCK_CONFLICTS_INPUT: ConflictInput[] = [
       "Large-scale conventional war along a shifting front line in eastern and southern Ukraine, with sustained long-range strikes on infrastructure on both sides.",
     eventCount: 63,
     lastUpdateMinutesAgo: 12,
-    countryCodesInvolved: ["UA", "RU", "PL", "DE"],
+    countryCodesInvolved: ["UA", "RU"],
   },
   {
     id: "c-il-ps",
@@ -50,7 +50,7 @@ const MOCK_CONFLICTS_INPUT: ConflictInput[] = [
       "Ongoing military operations in and around Gaza alongside intermittent escalation in the West Bank, with periodic diplomatic ceasefire efforts.",
     eventCount: 58,
     lastUpdateMinutesAgo: 24,
-    countryCodesInvolved: ["IL", "PS", "EG"],
+    countryCodesInvolved: ["IL", "PS"],
   },
   {
     id: "c-lb",
@@ -126,7 +126,7 @@ const MOCK_CONFLICTS_INPUT: ConflictInput[] = [
       "Repeated attacks on commercial shipping in the Bab-el-Mandeb corridor have pushed significant container and tanker traffic away from the Suez route.",
     eventCount: 30,
     lastUpdateMinutesAgo: 55,
-    countryCodesInvolved: ["YE", "EG"],
+    countryCodesInvolved: ["YE"],
   },
   {
     id: "c-sd",
@@ -145,7 +145,7 @@ const MOCK_CONFLICTS_INPUT: ConflictInput[] = [
       "Sustained fighting between rival military factions has produced one of the world's largest displacement and food-insecurity crises.",
     eventCount: 22,
     lastUpdateMinutesAgo: 70,
-    countryCodesInvolved: ["SD", "EG"],
+    countryCodesInvolved: ["SD"],
   },
   {
     id: "c-cd",
@@ -259,7 +259,7 @@ const MOCK_CONFLICTS_INPUT: ConflictInput[] = [
       "Continued missile tests and military posturing around the demilitarized zone, alongside allied exercises in the region.",
     eventCount: 11,
     lastUpdateMinutesAgo: 300,
-    countryCodesInvolved: ["KP", "KR", "JP"],
+    countryCodesInvolved: ["KP", "KR"],
   },
   {
     id: "c-taiwan",
@@ -278,7 +278,7 @@ const MOCK_CONFLICTS_INPUT: ConflictInput[] = [
       "Increased military activity and patrols around Taiwan continue alongside close monitoring of semiconductor-linked trade routes.",
     eventCount: 15,
     lastUpdateMinutesAgo: 190,
-    countryCodesInvolved: ["TW", "CN", "JP"],
+    countryCodesInvolved: ["TW", "CN"],
   },
 ];
 

@@ -16,8 +16,13 @@ export interface SeverityScoreResult {
   reasons: string[];
 }
 
+/** Which hard rule (if any) set a floor on an impact score. */
+export type HardFloor = "own_country_war" | "bordering_war" | null;
+
 export interface ImpactScoreResult {
   impactScore: number; // 0-100 integer, always relative to one country
+  /** The hard rule that applied — lets aggregators enforce it again on roll-ups. */
+  hardFloor: HardFloor;
   reasons: string[];
 }
 

@@ -17,5 +17,10 @@ export interface Conflict {
   summary: string;
   eventCount: number;
   lastUpdateMinutesAgo: number;
+  /** ISO codes of the countries whose territory or armed forces are PARTY to
+   * the fighting (belligerents and the country it is fought in). Not
+   * suppliers, mediators or alliance members: the scoring engine's hard rules
+   * treat every code here as "the war is in that country", so listing a
+   * bystander would wrongly floor its impact at 100. */
   countryCodesInvolved: string[];
 }

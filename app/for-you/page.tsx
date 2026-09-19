@@ -56,7 +56,7 @@ export default function ForYouPage() {
             value={c.value}
             change24h={exposure.change24h}
             topConflictName={c.drivers[0]?.label}
-            seedKey={`${country.code}:${c.dimension}`}
+            basis={c.basis}
           />
         ))}
       </div>
@@ -78,7 +78,7 @@ export default function ForYouPage() {
             >
               <div className="min-w-[140px] flex-1">
                 <p className="text-sm font-medium text-ink">{conflict.shortName}</p>
-                <p className="text-xs text-ink-faint">{km.toLocaleString()} km away</p>
+                <p className="text-xs text-ink-faint">{km.toLocaleString("en-US")} km away</p>
               </div>
               <MiniMetric label="Impact" value={impact.score} accent />
               <MiniMetric label="Security" value={sec} />

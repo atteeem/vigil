@@ -140,7 +140,12 @@ export const useAppStore = create<AppState>()(
         mapBasemapMode: s.mapBasemapMode,
         contentSensitivity: s.contentSensitivity,
       }),
-      skipHydration: typeof window === "undefined",
+      // Never hydrate at store-creation time: the client would then render
+      // the saved preferences on its FIRST pass while the server rendered the
+      // defaults, a guaranteed hydration mismatch for every returning user
+      // (e.g. a saved country other than the default). Providers rehydrates
+      // once after mount instead, so server and first client render agree.
+      skipHydration: true,
     },
   ),
 );

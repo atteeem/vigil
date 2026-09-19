@@ -7,159 +7,77 @@ import type {
   ImpactScore,
 } from "@/lib/types";
 import { distanceKm } from "@/lib/utils/geo";
-import { seededRandom } from "@/lib/utils/seed";
 import { clamp } from "@/lib/utils/format";
 import { computeSeverityScore } from "@/lib/scoring/severity";
 import { computeImpactScore } from "@/lib/scoring/impact";
-import { MOCK_CONFLICTS, getConflictById } from "./mock-conflicts";
+import { aggregateExposure, combineDamped } from "@/lib/scoring/exposure";
+import type { ImpactScoreResult } from "@/lib/scoring/types";
+import { MOCK_CONFLICTS } from "./mock-conflicts";
 
-const DIMENSION_WEIGHTS: Record<ExposureDimension, number> = {
-  security: 0.23,
-  energy: 0.18,
-  trade: 0.18,
-  finance: 0.13,
-  food_supply: 0.13,
-};
-const DISTANCE_WEIGHT = 0.15;
+// Country impact/exposure. Everything here is a deterministic function of the
+// country, the conflict's own fields and the Central Conflict Scoring Engine —
+// no random jitter, no shuffled boilerplate "drivers". Where a dimension has
+// no sourced data behind it yet (energy, trade, finance, food), the value is a
+// rule-of-thumb estimate from the conflict's tagged effects and intensity and
+// is labelled `basis: "estimated"` so the UI never presents it as measured.
 
-type DriverTemplate = { label: string; description: string };
 
-const DRIVER_TEMPLATES: Record<ExposureDimension, DriverTemplate[]> = {
-  security: [
-    { label: "Shared regional security environment", description: "The conflict sits within your country's own region." },
-    { label: "Alliance & defense-pact implications", description: "Collective-defense commitments connect this conflict to your country's security posture." },
-    { label: "Military posture & mobilization", description: "Visible mobilization or force posture changes near the conflict zone." },
-    { label: "Border or maritime proximity", description: "Physical proximity to active front lines or contested waters." },
-    { label: "Displacement & spillover risk", description: "Refugee flows or cross-border incidents linked to the conflict." },
-  ],
-  energy: [
-    { label: "Shared energy supplier exposure", description: "Your country's energy mix includes supply routed through this region." },
-    { label: "Chokepoint / shipping-lane risk", description: "The conflict sits near a strait or corridor energy shipments pass through." },
-    { label: "Benchmark price volatility", description: "The conflict is a recognized driver of recent benchmark energy price swings." },
-    { label: "Regional grid interconnection", description: "Shared or adjacent power infrastructure with the conflict region." },
-  ],
-  trade: [
-    { label: "Regional trade disruption", description: "Trade corridors serving your country run through or near the conflict zone." },
-    { label: "Shipping-route rerouting", description: "Vessels are being rerouted around the conflict area, adding time and cost." },
-    { label: "Key trading-partner exposure", description: "One or more of your country's major trading partners are directly involved." },
-    { label: "Supply-chain concentration", description: "Manufacturing or component supply chains pass through the affected region." },
-  ],
-  finance: [
-    { label: "Market spillover", description: "Broad market risk sentiment has moved in response to this conflict." },
-    { label: "Currency & rate sensitivity", description: "Regional currency or bond markets have shown measurable sensitivity." },
-    { label: "Sanctions & capital-flow effects", description: "Sanctions regimes tied to this conflict affect capital flows your country is exposed to." },
-    { label: "Investor risk repricing", description: "Institutional exposure to the region has prompted portfolio repositioning." },
-  ],
-  food_supply: [
-    { label: "Grain & staple export exposure", description: "The conflict region is a significant exporter of grain or staple crops your country imports." },
-    { label: "Fertilizer & input supply", description: "Agricultural input supply chains pass through the affected region." },
-    { label: "Regional food-price pressure", description: "Local food price indices in your region have moved in tandem with the conflict." },
-    { label: "Logistics & storage disruption", description: "Port or logistics disruption is affecting food shipment timelines." },
-  ],
+const DIMENSIONS: ExposureDimension[] = ["security", "energy", "trade", "finance", "food_supply"];
+
+const DIMENSION_LABEL: Record<ExposureDimension, string> = {
+  security: "Security",
+  energy: "Energy",
+  trade: "Trade",
+  finance: "Finance",
+  food_supply: "Food & Supply",
 };
 
-function pickDrivers(
-  dimension: ExposureDimension,
-  value: number,
-  rand: () => number,
-): ImpactDriver[] {
-  const pool = [...DRIVER_TEMPLATES[dimension]];
-  // deterministic shuffle
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [pool[i], pool[j]] = [pool[j]!, pool[i]!];
-  }
-  const chosen = pool.slice(0, 3);
-  const shares = [0.46, 0.3, 0.24];
-  let assigned = 0;
-  const drivers: ImpactDriver[] = chosen.map((t, i) => {
-    const contribution = Math.max(1, Math.round(value * shares[i]! * 0.82));
-    assigned += contribution;
-    return { label: t.label, description: t.description, contribution };
-  });
-  const other = Math.max(0, value - assigned);
-  drivers.push({
-    label: "Other factors",
-    description: "Smaller, distributed contributing signals.",
-    contribution: other,
-  });
+export { DIMENSION_LABEL };
+
+/** Only security is built from geography/severity/hard rules; the rest are
+ * tag-and-intensity estimates until real supply-chain/market data feeds them. */
+const DIMENSION_BASIS: Record<ExposureDimension, ImpactComponent["basis"]> = {
+  security: "computed",
+  energy: "estimated",
+  trade: "estimated",
+  finance: "estimated",
+  food_supply: "estimated",
+};
+
+interface Term {
+  label: string;
+  description: string;
+  points: number;
+}
+
+/** Turns a dimension's own formula terms into drivers that sum to the value —
+ * the explanation is the calculation, not narrative filler. */
+function driversFromTerms(terms: Term[], value: number): ImpactDriver[] {
+  const active = terms.filter((t) => t.points > 0);
+  const total = active.reduce((a, t) => a + t.points, 0);
+  const drivers = active
+    .sort((a, b) => b.points - a.points)
+    .map((t) => ({
+      label: t.label,
+      description: t.description,
+      contribution: total > 0 ? Math.round((t.points / total) * value) : 0,
+    }));
+  const assigned = drivers.reduce((a, d) => a + d.contribution, 0);
+  if (assigned !== value && drivers.length > 0) drivers[0]!.contribution += value - assigned;
   return drivers;
 }
 
-export function computeImpact(country: Country, conflict: Conflict): ImpactScore {
-  const rand = seededRandom(`${country.code}:${conflict.id}`);
-  const jitter = (spread: number) => (rand() * 2 - 1) * spread;
+export interface ConflictImpactDetail extends ImpactScore {
+  hardFloor: ImpactScoreResult["hardFloor"];
+}
 
+export function computeImpact(country: Country, conflict: Conflict): ConflictImpactDetail {
   const dist = distanceKm(country, conflict);
   const proximity = clamp(100 - dist / 120, 0, 100);
   const sameRegion = country.region === conflict.region;
   const involved = conflict.countryCodesInvolved.includes(country.code);
   const effects = new Set(conflict.primaryEffects);
 
-  const security = clamp(
-    0.5 * proximity +
-      (sameRegion ? 16 : 0) +
-      (involved ? 22 : 0) +
-      conflict.intensity * 0.14 +
-      jitter(6),
-    0,
-    100,
-  );
-  const energy = clamp(
-    (effects.has("Energy") ? 38 : 8) +
-      proximity * 0.22 +
-      conflict.intensity * 0.24 +
-      jitter(7),
-    0,
-    100,
-  );
-  const trade = clamp(
-    (effects.has("Trade") ? 34 : 8) +
-      proximity * 0.28 +
-      (sameRegion ? 10 : 0) +
-      conflict.intensity * 0.14 +
-      jitter(7),
-    0,
-    100,
-  );
-  const finance = clamp(
-    14 + conflict.intensity * 0.34 + (effects.has("Finance") ? 14 : 0) + jitter(9),
-    0,
-    100,
-  );
-  const foodSupply = clamp(
-    (effects.has("Food & Supply") ? 34 : 7) +
-      proximity * 0.14 +
-      (sameRegion ? 9 : 0) +
-      conflict.intensity * 0.09 +
-      jitter(6),
-    0,
-    100,
-  );
-
-  const values: Record<ExposureDimension, number> = {
-    security: Math.round(security),
-    energy: Math.round(energy),
-    trade: Math.round(trade),
-    finance: Math.round(finance),
-    food_supply: Math.round(foodSupply),
-  };
-
-  const components: ImpactComponent[] = (
-    Object.keys(values) as ExposureDimension[]
-  ).map((dimension) => ({
-    dimension,
-    value: values[dimension],
-    drivers: pickDrivers(dimension, values[dimension], seededRandom(`${country.code}:${conflict.id}:${dimension}`)),
-  }));
-
-  // Headline score: the Central Conflict Scoring Engine, not this file's
-  // own weighted-jitter formula — this is what makes the hard rules
-  // (same-country war = 100, bordering war >= 75, regardless of
-  // attacker/defender) actually hold for the homepage's "Most Relevant To
-  // You" card and the /country, /for-you pages that share this function.
-  // The dimension-level values above remain this file's own decorative
-  // sub-breakdown (used for the driver cards' flavor text), unaffected.
   const severity = computeSeverityScore({
     severityLabel: conflict.severity,
     status: conflict.status,
@@ -178,124 +96,139 @@ export function computeImpact(country: Country, conflict: Conflict): ImpactScore
   });
   const score = centralized.impactScore;
 
-  const overallDrivers: ImpactDriver[] = (
-    Object.keys(values) as ExposureDimension[]
-  ).map((dim) => ({
-    label: DIMENSION_LABEL[dim],
-    description: `Contribution from ${DIMENSION_LABEL[dim].toLowerCase()} exposure.`,
-    contribution: Math.round(values[dim] * DIMENSION_WEIGHTS[dim]),
-  }));
-  overallDrivers.push({
-    label: "Distance",
-    description: "Geographic proximity to the conflict.",
-    contribution: Math.round(proximity * DISTANCE_WEIGHT),
-  });
-  const assignedTotal = overallDrivers.reduce((a, d) => a + d.contribution, 0);
-  overallDrivers.push({
-    label: "Other",
-    description: "Smaller, distributed contributing signals.",
-    contribution: Math.max(0, score - assignedTotal),
-  });
-  if (centralized.reasons.length > 0) {
-    overallDrivers.unshift({
-      label: "Centralized scoring engine",
+  const securityTerms: Term[] = [
+    { label: "Proximity", description: "Geographic distance to the conflict.", points: 0.5 * proximity },
+    { label: "Shared region", description: "The conflict is in your country's own region.", points: sameRegion ? 16 : 0 },
+    { label: "Country involved", description: "Your country is named as involved in the conflict.", points: involved ? 22 : 0 },
+    { label: "Conflict intensity", description: "Current intensity of the conflict.", points: conflict.intensity * 0.14 },
+  ];
+  let security = securityTerms.reduce((a, t) => a + t.points, 0);
+  // Hard rules apply to the security dimension too: an own-country war is a
+  // 100 security exposure, a bordering war at least 75 (attacker/defender
+  // direction is irrelevant).
+  const securityFloor = centralized.hardFloor === "own_country_war" ? 100 : centralized.hardFloor === "bordering_war" ? 75 : 0;
+  if (securityFloor > security) {
+    securityTerms.push({
+      label: centralized.hardFloor === "own_country_war" ? "Active war inside your country" : "Active war in a bordering country",
       description: centralized.reasons.join("; "),
-      contribution: 0,
+      points: securityFloor - security,
     });
+    security = securityFloor;
   }
 
-  const change24h =
-    Math.round((conflict.intensityChange24h * 0.55 + jitter(1.4)) * 10) / 10;
+  const energyTerms: Term[] = [
+    { label: "Energy supply exposure", description: "The conflict is tagged as affecting energy supply.", points: effects.has("Energy") ? 38 : 8 },
+    { label: "Proximity", description: "Geographic distance to the conflict.", points: proximity * 0.22 },
+    { label: "Conflict intensity", description: "Current intensity of the conflict.", points: conflict.intensity * 0.24 },
+  ];
+  const tradeTerms: Term[] = [
+    { label: "Trade/shipping exposure", description: "The conflict is tagged as affecting trade.", points: effects.has("Trade") ? 34 : 8 },
+    { label: "Proximity", description: "Geographic distance to the conflict.", points: proximity * 0.28 },
+    { label: "Shared region", description: "The conflict is in your country's own region.", points: sameRegion ? 10 : 0 },
+    { label: "Conflict intensity", description: "Current intensity of the conflict.", points: conflict.intensity * 0.14 },
+  ];
+  const financeTerms: Term[] = [
+    { label: "Baseline market exposure", description: "Any monitored conflict carries some market risk.", points: 14 },
+    { label: "Conflict intensity", description: "Current intensity of the conflict.", points: conflict.intensity * 0.34 },
+    { label: "Sanctions/economic exposure", description: "The conflict is tagged as affecting finance.", points: effects.has("Finance") ? 14 : 0 },
+  ];
+  const foodTerms: Term[] = [
+    { label: "Food/supply chain exposure", description: "The conflict is tagged as affecting food and supply.", points: effects.has("Food & Supply") ? 34 : 7 },
+    { label: "Proximity", description: "Geographic distance to the conflict.", points: proximity * 0.14 },
+    { label: "Shared region", description: "The conflict is in your country's own region.", points: sameRegion ? 9 : 0 },
+    { label: "Conflict intensity", description: "Current intensity of the conflict.", points: conflict.intensity * 0.09 },
+  ];
+
+  const sum = (terms: Term[]) => clamp(terms.reduce((a, t) => a + t.points, 0), 0, 100);
+  const raw: Record<ExposureDimension, { value: number; terms: Term[] }> = {
+    security: { value: clamp(security, 0, 100), terms: securityTerms },
+    energy: { value: sum(energyTerms), terms: energyTerms },
+    trade: { value: sum(tradeTerms), terms: tradeTerms },
+    finance: { value: sum(financeTerms), terms: financeTerms },
+    food_supply: { value: sum(foodTerms), terms: foodTerms },
+  };
+
+  const components: ImpactComponent[] = DIMENSIONS.map((dimension) => {
+    const value = Math.round(raw[dimension].value);
+    return { dimension, value, basis: DIMENSION_BASIS[dimension], drivers: driversFromTerms(raw[dimension].terms, value) };
+  });
+
+  const overallDrivers: ImpactDriver[] = [];
+  if (centralized.reasons.length > 0) {
+    overallDrivers.push({ label: "Centralized scoring engine", description: centralized.reasons.join("; "), contribution: score });
+  }
 
   return {
     countryCode: country.code,
     conflictId: conflict.id,
     score,
-    change24h,
+    // The conflict's own reported 24h intensity change, scaled — never random.
+    change24h: Math.round(conflict.intensityChange24h * 0.55 * 10) / 10,
     components,
     overallDrivers,
+    hardFloor: centralized.hardFloor,
   };
 }
 
-const DIMENSION_LABEL: Record<ExposureDimension, string> = {
-  security: "Security",
-  energy: "Energy",
-  trade: "Trade",
-  finance: "Finance",
-  food_supply: "Food & Supply",
-};
-
-export { DIMENSION_LABEL };
-
 export function computeCountryExposure(country: Country): ImpactScore {
-  const perConflict = MOCK_CONFLICTS.map((c) => computeImpact(country, c));
-  const dims: ExposureDimension[] = ["security", "energy", "trade", "finance", "food_supply"];
+  const perConflict = MOCK_CONFLICTS.map((c) => ({ conflict: c, impact: computeImpact(country, c) }));
 
-  // Overall country exposure = highest-weighted blend of top contributing conflicts per dimension.
-  const components: ImpactComponent[] = dims.map((dimension) => {
-    const sorted = [...perConflict].sort(
-      (a, b) =>
-        (b.components.find((c) => c.dimension === dimension)?.value ?? 0) -
-        (a.components.find((c) => c.dimension === dimension)?.value ?? 0),
-    );
-    const top = sorted.slice(0, 4);
-    const value = Math.round(
-      top.reduce(
-        (acc, s, i) =>
-          acc +
-          (s.components.find((c) => c.dimension === dimension)?.value ?? 0) *
-            [0.4, 0.28, 0.19, 0.13][i]!,
-        0,
-      ),
-    );
-    const topConflict = getConflictById(sorted[0]!.conflictId!);
+  // Headline: the explainable aggregate (lib/scoring/exposure.ts) over the
+  // per-conflict centralized impact scores — never an average of dimensions.
+  const aggregate = aggregateExposure(
+    perConflict.map(({ conflict, impact }) => ({
+      conflictId: conflict.id,
+      conflictName: conflict.shortName,
+      impactScore: impact.score,
+      hardFloor: impact.hardFloor,
+    })),
+  );
+
+  // Each dimension card combines the conflicts' own dimension values with the
+  // same damped rule (top conflict leads), so a 100-security own-country war
+  // shows Security 100 rather than being averaged away.
+  const components: ImpactComponent[] = DIMENSIONS.map((dimension) => {
+    const rows = perConflict
+      .map(({ conflict, impact }) => ({ conflict, value: impact.components.find((c) => c.dimension === dimension)?.value ?? 0 }))
+      .sort((a, b) => b.value - a.value);
+    const value = combineDamped(rows.map((r) => r.value));
+    const lead = rows[0]?.conflict;
     return {
       dimension,
-      value: clampInt(value),
+      value,
+      basis: DIMENSION_BASIS[dimension],
       drivers: [
         {
-          label: topConflict ? topConflict.shortName : "Leading conflict",
+          label: lead ? lead.shortName : "Leading conflict",
           description: `Largest single contributor to your ${DIMENSION_LABEL[dimension].toLowerCase()} exposure.`,
-          contribution: Math.round(value * 0.55),
+          contribution: Math.min(value, rows[0]?.value ?? 0),
         },
         {
           label: "Other active conflicts",
           description: "Combined smaller contributions from other monitored conflicts.",
-          contribution: Math.max(0, value - Math.round(value * 0.55)),
+          contribution: Math.max(0, value - (rows[0]?.value ?? 0)),
         },
       ],
     };
   });
 
-  const score = clampInt(
-    Math.round(
-      components.reduce((acc, c) => acc + c.value * DIMENSION_WEIGHTS[c.dimension], 0) /
-        (1 - DISTANCE_WEIGHT),
-    ),
-  );
+  const overallDrivers: ImpactDriver[] = [
+    ...aggregate.reasons.map((r) => ({ label: "Aggregation", description: r, contribution: 0 })),
+    ...aggregate.contributions.slice(0, 5).map((c) => ({
+      label: c.conflictName,
+      description: `Impact ${c.impactScore} for your country.`,
+      contribution: c.contribution,
+    })),
+  ];
 
-  const change24h =
-    Math.round(
-      (perConflict.reduce((acc, s) => acc + s.change24h, 0) / perConflict.length) * 10,
-    ) / 10;
-
-  const overallDrivers: ImpactDriver[] = components.map((c) => ({
-    label: DIMENSION_LABEL[c.dimension],
-    description: `Contribution from ${DIMENSION_LABEL[c.dimension].toLowerCase()} exposure.`,
-    contribution: Math.round(c.value * DIMENSION_WEIGHTS[c.dimension]),
-  }));
-  const assigned = overallDrivers.reduce((a, d) => a + d.contribution, 0);
-  overallDrivers.push({
-    label: "Other",
-    description: "Smaller, distributed contributing signals across all monitored conflicts.",
-    contribution: Math.max(0, score - assigned),
-  });
-
+  const lead = perConflict.find((p) => p.conflict.id === aggregate.leadConflictId);
   return {
     countryCode: country.code,
     conflictId: null,
-    score,
-    change24h,
+    score: aggregate.score,
+    // The leading conflict's own change — an average across conflicts would
+    // itself dilute the direction of the one that matters.
+    change24h: lead?.impact.change24h ?? 0,
     components,
     overallDrivers,
   };
@@ -310,6 +243,3 @@ export function getTopConflictsForCountry(country: Country, limit = 5) {
     .slice(0, limit);
 }
 
-function clampInt(n: number): number {
-  return Math.round(clamp(n, 0, 100));
-}
