@@ -371,13 +371,17 @@ function addEventLayers(
     100,
     58,
   ];
-  // Opacity = corroboration x recency (spec #5/#6), multiplied rather than
-  // added so neither factor alone can force full strength: a single-source
-  // report stays modest even if brand new, and a heavily-corroborated
-  // report still fades once old.
+  // Opacity = confidence x recency (Central Conflict Scoring Engine §7
+  // "confidence influences opacity"), multiplied rather than added so
+  // neither factor alone can force full strength: a low-confidence report
+  // stays modest even if brand new, and a well-evidenced report still
+  // fades once old. confidenceScore (lib/scoring/confidence.ts, computed
+  // in lib/map/heat-layers.ts) replaces the previous direct sourceCount
+  // interpolation — the same formula admin/conflict views use, not a
+  // second ad hoc one living only here.
   const eventHeatOpacity: DataDrivenPropertyValueSpecification<number> = [
     "*",
-    ["interpolate", ["linear"], ["get", "sourceCount"], 1, 0.4, 3, 0.75, 8, 1],
+    ["interpolate", ["linear"], ["get", "confidenceScore"], 30, 0.4, 60, 0.75, 90, 1],
     ["interpolate", ["linear"], ["get", "ageHours"], 0, 1, 24, 0.65, 168, 0.25, 720, 0.08],
   ];
   for (const ring of GRADIENT_RINGS) {

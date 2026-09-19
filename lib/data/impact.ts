@@ -9,6 +9,8 @@ import type {
 import { distanceKm } from "@/lib/utils/geo";
 import { seededRandom } from "@/lib/utils/seed";
 import { clamp } from "@/lib/utils/format";
+import { computeSeverityScore } from "@/lib/scoring/severity";
+import { computeImpactScore } from "@/lib/scoring/impact";
 import { MOCK_CONFLICTS, getConflictById } from "./mock-conflicts";
 
 const DIMENSION_WEIGHTS: Record<ExposureDimension, number> = {
@@ -151,13 +153,30 @@ export function computeImpact(country: Country, conflict: Conflict): ImpactScore
     drivers: pickDrivers(dimension, values[dimension], seededRandom(`${country.code}:${conflict.id}:${dimension}`)),
   }));
 
-  const weightedSum =
-    Object.entries(values).reduce(
-      (acc, [dim, val]) => acc + val * DIMENSION_WEIGHTS[dim as ExposureDimension],
-      0,
-    ) +
-    proximity * DISTANCE_WEIGHT;
-  const score = Math.round(clamp(weightedSum, 0, 100));
+  // Headline score: the Central Conflict Scoring Engine, not this file's
+  // own weighted-jitter formula — this is what makes the hard rules
+  // (same-country war = 100, bordering war >= 75, regardless of
+  // attacker/defender) actually hold for the homepage's "Most Relevant To
+  // You" card and the /country, /for-you pages that share this function.
+  // The dimension-level values above remain this file's own decorative
+  // sub-breakdown (used for the driver cards' flavor text), unaffected.
+  const severity = computeSeverityScore({
+    severityLabel: conflict.severity,
+    status: conflict.status,
+    intensity: conflict.intensity,
+    escalationTrend: conflict.intensityChange24h,
+  });
+  const centralized = computeImpactScore({
+    severityScore: severity.severityScore,
+    conflictStatus: conflict.status,
+    userCountryCode: country.code,
+    conflictCountryCodes: conflict.countryCodesInvolved,
+    userCountryPoint: country,
+    conflictPoint: conflict,
+    sameRegion,
+    primaryEffects: conflict.primaryEffects,
+  });
+  const score = centralized.impactScore;
 
   const overallDrivers: ImpactDriver[] = (
     Object.keys(values) as ExposureDimension[]
@@ -177,6 +196,13 @@ export function computeImpact(country: Country, conflict: Conflict): ImpactScore
     description: "Smaller, distributed contributing signals.",
     contribution: Math.max(0, score - assignedTotal),
   });
+  if (centralized.reasons.length > 0) {
+    overallDrivers.unshift({
+      label: "Centralized scoring engine",
+      description: centralized.reasons.join("; "),
+      contribution: 0,
+    });
+  }
 
   const change24h =
     Math.round((conflict.intensityChange24h * 0.55 + jitter(1.4)) * 10) / 10;

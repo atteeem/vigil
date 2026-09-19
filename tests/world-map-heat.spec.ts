@@ -130,6 +130,32 @@ test.describe("Heat layer data pipeline (lib/map/heat-layers.ts)", () => {
     expect(a.properties.severity).toBe("severe"); // max of severe+elevated
     expect(b.properties.severity).toBe("guarded");
   });
+
+  // Central Conflict Scoring Engine v1 §7 "Use centralized severityScore
+  // for color/intensity" / "confidence influences opacity" — the two heat
+  // GeoJSON builders must go through lib/scoring/severity.ts and
+  // lib/scoring/confidence.ts, not compute their own color/opacity numbers.
+  test("8. Heatmap features carry the centralized engine's severityScore/confidenceScore, not ad hoc numbers", () => {
+    const heat = eventsToHeatGeoJSON(
+      [
+        baseEvent({ id: "war", severity: "extreme", sourceCount: 3, sources: [{ id: "s1", name: "Wire", sourceType: "Wire", url: "https://x", publishedAt: NOW }] }),
+        baseEvent({ id: "minor", severity: "guarded", sourceCount: 1 }),
+      ],
+      NOW,
+    );
+    const war = heat.features.find((f) => f.properties.id === "war")!.properties;
+    const minor = heat.features.find((f) => f.properties.id === "minor")!.properties;
+    // Full-scale-war hard rule (100 = deepest red) reaches the heatmap unchanged.
+    expect(war.severityScore).toBe(100);
+    expect(war.severity).toBe("extreme");
+    // More/diverse corroboration -> higher confidenceScore -> higher opacity driver.
+    expect(war.confidenceScore).toBeGreaterThan(minor.confidenceScore);
+
+    const bases = conflictBaseGeoJSON([
+      baseEvent({ id: "c1", conflictId: "conflict-war", severity: "extreme", lat: 31.5, lng: 34.47 }),
+    ]);
+    expect(bases.features[0]!.properties.severityScore).toBe(100);
+  });
 });
 
 test.describe("World map heatmap rendering (real published events)", () => {

@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, Pencil, Archive } from "lucide-react";
+import { Plus, Trash2, Pencil, Archive, Gauge } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CONFLICT_STATUSES, type ConflictDTO, type ConflictStatus } from "@/lib/types/db";
 import { SEVERITY_LEVELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { ScoresPanel } from "@/components/admin/scores-panel";
 
 interface ConflictFormState {
   slug: string;
@@ -63,6 +64,7 @@ export default function AdminConflictsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ConflictFormState>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
+  const [scoresOpenId, setScoresOpenId] = useState<string | null>(null);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin", "conflicts"] });
 
@@ -290,7 +292,8 @@ export default function AdminConflictsPage() {
               </tr>
             )}
             {conflicts.map((c) => (
-              <tr key={c.id} data-testid={`conflict-row-${c.slug}`} className="border-b border-border/60 align-top">
+              <Fragment key={c.id}>
+              <tr data-testid={`conflict-row-${c.slug}`} className="border-b border-border/60 align-top">
                 <td className="px-4 py-3">
                   <div className="font-medium text-ink">{c.shortName ?? c.name}</div>
                   <div className="text-xs text-ink-faint">{c.slug}</div>
@@ -318,6 +321,15 @@ export default function AdminConflictsPage() {
                 <td className="px-4 py-3 text-ink-dim">{c.eventCount ?? 0}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-1.5">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => setScoresOpenId(scoresOpenId === c.id ? null : c.id)}
+                      aria-label={`Scores for ${c.name}`}
+                      aria-expanded={scoresOpenId === c.id}
+                    >
+                      <Gauge className="h-3.5 w-3.5" />
+                    </Button>
                     <Button size="icon" variant="ghost" onClick={() => startEdit(c)} aria-label={`Edit ${c.name}`}>
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
@@ -340,6 +352,14 @@ export default function AdminConflictsPage() {
                   </div>
                 </td>
               </tr>
+              {scoresOpenId === c.id && (
+                <tr className="border-b border-border/60 bg-surface/40">
+                  <td colSpan={7} className="px-4 py-4">
+                    <ScoresPanel kind="conflicts" entityId={c.id} />
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
           </tbody>
         </table>

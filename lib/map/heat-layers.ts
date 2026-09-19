@@ -2,28 +2,42 @@ import type { FeatureCollection, Point } from "geojson";
 import type { ConflictEvent } from "@/lib/types";
 import { distanceKm } from "@/lib/utils/geo";
 import { maxSeverity, severityRank } from "@/lib/utils/severity";
+import { computeSeverityScore } from "@/lib/scoring/severity";
+import { computeConfidenceScore } from "@/lib/scoring/confidence";
 
 // Heatmap-mode rendering data (world-map.tsx). Deliberately kept separate
 // from events-to-geojson.ts's marker-mode feature shape: the heat
 // visualization encodes different things per spec —
 //   color = severity (per event / per conflict's worst event, never an
-//     aggregate of how many reports exist)
-//   opacity = corroboration (independent source count) x recency decay
+//     aggregate of how many reports exist) — now the Central Conflict
+//     Scoring Engine's severityScore, run back through severityFromScore
+//     to pick a color band, rather than the raw admin-entered enum
+//     directly. 100 (the engine's exclusive "active full-scale war" band)
+//     always resolves to "extreme", the deepest red.
+//   opacity = confidenceScore (evidence quality — independent source
+//     count, source diversity, freshness) x recency decay. Previously
+//     interpolated straight off sourceCount; now goes through the same
+//     centralized confidence engine admin/conflict views use, so this
+//     project has exactly one "how well-evidenced is this" formula, not
+//     a second ad hoc one living only in the heatmap.
 //   radius = geographic scope (event importance for an incident;
 //     geographic spread of its events for a whole conflict)
-// Report/article COUNT never drives color — see conflictBaseGeoJSON's
-// eventCount usage below, which only nudges opacity/confidence, capped,
-// same as an individual event's sourceCount.
+// Report/article COUNT never drives color — severity.ts's input shape has
+// no source/report-count field at all (see lib/scoring/severity.ts).
 
 export interface EventHeatFeatureProps {
   id: string;
   severity: string;
+  /** 0-100, Central Conflict Scoring Engine output — drives color band via severityFromScore. */
+  severityScore: number;
+  /** 0-100, Central Conflict Scoring Engine output — drives opacity (evidence quality), independent of severity. */
+  confidenceScore: number;
   /** Hours between the event's occurredAt and the reference "now" this
    * feature collection was built against — used to fade older, isolated
    * incidents (spec "recency"). */
   ageHours: number;
-  /** Independent supporting-source count — drives opacity/confidence,
-   * never severity (spec "corroboration"). */
+  /** Independent supporting-source count — kept for display/debugging;
+   * confidenceScore (above), not this raw count, drives opacity. */
   sourceCount: number;
   importance: number;
 }
@@ -38,6 +52,16 @@ export function eventsToHeatGeoJSON(
   nowIso: string,
 ): FeatureCollection<Point, EventHeatFeatureProps> {
   const now = new Date(nowIso).getTime();
+  const withScores = events.map((e) => {
+    const severity = computeSeverityScore({ severityLabel: e.severity, importance: e.importance });
+    const confidence = computeConfidenceScore({
+      independentSourceCount: e.sourceCount,
+      sourceCategories: Array.from(new Set(e.sources.map((s) => s.sourceType))),
+      latestCorroborationAt: e.sources.length > 0 ? new Date(Math.max(...e.sources.map((s) => new Date(s.publishedAt).getTime()))).toISOString() : null,
+      now: nowIso,
+    });
+    return { event: e, severity, confidence };
+  });
   return {
     type: "FeatureCollection",
     // MapLibre circle layers paint features in source-array order, later
@@ -45,16 +69,21 @@ export function eventsToHeatGeoJSON(
     // is what makes "severe never gets visually covered by a lower
     // severity" deterministic, via plain render order rather than any
     // opacity/z-index hack. Stable sort (Array.prototype.sort guarantees
-    // this) preserves relative order within the same severity.
-    features: [...events]
-      .sort((a, b) => severityRank(a.severity) - severityRank(b.severity))
-      .map((e) => ({
+    // this) preserves relative order within the same severity. Sorts by
+    // the ENGINE's computed severityScore rank, not the raw input label —
+    // the two usually agree, but the engine can refine a label upward
+    // when enough structured signals stack up.
+    features: withScores
+      .sort((a, b) => severityRank(a.severity.severityLabel) - severityRank(b.severity.severityLabel))
+      .map(({ event: e, severity, confidence }) => ({
         type: "Feature",
         id: e.id,
         geometry: { type: "Point", coordinates: [e.lng, e.lat] },
         properties: {
           id: e.id,
-          severity: e.severity,
+          severity: severity.severityLabel,
+          severityScore: severity.severityScore,
+          confidenceScore: confidence.confidenceScore,
           ageHours: Math.max(0, (now - new Date(e.occurredAt).getTime()) / 3_600_000),
           sourceCount: e.sourceCount,
           importance: e.importance,
@@ -72,6 +101,10 @@ export interface ConflictBaseFeatureProps {
    * reports must not automatically become red" — both fall out of using
    * max rather than mean or count). */
   severity: string;
+  /** 0-100, Central Conflict Scoring Engine output for the conflict as a
+   * whole (worst-event severity enriched with spreadKm/eventCount) —
+   * drives the base layer's color band via severityFromScore. */
+  severityScore: number;
   /** Great-circle radius (km) covering every event attributed to this
    * conflict — drives the base layer's geographic footprint (spec
    * "radius = geographic scope" / "sustained regional conflict = broad
@@ -105,11 +138,12 @@ export function conflictBaseGeoJSON(events: ConflictEvent[]): FeatureCollection<
     const lng = group.reduce((sum, e) => sum + e.lng, 0) / group.length;
     const spreadKm = group.reduce((max, e) => Math.max(max, distanceKm({ lat, lng }, { lat: e.lat, lng: e.lng })), 0);
     const worst = group.reduce((w: string, e) => maxSeverity(w, e.severity), group[0]!.severity);
+    const severity = computeSeverityScore({ severityLabel: worst as ConflictEvent["severity"], spreadKm, eventCount: group.length });
     features.push({
       type: "Feature",
       id: conflictId,
       geometry: { type: "Point", coordinates: [lng, lat] },
-      properties: { conflictId, severity: worst, spreadKm, eventCount: group.length },
+      properties: { conflictId, severity: severity.severityLabel, severityScore: severity.severityScore, spreadKm, eventCount: group.length },
     });
   }
   // Same deterministic-stacking rationale as eventsToHeatGeoJSON above —

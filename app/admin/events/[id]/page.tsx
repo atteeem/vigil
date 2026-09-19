@@ -4,10 +4,11 @@ import { useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ShieldQuestion, Pencil, Globe2, EyeOff, Trash2, X, Check, AlertTriangle, History, CheckCheck, Radio } from "lucide-react";
+import { ArrowLeft, ShieldQuestion, Pencil, Globe2, EyeOff, Trash2, X, Check, AlertTriangle, History, CheckCheck, Radio, Gauge } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LocationPicker, type LocationValue } from "@/components/admin/location-picker";
+import { ScoresPanel } from "@/components/admin/scores-panel";
 import { EventTypeIcon, getEventTypeLabel, EVENT_TYPE_LABEL } from "@/components/events/event-type-icon";
 import { EventStatusBadge } from "@/components/events/event-status-badge";
 import { getEventCorroboration } from "@/lib/data/corroboration";
@@ -484,6 +485,14 @@ export default function AdminEventDetailPage() {
           Corroboration describes how many reports and sources exist for this event — it is not a truth or
           credibility score. Multiple sources reporting the same thing does not by itself prove it happened.
         </p>
+      </Card>
+
+      <Card className="mt-4 p-4" data-testid="scores-card">
+        <div className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-faint">
+          <Gauge className="h-3.5 w-3.5" />
+          Scoring Engine
+        </div>
+        <ScoresPanel kind="events" entityId={event.id} />
       </Card>
 
       <Card className="mt-4 p-4" data-testid="supporting-reports-panel">
