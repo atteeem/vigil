@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/client";
 import type { ConflictActor, ConflictTerritory, Conflict } from "@prisma/client";
 import { nextActorColor } from "@/lib/map/territorial-colors";
 import { deriveDisplayStatus, parseTerritorialGeometry } from "@/lib/data/territorial-control";
+import { splitGeometry, validateTerritorialGeometry } from "@/lib/territory/geometry";
 import type {
   AssignableTerritorialStatus,
   ConflictActorDTO,
@@ -50,6 +51,7 @@ function toTerritoryDTO(row: TerritoryRow, asOf?: Date): TerritoryDTO | null {
     validFrom: row.validFrom.toISOString(),
     validTo: row.validTo ? row.validTo.toISOString() : null,
     published: row.published,
+    splitFromId: row.splitFromId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -106,6 +108,19 @@ export async function getTerritory(id: string): Promise<TerritoryDTO | null> {
   return toTerritoryDTO(row);
 }
 
+/** Thrown when geometry fails validation; `errors` has one clear message per problem. */
+export class TerritoryValidationError extends Error {
+  constructor(public readonly errors: string[]) {
+    super(errors.join(" "));
+    this.name = "TerritoryValidationError";
+  }
+}
+
+export function assertValidGeometry(geometry: unknown): asserts geometry is TerritorialGeometry {
+  const result = validateTerritorialGeometry(geometry);
+  if (!result.valid) throw new TerritoryValidationError(result.errors);
+}
+
 export interface TerritoryInput {
   conflictId: string;
   actorId?: string | null;
@@ -116,6 +131,8 @@ export interface TerritoryInput {
   sourceUrl?: string | null;
   validFrom: Date;
   validTo?: Date | null;
+  /** Draft only: the active version this draft partially changes (a split). */
+  splitFromId?: string | null;
 }
 
 function toRow(input: TerritoryInput) {
@@ -129,12 +146,15 @@ function toRow(input: TerritoryInput) {
     sourceUrl: input.sourceUrl ?? null,
     validFrom: input.validFrom,
     validTo: input.validTo ?? null,
+    splitFromId: input.splitFromId ?? null,
   };
 }
 
 /** Creates a new DRAFT version (published: false) — freely editable/
  * deletable until published. */
-export function createTerritoryDraft(input: TerritoryInput): Promise<ConflictTerritory> {
+export async function createTerritoryDraft(input: TerritoryInput): Promise<ConflictTerritory> {
+  assertValidGeometry(input.geometry);
+  if (input.splitFromId) await assertSplittableSource(input.splitFromId, input.conflictId);
   return prisma.conflictTerritory.create({ data: { ...toRow(input), published: false } });
 }
 
@@ -147,6 +167,7 @@ export async function updateTerritoryDraft(id: string, input: Partial<TerritoryI
   const existing = await prisma.conflictTerritory.findUnique({ where: { id } });
   if (!existing) throw new Error("Territory not found");
   if (existing.published) throw new Error("Cannot edit a published territory version — supersede it instead");
+  if (input.geometry !== undefined) assertValidGeometry(input.geometry);
   const data: Record<string, unknown> = {};
   if (input.conflictId !== undefined) data.conflictId = input.conflictId;
   if (input.actorId !== undefined) data.actorId = input.actorId;
@@ -169,6 +190,25 @@ export async function publishTerritory(id: string): Promise<ConflictTerritory> {
   if (!existing) throw new Error("Territory not found");
   if (!existing.geometry || !existing.status || !existing.validFrom) {
     throw new Error("Territory is missing required fields (geometry, status, validFrom)");
+  }
+  if (existing.published) return existing;
+  // Never publish invalid geometry, whatever path created the draft.
+  const geometry = parseTerritorialGeometry(existing.geometry);
+  if (!geometry) throw new TerritoryValidationError(["Stored geometry is not a valid Polygon or MultiPolygon."]);
+  assertValidGeometry(geometry);
+  // A draft that is a partial change carves its area out of the active
+  // version it was drawn against, instead of replacing the whole polygon.
+  if (existing.splitFromId) {
+    const { affected } = await splitTerritory(existing.splitFromId, geometry, {
+      actorId: existing.actorId,
+      status: existing.status as AssignableTerritorialStatus,
+      confidence: existing.confidence,
+      sourceName: existing.sourceName,
+      sourceUrl: existing.sourceUrl,
+      validFrom: existing.validFrom,
+      draftId: existing.id,
+    });
+    return affected;
   }
   return prisma.conflictTerritory.update({ where: { id }, data: { published: true } });
 }
@@ -195,6 +235,7 @@ export async function supersedeTerritory(
   currentId: string,
   next: Omit<TerritoryInput, "conflictId"> & { conflictId?: string },
 ): Promise<{ previous: ConflictTerritory; next: ConflictTerritory }> {
+  assertValidGeometry(next.geometry);
   const current = await prisma.conflictTerritory.findUnique({ where: { id: currentId } });
   if (!current) throw new Error("Territory not found");
   if (!current.published) throw new Error("Cannot supersede a draft — publish it first, or edit it directly");
@@ -210,4 +251,127 @@ export async function supersedeTerritory(
     }),
   ]);
   return { previous, next: created };
+}
+
+// ---- split / partial control change -----------------------------------------
+
+/** The version a split carves from must be published, still active and in the
+ * same conflict — anything else would rewrite or double-close history. */
+async function assertSplittableSource(sourceId: string, conflictId: string): Promise<ConflictTerritory> {
+  const source = await prisma.conflictTerritory.findUnique({ where: { id: sourceId } });
+  if (!source) throw new Error("Territory to split not found");
+  if (!source.published) throw new Error("Cannot split a draft — only a published, active version");
+  if (source.validTo !== null) throw new Error("This territory version has already been superseded");
+  if (source.conflictId !== conflictId) throw new Error("The territory to split belongs to a different conflict");
+  return source;
+}
+
+export interface SplitPreview {
+  valid: boolean;
+  errors: string[];
+  /** Base geometry being split (the active version). */
+  base: TerritorialGeometry | null;
+  /** Part of the base the drawn area covers — will go to the new controller/status. */
+  affected: TerritorialGeometry | null;
+  /** Rest of the base — stays with the old controller/status, unchanged. */
+  remainder: TerritorialGeometry | null;
+  /** True when the drawn area reaches outside the base (that part is ignored, never added). */
+  areaOutsideBase: boolean;
+}
+
+/** Pure preview of splitting `sourceId` by a drawn area. Reads only. */
+export async function previewSplit(sourceId: string, area: unknown): Promise<SplitPreview> {
+  const empty: SplitPreview = { valid: false, errors: [], base: null, affected: null, remainder: null, areaOutsideBase: false };
+  const check = validateTerritorialGeometry(area);
+  if (!check.valid) return { ...empty, errors: check.errors };
+  const source = await prisma.conflictTerritory.findUnique({ where: { id: sourceId } });
+  if (!source) return { ...empty, errors: ["Territory to split not found."] };
+  const base = parseTerritorialGeometry(source.geometry);
+  if (!base) return { ...empty, errors: ["The territory to split has unreadable geometry."] };
+  const drawn = area as TerritorialGeometry;
+  const { affected, remainder } = splitGeometry(base, drawn);
+  if (!affected) return { ...empty, base, remainder, errors: ["The drawn area does not overlap the territory being changed."] };
+  const outside = splitGeometry(drawn, base).remainder !== null;
+  return { valid: true, errors: [], base, affected, remainder, areaOutsideBase: outside };
+}
+
+export interface SplitNext {
+  actorId?: string | null;
+  status: AssignableTerritorialStatus;
+  confidence: number;
+  sourceName?: string | null;
+  sourceUrl?: string | null;
+  validFrom: Date;
+  /** An existing draft to publish as the affected area instead of creating a new row. */
+  draftId?: string;
+}
+
+/**
+ * Partial control change. In ONE transaction:
+ *  - the active version is closed (validTo = validFrom of the change) — its
+ *    geometry is never touched, so history before the change is intact;
+ *  - a new published version holds the AFFECTED part (base ∩ drawn area) with
+ *    the new actor/status/confidence/provenance;
+ *  - a new published version holds the REMAINDER (base − drawn area) with the
+ *    OLD actor/status/confidence/provenance, so unaffected ground keeps its
+ *    controller and is exactly complementary (no gap, no overlap);
+ *  - both new rows record `splitFromId` = the closed version.
+ * If the drawn area covers the whole base there is no remainder row (it is a
+ * whole-area supersede). The drawn area outside the base is ignored.
+ */
+export async function splitTerritory(
+  sourceId: string,
+  area: TerritorialGeometry,
+  next: SplitNext,
+): Promise<{ previous: ConflictTerritory; affected: ConflictTerritory; remainder: ConflictTerritory | null }> {
+  assertValidGeometry(area);
+  const source = await prisma.conflictTerritory.findUnique({ where: { id: sourceId } });
+  if (!source) throw new Error("Territory to split not found");
+  await assertSplittableSource(sourceId, source.conflictId);
+  if (next.validFrom.getTime() < source.validFrom.getTime()) {
+    throw new Error("A change's effective time cannot be before the version it changes");
+  }
+  const base = parseTerritorialGeometry(source.geometry);
+  if (!base) throw new Error("The territory to split has unreadable geometry");
+  const { affected, remainder } = splitGeometry(base, area);
+  if (!affected) throw new Error("The drawn area does not overlap the territory being changed");
+
+  const result = await prisma.$transaction(async (tx) => {
+    const previous = await tx.conflictTerritory.update({ where: { id: source.id }, data: { validTo: next.validFrom } });
+    const affectedData = {
+      conflictId: source.conflictId,
+      actorId: next.actorId ?? null,
+      status: next.status,
+      confidence: next.confidence,
+      geometry: JSON.stringify(affected),
+      sourceName: next.sourceName ?? null,
+      sourceUrl: next.sourceUrl ?? null,
+      validFrom: next.validFrom,
+      validTo: null,
+      published: true,
+      splitFromId: remainder ? source.id : null,
+    };
+    const affectedRow = next.draftId
+      ? await tx.conflictTerritory.update({ where: { id: next.draftId }, data: affectedData })
+      : await tx.conflictTerritory.create({ data: affectedData });
+    const remainderRow = remainder
+      ? await tx.conflictTerritory.create({
+          data: {
+            conflictId: source.conflictId,
+            actorId: source.actorId,
+            status: source.status,
+            confidence: source.confidence,
+            geometry: JSON.stringify(remainder),
+            sourceName: source.sourceName,
+            sourceUrl: source.sourceUrl,
+            validFrom: next.validFrom,
+            validTo: null,
+            published: true,
+            splitFromId: source.id,
+          },
+        })
+      : null;
+    return { previous, affected: affectedRow, remainder: remainderRow };
+  });
+  return result;
 }

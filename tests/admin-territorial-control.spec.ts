@@ -57,6 +57,8 @@ test("2. Publishing a draft moves it to Published and removes the edit/delete ac
   await page.goto("/admin/territorial-control");
   const row = page.getByTestId(`territory-row-${draft.id}`);
   await expect(row).toContainText("Draft");
+  // Publishing is explicit: the row action asks for confirmation first.
+  page.once("dialog", (d) => d.accept());
   await page.getByTestId(`territory-publish-${draft.id}`).click();
   await expect(row).toContainText("Published");
 
@@ -79,6 +81,9 @@ test("3. Superseding a published territory creates a new version and closes the 
   await page.getByTestId(`territory-supersede-${draft.id}`).click();
   await expect(page.getByTestId("territory-form")).toBeVisible();
   await page.getByTestId("territory-form").getByLabel("Status").selectOption("contested");
+  // Publishing a change needs explicit confirmation.
+  await expect(page.getByTestId("territory-form-submit")).toBeDisabled();
+  await page.getByTestId("territory-confirm").check();
   await page.getByTestId("territory-form-submit").click();
 
   await expect(page.getByTestId("territory-form")).not.toBeVisible();

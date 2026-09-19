@@ -277,11 +277,18 @@ model ConflictTerritory {
   // reconstruction query and may be freely edited/deleted; once
   // published, a row is immutable — see the model's own comment above.
   published  Boolean  @default(false)
+  // Split lineage. On a DRAFT (published: false) it names the currently
+  // active version this draft is a partial change of: publishing it carves
+  // the drawn area out of that version (see splitTerritory) instead of
+  // replacing the whole polygon. On a PUBLISHED row it records which version
+  // the row was split from, so history shows both halves of a split.
+  splitFromId String? @map("split_from_id")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@index([conflictId, validFrom])
   @@index([published, validFrom, validTo])
+  @@index([splitFromId])
   @@map("conflict_territories")
 }
 

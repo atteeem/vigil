@@ -5,7 +5,7 @@ import {
   getTerritory,
   type TerritoryInput,
 } from "@/lib/db/repositories/territorial-control";
-import { isValidTerritorialGeometry } from "@/lib/data/territorial-control";
+import { geometryErrorResponse, repositoryErrorResponse } from "@/lib/territory/api-errors";
 import { ASSIGNABLE_TERRITORIAL_STATUSES } from "@/lib/types/territorial-control";
 
 export async function GET() {
@@ -23,6 +23,8 @@ interface CreateBody {
   sourceUrl?: string | null;
   validFrom?: string;
   validTo?: string | null;
+  /** Partial change: the active version this draft carves its area out of when published. */
+  splitFromId?: string | null;
 }
 
 export async function POST(request: Request) {
@@ -36,9 +38,8 @@ export async function POST(request: Request) {
   if (!ASSIGNABLE_TERRITORIAL_STATUSES.includes(body.status as never)) {
     return NextResponse.json({ error: `status must be one of ${ASSIGNABLE_TERRITORIAL_STATUSES.join(", ")}` }, { status: 400 });
   }
-  if (!isValidTerritorialGeometry(body.geometry)) {
-    return NextResponse.json({ error: "geometry must be a valid GeoJSON Polygon or MultiPolygon" }, { status: 400 });
-  }
+  const geometryError = geometryErrorResponse(body.geometry);
+  if (geometryError) return geometryError;
   const validFrom = new Date(body.validFrom);
   if (Number.isNaN(validFrom.getTime())) {
     return NextResponse.json({ error: "validFrom is not a valid timestamp" }, { status: 400 });
@@ -58,8 +59,12 @@ export async function POST(request: Request) {
     sourceUrl: body.sourceUrl ?? null,
     validFrom,
     validTo,
+    splitFromId: body.splitFromId ?? null,
   };
-  const created = await createTerritoryDraft(input);
-  const dto = await getTerritory(created.id);
-  return NextResponse.json(dto, { status: 201 });
+  try {
+    const created = await createTerritoryDraft(input);
+    return NextResponse.json(await getTerritory(created.id), { status: 201 });
+  } catch (err) {
+    return repositoryErrorResponse(err);
+  }
 }

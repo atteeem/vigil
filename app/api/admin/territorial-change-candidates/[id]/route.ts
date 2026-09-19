@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { reviewTerritorialChangeCandidate } from "@/lib/db/repositories/myanmar";
+import { getReviewCandidate } from "@/lib/db/repositories/territorial-changes";
 
 // Review-state only. Deliberately has no path that creates, edits, or
 // supersedes a ConflictTerritory.
@@ -10,5 +11,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "status must be 'reviewed' or 'dismissed'" }, { status: 400 });
   }
   const candidate = await reviewTerritorialChangeCandidate(id, body.status, body.reviewNote);
+  return NextResponse.json(candidate);
+}
+
+// One candidate with its comparison against the current published state —
+// what the territory editor opens from a review.
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const candidate = await getReviewCandidate(id);
+  if (!candidate) return NextResponse.json({ error: "Candidate not found" }, { status: 404 });
   return NextResponse.json(candidate);
 }

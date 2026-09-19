@@ -179,9 +179,19 @@ function CandidatePanel({ candidate, all }: { candidate: TerritorialChangeCandid
         </div>
       )}
 
+      {(isOpen(candidate) || (candidate.status === "approved" && candidate.geometryPending)) && (
+        <a
+          href={`/admin/territorial-control?candidate=${candidate.id}`}
+          className="inline-flex rounded-lg border border-border px-3 py-1 text-xs text-accent hover:bg-white/5"
+          data-testid="tc-open-editor"
+        >
+          Open in territory editor — draw only the affected area
+        </a>
+      )}
+
       {candidate.status === "approved" && candidate.geometryPending && (
         <div className="space-y-2">
-          <div className="text-xs uppercase tracking-wide text-ink-faint">Add admin-supplied geometry</div>
+          <div className="text-xs uppercase tracking-wide text-ink-faint">Add admin-supplied geometry (paste GeoJSON — or use the territory editor above)</div>
           <textarea
             className="h-24 w-full rounded-lg border border-border bg-surface p-2 font-mono text-xs text-ink"
             placeholder='GeoJSON Polygon or MultiPolygon, e.g. {"type":"Polygon","coordinates":[[[...]]]}'

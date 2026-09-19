@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { updateTerritoryDraft, deleteTerritoryDraft, getTerritory, type TerritoryInput } from "@/lib/db/repositories/territorial-control";
-import { isValidTerritorialGeometry } from "@/lib/data/territorial-control";
+import { geometryErrorResponse, repositoryErrorResponse } from "@/lib/territory/api-errors";
 import { ASSIGNABLE_TERRITORIAL_STATUSES } from "@/lib/types/territorial-control";
 
 interface PatchBody {
@@ -25,8 +25,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (body.status !== undefined && !ASSIGNABLE_TERRITORIAL_STATUSES.includes(body.status as never)) {
     return NextResponse.json({ error: `status must be one of ${ASSIGNABLE_TERRITORIAL_STATUSES.join(", ")}` }, { status: 400 });
   }
-  if (body.geometry !== undefined && !isValidTerritorialGeometry(body.geometry)) {
-    return NextResponse.json({ error: "geometry must be a valid GeoJSON Polygon or MultiPolygon" }, { status: 400 });
+  if (body.geometry !== undefined) {
+    const geometryError = geometryErrorResponse(body.geometry);
+    if (geometryError) return geometryError;
   }
 
   const input: Partial<TerritoryInput> = {};
@@ -43,7 +44,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     await updateTerritoryDraft(id, input);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: message.includes("Cannot edit") ? 409 : 404 });
+    if (message.includes("Cannot edit")) return NextResponse.json({ error: message }, { status: 409 });
+    return repositoryErrorResponse(err, 404);
   }
   return NextResponse.json(await getTerritory(id));
 }

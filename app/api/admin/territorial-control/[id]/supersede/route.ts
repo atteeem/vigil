@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supersedeTerritory, getTerritory } from "@/lib/db/repositories/territorial-control";
-import { isValidTerritorialGeometry } from "@/lib/data/territorial-control";
+import { geometryErrorResponse, repositoryErrorResponse } from "@/lib/territory/api-errors";
 import { ASSIGNABLE_TERRITORIAL_STATUSES } from "@/lib/types/territorial-control";
 
 interface SupersedeBody {
@@ -26,9 +26,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!ASSIGNABLE_TERRITORIAL_STATUSES.includes(body.status as never)) {
     return NextResponse.json({ error: `status must be one of ${ASSIGNABLE_TERRITORIAL_STATUSES.join(", ")}` }, { status: 400 });
   }
-  if (!isValidTerritorialGeometry(body.geometry)) {
-    return NextResponse.json({ error: "geometry must be a valid GeoJSON Polygon or MultiPolygon" }, { status: 400 });
-  }
+  const geometryError = geometryErrorResponse(body.geometry);
+  if (geometryError) return geometryError;
   const validFrom = new Date(body.validFrom);
   if (Number.isNaN(validFrom.getTime())) {
     return NextResponse.json({ error: "validFrom is not a valid timestamp" }, { status: 400 });
@@ -46,7 +45,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
     return NextResponse.json(await getTerritory(next.id), { status: 201 });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: message.includes("not found") ? 404 : 400 });
+    return repositoryErrorResponse(err);
   }
 }

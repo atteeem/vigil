@@ -46,6 +46,8 @@ export interface TerritoryDTO {
   validFrom: string;
   validTo: string | null;
   published: boolean;
+  /** Draft: the active version this draft partially changes. Published: the version this row was split from. */
+  splitFromId: string | null;
   createdAt: string;
   updatedAt: string;
 }

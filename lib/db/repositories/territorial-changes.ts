@@ -8,7 +8,17 @@ import {
   type CandidateRow,
   type TerritorialChangeCandidateInput,
 } from "@/lib/db/repositories/myanmar";
-import { createActor, createTerritoryDraft, publishTerritory, supersedeTerritory } from "@/lib/db/repositories/territorial-control";
+import {
+  assertValidGeometry,
+  createActor,
+  createTerritoryDraft,
+  previewSplit,
+  publishTerritory,
+  splitTerritory,
+  supersedeTerritory,
+  type SplitPreview,
+} from "@/lib/db/repositories/territorial-control";
+import { validateTerritorialGeometry } from "@/lib/territory/geometry";
 import { isValidTerritorialGeometry, parseTerritorialGeometry } from "@/lib/data/territorial-control";
 import { claimKeyFor, normalizeLocationKey } from "@/lib/territory/change-detection";
 import { isChangeType, proposedStatusFor, type TerritorialChangeType } from "@/lib/territory/change-types";
@@ -468,5 +478,113 @@ export async function attachGeometry(id: string, geometry: unknown, options: { v
   });
   const published = await publishTerritory(draft.id);
   await prisma.territorialChangeCandidate.update({ where: { id }, data: { appliedTerritoryId: published.id, geometryPending: false } });
+  return (await getReviewCandidate(id))!;
+}
+
+// ---- drawing/editing integration --------------------------------------------
+
+/** Statuses from which an admin may draw and apply geometry: still under
+ * review, or already approved and waiting for geometry. */
+function assertGeometryApplicable(row: { status: string; geometryPending: boolean }) {
+  const open = (OPEN_CANDIDATE_STATUSES as readonly string[]).includes(row.status);
+  const awaiting = row.status === "approved" && row.geometryPending;
+  if (!open && !awaiting) throw new Error("Candidate is not open for review and is not awaiting geometry");
+}
+
+async function candidateEditContext(id: string) {
+  const row = await prisma.territorialChangeCandidate.findUnique({ where: { id }, include: CANDIDATE_INCLUDE });
+  if (!row) throw new Error("Candidate not found");
+  const dto = toCandidateDTO(row);
+  const territories = await activeTerritories([row.conflictId], new Date());
+  const open = (
+    await prisma.territorialChangeCandidate.findMany({ where: { conflictId: row.conflictId, status: { in: [...OPEN_CANDIDATE_STATUSES] } }, include: CANDIDATE_INCLUDE })
+  ).map((r) => toComparable(toCandidateDTO(r)));
+  const comparison = compareCandidate(toComparable(dto), territories, open);
+  return {
+    row,
+    proposedActorName: comparison.proposedActorName,
+    proposedStatus: comparison.proposedStatus,
+    currentTerritoryId: comparison.currentTerritoryId,
+  };
+}
+
+export interface CandidateGeometryPreview extends SplitPreview {
+  sourceTerritoryId: string | null;
+  proposedActorName: string | null;
+  proposedStatus: "controlled" | "contested" | "uncertain";
+}
+
+/** Old vs proposed for a drawn area. With a current territory the area is
+ * split against it; without one the drawn area itself is the proposal (a new
+ * polygon). Reads only — nothing is written. */
+export async function previewCandidateGeometry(id: string, geometry: unknown, sourceTerritoryId?: string | null): Promise<CandidateGeometryPreview> {
+  const ctx = await candidateEditContext(id);
+  const sourceId = sourceTerritoryId ?? ctx.currentTerritoryId;
+  const base = { sourceTerritoryId: sourceId, proposedActorName: ctx.proposedActorName, proposedStatus: ctx.proposedStatus };
+  if (sourceId) return { ...(await previewSplit(sourceId, geometry)), ...base };
+  const check = validateTerritorialGeometry(geometry);
+  return {
+    valid: check.valid,
+    errors: check.errors,
+    base: null,
+    affected: check.valid ? (geometry as TerritorialGeometry) : null,
+    remainder: null,
+    areaOutsideBase: false,
+    ...base,
+  };
+}
+
+/** Publishes the admin-drawn geometry for a candidate — only on explicit
+ * confirmation. Splits the current territory when one applies (unaffected area
+ * stays with the old controller); otherwise publishes a new territory. Marks
+ * the candidate approved and no longer pending geometry. Geometry is always
+ * admin-supplied; nothing is derived from the report text. */
+export async function applyCandidateGeometry(
+  id: string,
+  geometry: unknown,
+  options: { confirm?: boolean; sourceTerritoryId?: string | null; validFrom?: Date | null } = {},
+): Promise<TerritorialChangeCandidateDTO> {
+  if (options.confirm !== true) throw new Error("Explicit confirmation is required to publish territory");
+  const ctx = await candidateEditContext(id);
+  assertGeometryApplicable(ctx.row);
+  assertValidGeometry(geometry);
+
+  const now = new Date();
+  let validFrom = options.validFrom ?? ctx.row.observedAt ?? now;
+  if (validFrom.getTime() > now.getTime()) validFrom = now;
+  const actor = ctx.proposedActorName ? await findOrCreateConflictActor(ctx.row.conflictId, ctx.proposedActorName) : null;
+  const sourceId = options.sourceTerritoryId ?? ctx.currentTerritoryId;
+
+  let appliedId: string;
+  if (sourceId) {
+    const source = await prisma.conflictTerritory.findUnique({ where: { id: sourceId } });
+    if (source && validFrom.getTime() < source.validFrom.getTime()) validFrom = source.validFrom;
+    const { affected } = await splitTerritory(sourceId, geometry, {
+      actorId: actor?.id ?? null,
+      status: ctx.proposedStatus,
+      confidence: ctx.row.confidence,
+      sourceName: ctx.row.sourceName,
+      sourceUrl: ctx.row.sourceUrl,
+      validFrom,
+    });
+    appliedId = affected.id;
+  } else {
+    const draft = await createTerritoryDraft({
+      conflictId: ctx.row.conflictId,
+      actorId: actor?.id ?? null,
+      status: ctx.proposedStatus,
+      confidence: ctx.row.confidence,
+      geometry,
+      sourceName: ctx.row.sourceName,
+      sourceUrl: ctx.row.sourceUrl,
+      validFrom,
+    });
+    appliedId = (await publishTerritory(draft.id)).id;
+  }
+
+  await prisma.territorialChangeCandidate.update({
+    where: { id },
+    data: { status: "approved", appliedTerritoryId: appliedId, geometryPending: false, reviewedAt: now },
+  });
   return (await getReviewCandidate(id))!;
 }

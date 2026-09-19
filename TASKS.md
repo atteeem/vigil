@@ -944,3 +944,45 @@ rather than left as stubs:
   panel's own copy says this explicitly, the same information-ethics
   posture Phase 1's market/briefing pages already follow (non-causal,
   descriptive language only).
+
+## Territorial Drawing & Editing Tools
+
+| # | Task | Status |
+|---|---|---|
+| T1 | Visual territory editor in `/admin/territorial-control` (`components/admin/territory-editor-map.tsx`): draw Polygon, draw a further polygon for MultiPolygon, select, move / add / remove vertices, delete polygon, clear geometry, Save Draft / Preview / Publish / Revert / Cancel. Advanced GeoJSON box kept for import/export and stays in sync with the map | DONE |
+| T2 | Pure geometry library (`lib/territory/geometry.ts`): deep validation (type, closure, ranges, self-intersection, zero area, non-empty), boolean split via `polygon-clipping`, and the vertex-edit operations the editor is built from | DONE |
+| T3 | Validation on every write path (create, edit, supersede, publish, candidate apply) with one clear message per problem; invalid geometry can never be published | DONE |
+| T4 | Split / partial control change: draft with `splitFromId` (migration `territory_split_lineage`); publishing carves the drawn area out of the active version — old version closed at `validFrom`, affected area to the new controller, remainder keeps the old controller/status/source. History and playback unchanged | DONE |
+| T5 | Territorial-change candidate hand-off: "Open in territory editor" from a review; shows current vs proposed, admin draws only the affected area, preview, explicit confirmation (`apply-geometry` requires `confirm: true`). Pending-geometry state kept; no geometry is ever generated from prose | DONE |
+| T6 | Tests: `territory-geometry`, `territory-split-api`, `territory-editor-ui` specs; existing admin specs updated for the confirmation step | DONE |
+
+### Territorial editor decisions
+
+- **Split is a draft with lineage, not a new table.** A draft carrying
+  `splitFromId` means "carve this area out of that active version when
+  published"; on published rows the same column records where the row was
+  split from. Whole-polygon supersede is unchanged.
+- **The drawn area is clipped to the polygon being changed.** Anything
+  drawn outside it is ignored (previewed as a warning), so a split can never
+  silently add territory.
+- **Publishing is always explicit**: an inline confirmation checkbox in the
+  editor, `window.confirm` for the table's publish action, `confirm: true`
+  in the candidate API.
+- **Custom editor, not a draw library.** The interaction layer is ~400 lines
+  over MapLibre; all geometry rules live in the pure library so they are
+  unit-tested without a map.
+
+### Deferred (not caused by this milestone; logged, not fixed)
+
+- Editor limitations: no hole-drawing tool (holes survive edits and JSON
+  import but can't be drawn), no multi-level undo, no touch-drag on phones,
+  no snapping to existing borders. The drawing tools are a desktop workflow.
+- DB-backed conflict scoring (`lib/db/repositories/scoring.ts`) still treats
+  every country in `Conflict.countries` as "war inside" that country; only the
+  mock conflict data was corrected (see the exposure milestone).
+- `lib/data/mock-markets.ts` and `mock-events.ts` still use seeded
+  pseudo-random values (mock data, not presented as scored intelligence).
+- Globe HTML markers can draw over the translucent right-hand card on narrow
+  views.
+- Without a MapTiler key the fallback map style has no glyphs, so map text
+  labels (report counts included) do not render.
