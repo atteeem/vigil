@@ -26,13 +26,13 @@ const PROPER_NOUN = "[A-Z][a-zA-Z'\\-]*(?:\\s+[A-Z][a-zA-Z'\\-]*){0,3}";
 // Kawkareik from the junta" / "AA regained control of Paletwa from the
 // Tatmadaw" — actor VERB [control of] LOCATION from actor.
 const GAINED_FROM_PATTERN = new RegExp(
-  `(${PROPER_NOUN})\\s+(?:recaptured|captured|seized(?:\\s+control\\s+of)?|took\\s+control\\s+of|regained(?:\\s+control\\s+of)?)\\s+(${PROPER_NOUN})\\s+from\\s+(?:the\\s+)?(${PROPER_NOUN})`,
+  `(?:[Tt]he\\s+)?(${PROPER_NOUN})\\s+(?:recaptured|captured|seized(?:\\s+control\\s+of)?|took\\s+control\\s+of|regained(?:\\s+control\\s+of)?)\\s+(${PROPER_NOUN})\\s+from\\s+(?:the\\s+)?(${PROPER_NOUN})`,
   "g",
 );
 
 // "MNDAA handed Lashio control to Tatmadaw" / "MNDAA handed Lashio to the Tatmadaw"
 const HANDED_TO_PATTERN = new RegExp(
-  `(${PROPER_NOUN})\\s+handed\\s+(${PROPER_NOUN})(?:\\s+control)?\\s+to\\s+(?:the\\s+)?(${PROPER_NOUN})`,
+  `(?:[Tt]he\\s+)?(${PROPER_NOUN})\\s+handed\\s+(${PROPER_NOUN})(?:\\s+control)?\\s+to\\s+(?:the\\s+)?(${PROPER_NOUN})`,
   "g",
 );
 

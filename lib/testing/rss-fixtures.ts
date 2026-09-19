@@ -92,6 +92,46 @@ const FEEDS: Record<string, string> = {
 </item>
 </channel>
 </rss>`,
+  // Myanmar specialist-source tests (tests/myanmar.spec.ts) — original text
+  // written for this fixture. Mirrors the structure of a real Myanmar Now
+  // WordPress feed: dc:creator bylines, <category> tags, and a "paid content"
+  // category on the paywalled item. Item 1 carries a control-change phrase,
+  // item 2 is paywalled, item 3 repeats an actor already named in item 1.
+  "myanmar-now-feed": `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<channel>
+<title>Vigil Test Fixture — Myanmar Now-style Feed</title>
+<item>
+<title>Junta retakes Kyaukme from resistance forces</title>
+<link>https://fixture.test/myanmar-now/kyaukme-retaken</link>
+<dc:creator><![CDATA[Fixture Reporter One]]></dc:creator>
+<pubDate>Wed, 01 Jan 2026 08:00:00 GMT</pubDate>
+<category><![CDATA[Myanmar]]></category>
+<category><![CDATA[News]]></category>
+<guid isPermaLink="false">fixture-myanmar-now-kyaukme-retaken</guid>
+<description><![CDATA[Local residents say the Tatmadaw recaptured Kyaukme from KNDF after several days of fighting near the town.]]></description>
+</item>
+<item>
+<title>Subscriber report on displacement in Sagaing</title>
+<link>https://fixture.test/myanmar-now/sagaing-displacement</link>
+<dc:creator><![CDATA[Fixture Reporter Two]]></dc:creator>
+<pubDate>Wed, 01 Jan 2026 09:00:00 GMT</pubDate>
+<category><![CDATA[Myanmar]]></category>
+<category><![CDATA[paid content]]></category>
+<guid isPermaLink="false">fixture-myanmar-now-sagaing-displacement</guid>
+<description><![CDATA[Preview: families flee villages in Sagaing as clashes continue.]]></description>
+</item>
+<item>
+<title>Tatmadaw airstrike reported near Sittwe</title>
+<link>https://fixture.test/myanmar-now/sittwe-airstrike</link>
+<dc:creator><![CDATA[Fixture Reporter One]]></dc:creator>
+<pubDate>Wed, 01 Jan 2026 10:00:00 GMT</pubDate>
+<category><![CDATA[Myanmar]]></category>
+<guid isPermaLink="false">fixture-myanmar-now-sittwe-airstrike</guid>
+<description><![CDATA[An airstrike attributed to the Tatmadaw hit a village outside Sittwe, residents said.]]></description>
+</item>
+</channel>
+</rss>`,
 };
 
 export function getRssFixture(name: string): string | null {

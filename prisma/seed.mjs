@@ -229,6 +229,27 @@ const sources = [
     autoProcessing: true,
     pollIntervalMinutes: 30,
   },
+  // Myanmar Specialist Source Integration. Myanmar Now is an independent
+  // Myanmar newsroom (local originating media, not an aggregator) with a
+  // public WordPress RSS feed — the existing RSSAdapter handles it. Items it
+  // tags "paid content" are paywalled: only the feed's own public excerpt is
+  // ever ingested, and no code fetches article pages.
+  {
+    name: "Myanmar Now",
+    type: "rss",
+    url: "https://myanmar-now.org/en/feed/",
+    country: "MM",
+    region: "Asia",
+    language: "en",
+    sourceCategory: "News",
+    sourceRole: "local_media",
+    reliabilityTier: "B",
+    permissionStatus: "authorized",
+    enabled: true,
+    autoIngest: true,
+    autoProcessing: true,
+    pollIntervalMinutes: 30,
+  },
 ];
 
 // Full conflict registry for /admin/conflicts (spec §1). The
@@ -670,6 +691,120 @@ async function seedMilitaryReference() {
   console.log("Seeded MilitaryLand Phase 1 reference data: 12 units, 3 equipment, 2 commanders.");
 }
 
+// Myanmar Specialist Source Integration — small REAL reference sample drawn
+// from IISS's published analysis "Myanmar's war to nowhere" (Morgan
+// Michaels, Aug 2025, myanmar.iiss.org/analysis/war-to-nowhere). Actor names
+// and the dated control-change reports are real; descriptions are written
+// fresh, not quoted. IISS's event-level dataset (ACLED-derived) is NOT
+// imported: its terms of reuse are unstated. Control changes are seeded only
+// as pending TerritorialChangeCandidates — never as ConflictTerritory rows.
+async function seedMyanmarReference() {
+  const conflict = await prisma.conflict.findUnique({ where: { slug: "myanmar" } });
+  if (!conflict) return;
+  const IISS_URL = "https://myanmar.iiss.org/analysis/war-to-nowhere";
+  const IISS_NAME = "IISS Myanmar Conflict Map — Myanmar's war to nowhere";
+
+  async function actor(name, branch) {
+    return prisma.militaryUnit.upsert({
+      where: { name },
+      update: {},
+      create: {
+        name,
+        branch,
+        unitType: "Armed group",
+        status: "active",
+        primaryConflictId: conflict.id,
+        sourceName: IISS_NAME,
+        sourceUrl: IISS_URL,
+      },
+    });
+  }
+  const tatmadaw = await actor("Tatmadaw", "State military");
+  const aa = await actor("Arakan Army", "Ethnic armed organization");
+  const mndaa = await actor("MNDAA", "Ethnic armed organization");
+  const tnla = await actor("TNLA", "Ethnic armed organization");
+  await actor("KIA", "Ethnic armed organization");
+  await actor("KNLA", "Ethnic armed organization");
+  const kndf = await actor("KNDF", "Resistance force");
+
+  const candidates = [
+    {
+      locationName: "Lashio",
+      claimed: tatmadaw,
+      previous: mndaa,
+      description: "Reported April 2025: the MNDAA handed Lashio back to the Tatmadaw under a China-brokered arrangement.",
+      lat: 22.94, lng: 97.75, precision: "approximate", observedAt: new Date("2025-04-15"),
+    },
+    {
+      locationName: "Nawnghkio",
+      claimed: tatmadaw,
+      previous: tnla,
+      description: "Reported July 2025: the Tatmadaw retook Nawnghkio town from the TNLA.",
+      lat: 22.05, lng: 96.67, precision: "approximate", observedAt: new Date("2025-07-15"),
+    },
+    {
+      locationName: "Moebye",
+      claimed: tatmadaw,
+      previous: kndf,
+      description: "Reported early July 2025: the Tatmadaw retook Moebye from the KNDF.",
+      lat: null, lng: null, precision: "unknown", observedAt: new Date("2025-07-05"),
+    },
+    {
+      locationName: "Demoso",
+      claimed: tatmadaw,
+      previous: kndf,
+      description: "Reported August 2025: the Tatmadaw retook Demoso from the KNDF.",
+      lat: null, lng: null, precision: "unknown", observedAt: new Date("2025-08-15"),
+    },
+  ];
+  for (const c of candidates) {
+    const existing = await prisma.territorialChangeCandidate.findFirst({
+      where: { conflictId: conflict.id, locationName: c.locationName, sourceUrl: IISS_URL },
+    });
+    if (existing) continue;
+    await prisma.territorialChangeCandidate.create({
+      data: {
+        conflictId: conflict.id,
+        description: c.description,
+        claimedActorId: c.claimed.id,
+        previousActorId: c.previous.id,
+        locationName: c.locationName,
+        lat: c.lat,
+        lng: c.lng,
+        precision: c.precision,
+        sourceName: IISS_NAME,
+        sourceUrl: IISS_URL,
+        observedAt: c.observedAt,
+      },
+    });
+  }
+
+  // One illustrative Area of Operation: deliberately a coarse, hand-drawn
+  // area-level box over Rakhine State (the analysis names Rakhine as the
+  // Arakan Army's theatre) — NOT IISS geometry, and NOT a control claim.
+  const aooName = "Rakhine State (area-level)";
+  const hasAoo = await prisma.areaOfOperation.findFirst({ where: { unitId: aa.id, name: aooName } });
+  if (!hasAoo) {
+    await prisma.areaOfOperation.create({
+      data: {
+        unitId: aa.id,
+        conflictId: conflict.id,
+        name: aooName,
+        description: "Coarse bounding area where the Arakan Army has demonstrated operational activity. Not a territorial-control claim.",
+        geometry: JSON.stringify({
+          type: "Polygon",
+          coordinates: [[[92.2, 17.0], [94.8, 17.0], [94.8, 21.5], [92.2, 21.5], [92.2, 17.0]]],
+        }),
+        precision: "area_level",
+        asOfDate: new Date("2025-08-01"),
+        sourceName: IISS_NAME,
+        sourceUrl: IISS_URL,
+      },
+    });
+  }
+  console.log("Seeded Myanmar reference data: 7 actors, 4 territorial-change candidates, 1 area of operation.");
+}
+
 async function main() {
   for (const source of sources) {
     const existing = await prisma.source.findFirst({ where: { name: source.name } });
@@ -691,6 +826,7 @@ async function main() {
   console.log(`Seeded ${conflicts.length} conflict(s).`);
 
   await seedMilitaryReference();
+  await seedMyanmarReference();
 }
 
 main()

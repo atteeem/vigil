@@ -26,6 +26,9 @@ import {
   linkArticleToEquipment,
   linkArticleToCommander,
 } from "@/lib/db/repositories/military";
+import { detectTerritorialChangeMentions } from "@/lib/myanmar/territorial-change-detection";
+import { createTerritorialChangeCandidate } from "@/lib/db/repositories/myanmar";
+import { findConflictByCountryCode } from "@/lib/db/repositories/conflicts";
 
 export interface FetchResult {
   fetched: number;
@@ -154,6 +157,51 @@ async function computeAndStoreMilitaryEntities(item: RawIngestionItemDTO): Promi
   }
 }
 
+/** Myanmar Specialist Source Integration (spec §7): flags reported control
+ * changes ("X recaptured Y from Z") as pending TerritorialChangeCandidate
+ * rows. Review-queue only — nothing here reads or writes ConflictTerritory.
+ * Needs a conflict to attach to: the draft snapshot's suggested conflict if
+ * one resolved, else the conflict matching the source's own country. */
+async function computeAndStoreTerritorialChangeCandidates(item: RawIngestionItemDTO, source: Source): Promise<void> {
+  try {
+    const text = [item.originalTitle, item.originalText].filter(Boolean).join("\n");
+    if (!text) return;
+    const mentions = detectTerritorialChangeMentions(text);
+    if (mentions.length === 0) return;
+
+    const fresh = await prisma.rawIngestionItem.findUnique({ where: { id: item.id }, select: { suggestedConflictId: true } });
+    let conflictId = fresh?.suggestedConflictId ?? null;
+    if (!conflictId && source.country) conflictId = (await findConflictByCountryCode(source.country))?.id ?? null;
+    if (!conflictId) return;
+
+    const provenance = { sourceName: source.name, sourceUrl: item.originalUrl ?? undefined };
+    for (const m of mentions) {
+      const claimed = m.claimedActorName ? await findOrCreateMilitaryUnit({ name: m.claimedActorName, primaryConflictId: conflictId }) : null;
+      const previous = m.previousActorName ? await findOrCreateMilitaryUnit({ name: m.previousActorName, primaryConflictId: conflictId }) : null;
+      // Named actors are linked to the article too, so publishing/merging it
+      // carries them onto the event (actor -> events).
+      if (claimed) await linkArticleToUnit(item.id, claimed.id);
+      if (previous) await linkArticleToUnit(item.id, previous.id);
+      const already = await prisma.territorialChangeCandidate.findFirst({
+        where: { conflictId, sourceUrl: provenance.sourceUrl ?? null, locationName: m.locationName },
+      });
+      if (already) continue;
+      await createTerritorialChangeCandidate({
+        conflictId,
+        description: m.description,
+        claimedActorId: claimed?.id,
+        previousActorId: previous?.id,
+        locationName: m.locationName,
+        precision: "unknown",
+        observedAt: item.publishedAt ?? item.receivedAt,
+        ...provenance,
+      });
+    }
+  } catch (err) {
+    console.error(`[ingestion] territorial-change detection failed for item ${item.id}:`, err);
+  }
+}
+
 /** Fetches, normalizes, and dedupes one source's latest items into
  * raw_ingestion_items — never publishes anything. Shared by the scheduler
  * (lib/ingestion/scheduler.ts, enabled+auto-ingest sources only, on their
@@ -187,6 +235,7 @@ export async function pollSource(source: Source): Promise<FetchResult> {
         await computeAndStoreSnapshot(item, source);
         await computeAndStoreFacts(item);
         await computeAndStoreMilitaryEntities(item);
+        await computeAndStoreTerritorialChangeCandidates(item, source);
       }
     }
 
