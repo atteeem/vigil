@@ -1,9 +1,17 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// Local-development E2E suite (spec §20). Assumes the SQLite DB has been
-// migrated (`npm run db:migrate`) — it does not seed/reset the DB itself,
-// so tests create whatever fixture data they need via the API and avoid
-// asserting on total counts that other data could affect.
+// Local-development E2E suite (spec §20). Tests create whatever fixture data
+// they need via the API and avoid asserting on total counts.
+// Test isolation: the suite runs its own Next server on its own port, its own
+// build dir and its own throwaway SQLite DB (rebuilt from migrations + seed
+// by scripts/prepare-test-db.mjs on every run). Fixture actors, territories,
+// events and sources therefore can never appear in the normal dev DB/UI.
+// Setting DATABASE_URL here also covers tests that import the Prisma client
+// directly (they run in workers that inherit this process.env).
+const TEST_PORT = 3100;
+const TEST_DB_URL = "file:./prisma/test.db";
+process.env.DATABASE_URL = TEST_DB_URL;
+
 export default defineConfig({
   testDir: "./tests",
   fullyParallel: false,
@@ -11,7 +19,7 @@ export default defineConfig({
   retries: 0,
   reporter: [["list"]],
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: `http://localhost:${TEST_PORT}`,
     trace: "retain-on-failure",
   },
   projects: [
@@ -19,11 +27,14 @@ export default defineConfig({
     { name: "Mobile", use: { ...devices["Pixel 7"] } },
   ],
   webServer: {
-    command: "npm run dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: true,
-    timeout: 60_000,
+    command: `node scripts/prepare-test-db.mjs && npx next dev -p ${TEST_PORT}`,
+    url: `http://localhost:${TEST_PORT}`,
+    // Never attach to an already-running (dev-DB) server.
+    reuseExistingServer: false,
+    timeout: 240_000, // includes rebuilding + seeding the test DB before the server starts
     env: {
+      DATABASE_URL: TEST_DB_URL,
+      NEXT_DIST_DIR: ".next-test",
       // Forces the gazetteer-only geocoding provider (no live Nominatim
       // calls) so /api/admin/geocode is deterministic too — see
       // lib/geocoding/provider.ts.

@@ -12,9 +12,12 @@ next-env.d.ts
 # npm run db:migrate && npm run db:seed
 prisma/dev.db
 prisma/dev.db-journal
+prisma/test.db*
+.next-test
 
 # Playwright output
 test-results
 playwright-report
 blob-report
 playwright/.cache
+prisma/dev.db.*.bak

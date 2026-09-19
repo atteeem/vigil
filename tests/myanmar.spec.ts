@@ -50,7 +50,7 @@ test.describe.serial("Myanmar Now ingestion and candidate pipeline", () => {
         data: {
           name: `Myanmar Now Fixture ${Date.now()}`,
           type: "rss",
-          url: "http://localhost:3000/api/test-fixtures/rss/myanmar-now-feed",
+          url: "http://localhost:3100/api/test-fixtures/rss/myanmar-now-feed",
           country: "MM",
           language: "en",
           sourceCategory: "News",
@@ -192,7 +192,7 @@ test.describe("Actor -> events and scoring integration", () => {
         data: {
           name: `Myanmar Now Events ${Date.now()}`,
           type: "rss",
-          url: "http://localhost:3000/api/test-fixtures/rss/myanmar-now-feed",
+          url: "http://localhost:3100/api/test-fixtures/rss/myanmar-now-feed",
           country: "MM",
           enabled: true,
           autoIngest: false,

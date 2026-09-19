@@ -11,7 +11,7 @@ import { test, expect } from "@playwright/test";
 // server process, short enough to exercise a real timeout deterministically
 // (lib/ingestion/poll.ts's FETCH_TIMEOUT_MS) while absorbing this
 // sandbox's dev-mode Turbopack first-hit compile latency.
-const FIXTURE_BASE = "http://localhost:3000/api/test-fixtures/rss";
+const FIXTURE_BASE = "http://localhost:3100/api/test-fixtures/rss";
 
 test.describe.serial("Ingestion reliability hardening", () => {
   test.beforeAll(async ({ request }) => {

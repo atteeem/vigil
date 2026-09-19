@@ -39,7 +39,7 @@ test.describe.serial("Admin event-matching UX", () => {
         data: {
           name: `Event-Matching UX Source ${Date.now()}`,
           type: "rss",
-          url: "http://localhost:3000/api/test-fixtures/rss/feed-a",
+          url: "http://localhost:3100/api/test-fixtures/rss/feed-a",
           enabled: true,
           autoIngest: false,
           autoProcessing: true,

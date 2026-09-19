@@ -22,7 +22,7 @@ test.describe.serial("Stage 1: end-to-end pipeline integrity", () => {
         data: {
           name: `Pipeline Integrity Feed ${Date.now()}`,
           type: "rss",
-          url: "http://localhost:3000/api/test-fixtures/rss/feed-a",
+          url: "http://localhost:3100/api/test-fixtures/rss/feed-a",
           language: "en",
           sourceCategory: "News",
           sourceRole: "originating",
@@ -123,7 +123,7 @@ test.describe.serial("Stage 1: end-to-end pipeline integrity", () => {
     const expectedUrl = found.sources[0].url;
     // The fixture RSS item's own <link> (lib/testing/rss-fixtures.ts) —
     // distinct from the fixture-serving route's URL (the Source.url this
-    // test's source was created with, http://localhost:3000/api/test-
+    // test's source was created with, http://localhost:3100/api/test-
     // fixtures/rss/feed-a) — this is the "real article URL" the pipeline
     // must preserve end to end.
     expect(expectedUrl).toBe("https://fixture.test/feed-a/kyiv-drone");
@@ -200,7 +200,7 @@ test.describe.serial("Stage 1: end-to-end pipeline integrity", () => {
       data: {
         name: noRoleName,
         type: "rss",
-        url: "http://localhost:3000/api/test-fixtures/rss/feed-b",
+        url: "http://localhost:3100/api/test-fixtures/rss/feed-b",
         enabled: true,
         autoIngest: false,
         autoProcessing: true,

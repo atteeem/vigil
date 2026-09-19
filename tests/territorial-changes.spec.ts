@@ -116,7 +116,7 @@ test.describe.serial("Detection through ingestion (Myanmar source)", () => {
         data: {
           name: `Territorial ${feed} ${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           type: "rss",
-          url: `http://localhost:3000/api/test-fixtures/rss/${feed}`,
+          url: `http://localhost:3100/api/test-fixtures/rss/${feed}`,
           country: "MM",
           language: "en",
           sourceCategory: "News",

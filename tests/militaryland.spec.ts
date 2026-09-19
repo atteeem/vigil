@@ -21,7 +21,7 @@ test.describe.serial("MilitaryLand Phase 1", () => {
         data: {
           name: `MilitaryLand Fixture Feed ${Date.now()}`,
           type: "rss",
-          url: "http://localhost:3000/api/test-fixtures/rss/militaryland-feed",
+          url: "http://localhost:3100/api/test-fixtures/rss/militaryland-feed",
           language: "en",
           sourceCategory: "Military Analysis",
           sourceRole: "local_media",

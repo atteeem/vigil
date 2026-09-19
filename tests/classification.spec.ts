@@ -22,7 +22,7 @@ test.describe.serial("Classification & scale milestone", () => {
         name: "Fixture Feed A",
         type: "rss",
         // Absolute URL required — RSSAdapter fetches this server-side.
-        url: "http://localhost:3000/api/test-fixtures/rss/feed-a",
+        url: "http://localhost:3100/api/test-fixtures/rss/feed-a",
         language: "en",
         sourceCategory: "News",
         reliabilityTier: "A",

@@ -19,7 +19,7 @@ test.describe.serial("Multi-source live ingestion", () => {
   test("0. Independent test-scoped sources can be created for feed A, feed B, a broken feed, and a slow feed", async ({
     request,
   }) => {
-    const base = "http://localhost:3000/api/test-fixtures/rss";
+    const base = "http://localhost:3100/api/test-fixtures/rss";
     const common = {
       type: "rss" as const,
       language: "en",
@@ -108,7 +108,7 @@ test.describe.serial("Multi-source live ingestion", () => {
         data: {
           name: `Multi-source Isolation Check ${Date.now()}`,
           type: "rss",
-          url: "http://localhost:3000/api/test-fixtures/rss/feed-b",
+          url: "http://localhost:3100/api/test-fixtures/rss/feed-b",
           enabled: true,
           autoIngest: true,
           autoProcessing: true,
@@ -179,7 +179,7 @@ test.describe.serial("Multi-source live ingestion", () => {
         data: {
           name: `Multi-source No Processing ${Date.now()}`,
           type: "rss",
-          url: "http://localhost:3000/api/test-fixtures/rss/feed-b",
+          url: "http://localhost:3100/api/test-fixtures/rss/feed-b",
           enabled: true,
           autoIngest: true,
           autoProcessing: false,
