@@ -245,3 +245,11 @@ test.describe("Report counts on globe conflict hotspots", () => {
     expect(rows.some((r) => r.reports > 1)).toBe(true);
   });
 });
+
+// The map tests above publish events at a fixed spot; the Desktop project's
+// leftovers would otherwise merge into the Mobile project's clusters/counts in
+// the shared test DB, so remove what this file created.
+test.afterAll(async () => {
+  const { prisma } = await import("@/lib/db/client");
+  await prisma.event.deleteMany({ where: { title: { startsWith: "RC event" } } });
+});
