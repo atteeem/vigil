@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { linkEventSource } from "@/lib/db/repositories/event-sources";
 import { setProcessingStatus } from "@/lib/db/repositories/raw-ingestion-items";
 import { proposeEventUpdatesFromReport } from "@/lib/db/repositories/event-updates";
+import { propagateUnitLinksToEvent } from "@/lib/db/repositories/military";
 import type { EventSourceRelationship } from "@/lib/types/db";
 
 interface MergeBody {
@@ -34,6 +35,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // that match into reviewable proposals. Never fails the merge itself —
   // a report with no extracted facts yet just proposes nothing.
   const proposals = await proposeEventUpdatesFromReport(body.eventId, id);
+
+  // Myanmar Specialist Source Integration (spec §4 "actor -> events") —
+  // same propagation as publish: a merged report's already-linked units
+  // carry over to the event it's attached to.
+  await propagateUnitLinksToEvent(id, body.eventId);
 
   return NextResponse.json({ ...item, proposalsCreated: proposals.length });
 }

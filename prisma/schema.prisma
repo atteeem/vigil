@@ -209,6 +209,8 @@ model Conflict {
   actors      ConflictActor[]
   territories ConflictTerritory[]
   militaryUnits MilitaryUnit[]
+  areasOfOperation AreaOfOperation[]
+  territorialChangeCandidates TerritorialChangeCandidate[]
 
   @@map("conflicts")
 }
@@ -326,9 +328,22 @@ model Event {
   casualtiesInjured    Int?     @map("casualties_injured")
   infrastructureDamage String?  @map("infrastructure_damage")
 
+  // Myanmar Specialist Source Integration (spec §6 "Preserve location
+  // precision metadata... do not treat every coordinate as exact") —
+  // "exact" | "approximate" | "area_level" | "unknown" (see
+  // lib/types/db.ts LOCATION_PRECISIONS). Nullable: every event predating
+  // this field, and any event whose source never reports precision,
+  // defaults to unknown rather than being force-labeled exact. Modeled
+  // directly on ACLED's own 3-tier geo_precision codebook (the data
+  // standard IISS's Myanmar Conflict Map itself is built on), so a future
+  // real IISS/ACLED-sourced event can carry its precision without
+  // inventing a second vocabulary.
+  locationPrecision String? @map("location_precision")
+
   sources         EventSource[]
   updateProposals EventUpdateProposal[]
   history         EventHistory[]
+  militaryUnitLinks MilitaryUnitEvent[]
 
   @@map("events")
 }
@@ -486,6 +501,10 @@ model MilitaryUnit {
   appointments      CommanderAppointment[]
   equipmentLinks    MilitaryUnitEquipment[]
   articleLinks      ArticleMilitaryUnitLink[]
+  eventLinks        MilitaryUnitEvent[]
+  areasOfOperation  AreaOfOperation[]
+  claimedInChanges  TerritorialChangeCandidate[] @relation("ClaimedActor")
+  previousInChanges TerritorialChangeCandidate[] @relation("PreviousActor")
 
   @@map("military_units")
 }
@@ -609,4 +628,98 @@ model ArticleMilitaryCommanderLink {
 
   @@unique([rawIngestionItemId, commanderId])
   @@map("article_military_commander_links")
+}
+
+// Myanmar Specialist Source Integration — spec §4 "actor -> events".
+// MilitaryLand Phase 1 deliberately left this transitive-only (via
+// ArticleMilitaryUnitLink -> RawIngestionItem -> EventSource -> Event);
+// this milestone's explicit "actor -> events" relationship requirement
+// needs a direct join, since transitive traversal can't answer "which
+// events involve this unit" as a single indexed query.
+model MilitaryUnitEvent {
+  id        String   @id @default(cuid())
+  unitId    String   @map("unit_id")
+  unit      MilitaryUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  eventId   String   @map("event_id")
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  sourceName String? @map("source_name")
+  sourceUrl String?  @map("source_url")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([unitId, eventId])
+  @@map("military_unit_events")
+}
+
+// Myanmar Specialist Source Integration — spec §3 "Areas of Operation
+// must NOT be treated as Territorial Control... never automatically
+// convert one into the other." Deliberately a completely separate model
+// from ConflictTerritory (not a shared table with a "kind" discriminator)
+// so there is no code path — a shared query, a shared admin action, a
+// shared map layer toggle — that could accidentally blur the two: an Area
+// of Operation is "this armed group has demonstrated operational reach
+// here" (IISS's own definition), a claim about activity, never a claim
+// about de facto control. Versioned by asOfDate rather than
+// validFrom/validTo like ConflictTerritory — IISS's own tool plots
+// reach "over time" as discrete observations, not continuously
+// superseded state.
+model AreaOfOperation {
+  id          String   @id @default(cuid())
+  unitId      String   @map("unit_id")
+  unit        MilitaryUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  conflictId  String?  @map("conflict_id")
+  conflict    Conflict? @relation(fields: [conflictId], references: [id], onDelete: SetNull)
+  name        String?
+  description String?
+  // GeoJSON Polygon/MultiPolygon OR a Point (a described area with no
+  // precise boundary is still valid, per spec §6 precision tiers) —
+  // JSON-encoded string, same SQLite convention as ConflictTerritory.geometry.
+  geometry    String
+  // "exact" | "approximate" | "area_level" | "unknown" — see Event.locationPrecision's own comment.
+  precision   String   @default("unknown")
+  asOfDate    DateTime? @map("as_of_date")
+  sourceName  String?  @map("source_name")
+  sourceUrl   String?  @map("source_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([unitId])
+  @@index([conflictId])
+  @@map("areas_of_operation")
+}
+
+// Myanmar Specialist Source Integration — spec §7 "flag it as a potential
+// territorial-change candidate... do NOT automatically modify published
+// control polygons." A candidate is purely a REVIEW QUEUE row — nothing
+// in this codebase reads a TerritorialChangeCandidate to construct or
+// mutate a ConflictTerritory; an admin who agrees with a candidate must
+// go create/supersede a territory the normal way (see
+// lib/db/repositories/territorial-control.ts), same as how an
+// EventUpdateProposal never auto-applies to an Event. This is Vigil's own
+// preparation for the future Territorial Change Intelligence milestone —
+// not that milestone itself.
+model TerritorialChangeCandidate {
+  id               String   @id @default(cuid())
+  conflictId       String   @map("conflict_id")
+  conflict         Conflict @relation(fields: [conflictId], references: [id], onDelete: Cascade)
+  description      String
+  claimedActorId   String?  @map("claimed_actor_id")
+  claimedActor     MilitaryUnit? @relation("ClaimedActor", fields: [claimedActorId], references: [id], onDelete: SetNull)
+  previousActorId  String?  @map("previous_actor_id")
+  previousActor    MilitaryUnit? @relation("PreviousActor", fields: [previousActorId], references: [id], onDelete: SetNull)
+  locationName     String?  @map("location_name")
+  lat              Float?
+  lng              Float?
+  precision        String   @default("unknown")
+  sourceName       String?  @map("source_name")
+  sourceUrl        String?  @map("source_url")
+  observedAt       DateTime? @map("observed_at")
+  // "pending" | "reviewed" | "dismissed" — an admin review-state, never a
+  // trigger for automatic polygon mutation (see the model's own comment).
+  status           String   @default("pending")
+  reviewNote       String?  @map("review_note")
+  reviewedAt       DateTime? @map("reviewed_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([conflictId, status])
+  @@map("territorial_change_candidates")
 }

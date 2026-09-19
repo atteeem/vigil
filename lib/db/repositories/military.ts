@@ -5,6 +5,7 @@ import type {
   CommanderDTO,
   CommanderAppointmentDTO,
   MilitaryUnitEquipmentLinkDTO,
+  MilitaryUnitEventLinkDTO,
 } from "@/lib/types/db";
 
 // MilitaryLand Phase 1 — see prisma/schema.prisma's own comment block on
@@ -437,4 +438,50 @@ export async function getArticleMilitaryLinks(rawIngestionItemId: string): Promi
     equipment: equipment.map((e) => e.equipment),
     commanders: commanders.map((c) => c.commander),
   };
+}
+
+// Myanmar Specialist Source Integration (spec §4 "actor -> events") —
+// unit -> event linking, a DIRECT relationship (unlike article -> unit
+// links above, which stay on the RawIngestionItem forever regardless of
+// publish state).
+
+export async function linkUnitToEvent(unitId: string, eventId: string, provenance: ProvenanceInput): Promise<void> {
+  await prisma.militaryUnitEvent.upsert({
+    where: { unitId_eventId: { unitId, eventId } },
+    update: {},
+    create: { unitId, eventId, sourceName: provenance.sourceName ?? null, sourceUrl: provenance.sourceUrl ?? null },
+  });
+}
+
+export async function listUnitEventLinks(unitId: string): Promise<MilitaryUnitEventLinkDTO[]> {
+  const rows = await prisma.militaryUnitEvent.findMany({
+    where: { unitId },
+    include: { event: { select: { title: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    unitId: r.unitId,
+    eventId: r.eventId,
+    eventTitle: r.event.title,
+    sourceName: r.sourceName,
+    sourceUrl: r.sourceUrl,
+    createdAt: r.createdAt.toISOString(),
+  }));
+}
+
+/**
+ * Spec "actor -> events" — when a RawIngestionItem that already has
+ * ArticleMilitaryUnitLink rows (units mentioned in the article text) is
+ * published or merged into an Event, this transfers those same unit
+ * associations onto the resulting Event, so "which events involve this
+ * unit" is answerable without a RawIngestionItem-level join. Called from
+ * the publish/merge routes; never invents a new unit — only propagates
+ * units the entity extractor already found and linked to this article.
+ */
+export async function propagateUnitLinksToEvent(rawIngestionItemId: string, eventId: string): Promise<void> {
+  const links = await prisma.articleMilitaryUnitLink.findMany({ where: { rawIngestionItemId } });
+  for (const link of links) {
+    await linkUnitToEvent(link.unitId, eventId, {});
+  }
 }

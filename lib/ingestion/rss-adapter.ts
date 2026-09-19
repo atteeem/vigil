@@ -8,6 +8,15 @@ interface RssItem {
   guid?: string;
   pubDate?: string;
   description?: string;
+  /** <dc:creator> — byline/author, where a feed provides one (spec "author
+   * where available", Myanmar Now Integration milestone). Optional: most
+   * seeded feeds omit it. */
+  creator?: string;
+  /** All <category> values on the item — used generically (not just by
+   * Myanmar Now) to detect a WordPress "paid content"-style category so
+   * paywalled items are never treated as if their RSS excerpt were the
+   * full article (spec "do not bypass paywalls/subscriber restrictions"). */
+  categories: string[];
 }
 
 // Deliberately dependency-free: a small regex-based extractor covering
@@ -30,6 +39,19 @@ function extractTag(block: string, tag: string): string | undefined {
     .trim();
 }
 
+function extractAllTags(block: string, tag: string): string[] {
+  const matches = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "gi")) ?? [];
+  return matches
+    .map((m) => {
+      const inner = m.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "i"));
+      if (!inner) return "";
+      const raw = inner[1]!.trim();
+      const cdata = raw.match(/^<!\[CDATA\[([\s\S]*?)\]\]>$/);
+      return (cdata ? cdata[1]! : raw).trim();
+    })
+    .filter(Boolean);
+}
+
 function parseRss(xml: string): RssItem[] {
   const items = xml.match(/<item[^>]*>[\s\S]*?<\/item>/gi) ?? [];
   return items.map((block) => ({
@@ -38,6 +60,8 @@ function parseRss(xml: string): RssItem[] {
     guid: extractTag(block, "guid"),
     pubDate: extractTag(block, "pubDate"),
     description: extractTag(block, "description"),
+    creator: extractTag(block, "dc:creator"),
+    categories: extractAllTags(block, "category"),
   }));
 }
 
@@ -63,6 +87,11 @@ export const RSSAdapter: SourceAdapter = {
   normalize(raw: unknown, source: Source): NormalizedItem {
     const item = raw as RssItem;
     const externalId = item.guid ?? item.link ?? `${source.id}:${item.title ?? ""}`;
+    // "paid content" is the exact WordPress category several seeded/
+    // candidate feeds (e.g. Myanmar Now) use to mark a paywalled article —
+    // stored as a flag, never used to fetch/scrape beyond what the feed's
+    // own description already provides (spec "do not bypass paywalls").
+    const paidContent = item.categories.some((c) => c.toLowerCase().includes("paid content"));
     return {
       externalId,
       originalUrl: item.link,
@@ -70,6 +99,11 @@ export const RSSAdapter: SourceAdapter = {
       originalText: item.description,
       language: source.language ?? undefined,
       publishedAt: item.pubDate ? new Date(item.pubDate) : undefined,
+      rawMetadata: {
+        ...(item.creator ? { author: item.creator } : {}),
+        ...(item.categories.length > 0 ? { categories: item.categories } : {}),
+        ...(paidContent ? { paidContent: true } : {}),
+      },
     };
   },
 

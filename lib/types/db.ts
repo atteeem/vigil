@@ -483,3 +483,70 @@ export interface MilitaryUnitEquipmentLinkDTO {
   sourceUrl: string | null;
   createdAt: string;
 }
+
+export interface MilitaryUnitEventLinkDTO {
+  id: string;
+  unitId: string;
+  eventId: string;
+  eventTitle?: string;
+  sourceName: string | null;
+  sourceUrl: string | null;
+  createdAt: string;
+}
+
+// Myanmar Specialist Source Integration — spec §6 "distinctions such as:
+// exact/precise, approximate, area-level, unknown". Modeled directly on
+// ACLED's own 3-tier geo_precision codebook (the standard IISS's Myanmar
+// Conflict Map is itself built on) plus an explicit "unknown" for sources
+// that report no precision at all.
+export const LOCATION_PRECISIONS = ["exact", "approximate", "area_level", "unknown"] as const;
+export type LocationPrecision = (typeof LOCATION_PRECISIONS)[number];
+
+// spec §3 "Areas of Operation must NOT be treated as Territorial Control"
+// — see prisma/schema.prisma's AreaOfOperation model comment for the full
+// rationale for why this is a wholly separate model/DTO, never sharing a
+// table or admin action with ConflictTerritory.
+export interface AreaOfOperationDTO {
+  id: string;
+  unitId: string;
+  unitName?: string;
+  conflictId: string | null;
+  name: string | null;
+  description: string | null;
+  geometry: string; // GeoJSON, JSON-encoded — same convention as ConflictTerritory.geometry
+  precision: LocationPrecision;
+  asOfDate: string | null;
+  sourceName: string | null;
+  sourceUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const TERRITORIAL_CHANGE_CANDIDATE_STATUSES = ["pending", "reviewed", "dismissed"] as const;
+export type TerritorialChangeCandidateStatus = (typeof TERRITORIAL_CHANGE_CANDIDATE_STATUSES)[number];
+
+// spec §7 "flag it as a potential territorial-change candidate... do NOT
+// automatically modify published control polygons" — a pure review-queue
+// row (see the model's own schema comment); nothing reads this DTO to
+// mutate a ConflictTerritory.
+export interface TerritorialChangeCandidateDTO {
+  id: string;
+  conflictId: string;
+  conflictName?: string;
+  description: string;
+  claimedActorId: string | null;
+  claimedActorName?: string | null;
+  previousActorId: string | null;
+  previousActorName?: string | null;
+  locationName: string | null;
+  lat: number | null;
+  lng: number | null;
+  precision: LocationPrecision;
+  sourceName: string | null;
+  sourceUrl: string | null;
+  observedAt: string | null;
+  status: TerritorialChangeCandidateStatus;
+  reviewNote: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+}

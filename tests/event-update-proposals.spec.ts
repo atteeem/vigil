@@ -35,6 +35,7 @@ function event(overrides: Partial<Event>): Event {
     casualtiesKilled: null,
     casualtiesInjured: null,
     infrastructureDamage: null,
+    locationPrecision: null,
     ...overrides,
   };
 }
