@@ -96,7 +96,9 @@ export interface SourceDTO {
   health?: "live" | "error" | "disabled";
 }
 
-export const CONFLICT_STATUSES = ["active", "dormant", "resolved", "archived"] as const;
+// Registry statuses first; "resolved"/"archived" are the pre-registry values and
+// read as "ended" (see lib/registry/status.ts).
+export const CONFLICT_STATUSES = ["active", "reduced", "dormant", "ended", "resolved", "archived"] as const;
 export type ConflictStatus = (typeof CONFLICT_STATUSES)[number];
 
 export interface ConflictDTO {
@@ -111,10 +113,26 @@ export interface ConflictDTO {
   startedAt: string | null;
   lat: number | null;
   lng: number | null;
+  /** LEGACY associated countries — not where fighting occurs. */
   countries: string[];
   summary: string | null;
   createdAt: string;
   updatedAt: string;
+  // ---- Global Conflict Registry ----
+  endedAt: string | null;
+  fullScaleWar: boolean;
+  /** Countries where fighting actually occurs — the only set scoring floors use. */
+  fightingCountries: string[];
+  /** Belligerent / party states (not necessarily fighting venues). */
+  participantCountries: string[];
+  /** External supporters / interveners. */
+  supporterCountries: string[];
+  regions: string[];
+  geographyBasis: string;
+  classificationConfidence: string;
+  classificationNote: string | null;
+  familyId: string | null;
+  curatedAt: string | null;
   /** Only present on the /admin/conflicts list response. */
   eventCount?: number;
 }

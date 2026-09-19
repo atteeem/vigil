@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/client";
+import { resolveActorName } from "@/lib/actors/registry";
 import type {
   MilitaryUnitDTO,
   MilitaryEquipmentDTO,
@@ -86,10 +87,16 @@ export interface MilitaryUnitInput extends ProvenanceInput {
  * an already-known unit's fields with nulls).
  */
 export async function findOrCreateMilitaryUnit(input: MilitaryUnitInput): Promise<MilitaryUnitDTO> {
-  const existing = await prisma.militaryUnit.findFirst({
-    where: { name: { equals: input.name } },
-    include: { parentUnit: { select: { name: true } } },
-  });
+  // Spelling variants of a registered actor ("the junta", "SAC", "IDF" ...)
+  // resolve to ONE canonical row (lib/actors/registry.ts); a legacy row already
+  // stored under the variant name is reused rather than duplicated.
+  const canonicalName = resolveActorName(input.name);
+  const existing =
+    (await prisma.militaryUnit.findFirst({ where: { name: { equals: canonicalName } }, include: { parentUnit: { select: { name: true } } } })) ??
+    (canonicalName !== input.name
+      ? await prisma.militaryUnit.findFirst({ where: { name: { equals: input.name } }, include: { parentUnit: { select: { name: true } } } })
+      : null);
+  input = { ...input, name: existing?.name ?? canonicalName };
   if (existing) {
     if (!input.sourceUrl) return toUnitDTO(existing);
     const updated = await prisma.militaryUnit.update({

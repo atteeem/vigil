@@ -986,3 +986,41 @@ rather than left as stubs:
   views.
 - Without a MapTiler key the fallback map style has no glyphs, so map text
   labels (report counts included) do not render.
+
+## Global Conflict Registry & Coverage System
+
+| # | Task | Status |
+|---|---|---|
+| R1 | Canonical registry on `Conflict`: status active / reduced / dormant / ended (legacy resolved/archived read as ended), start/end dates, `fullScaleWar`, classification confidence + note, finer `regions`, family link, provenance rows. Migration `global_conflict_registry` (backfills legacy `countries` into fighting geography, flagged `legacy_countries`) | DONE |
+| R2 | Geography split: `fightingCountries` (where fighting occurs) / `participantCountries` / `supporterCountries`. Scoring (DB-backed `scoreConflict` and the mock `computeImpact`) reads fighting geography only, so participants and supporters never trigger the same-country (100) or bordering (>= 75) floors | DONE |
+| R3 | Registry data audit (`data/conflict-registry.json`): 14 existing conflicts kept (name/severity/intensity untouched) and enriched, 18 added; tensions recorded as dormant + uncertain classification rather than forced into "active armed conflict"; no global total asserted. Idempotent seed | DONE |
+| R4 | Conflict families (`ConflictFamily`): Sahel (Mali / Burkina Faso / Niger), Kurdish fronts, Israel regional — members stay separate records | DONE |
+| R5 | Central actor registry (`data/actor-registry.json`, `lib/actors/registry.ts`): one canonical name + aliases (country-scoped where needed); `findOrCreateMilitaryUnit`, report-text actor detection and territorial-change extraction all resolve through it; `ConflictParticipant` links actors to conflicts | DONE |
+| R6 | Source coverage (`lib/registry/coverage.ts`): dedicated / specialist-local / general / aggregator sources per conflict (explicit links, country match, or having contributed events); health healthy / weak / stale / no_source / inactive. Aggregators/relays count as one independent source | DONE |
+| R7 | `/admin/conflict-coverage`: summary cards, filters (region, status, severity, health, dedicated, territorial), per-conflict detail (geography roles, family, actors, sources, provenance, candidates) | DONE |
+| R8 | Candidate-source backlog (`SourceCandidate`, `/api/admin/source-candidates`): candidate / approved / integrated / rejected. Never fetched or scraped | DONE |
+| R9 | Tests: `conflict-registry` (pure), `conflict-registry-api` (DB, scoring, coverage, filters, candidates, actors, dashboard) | DONE |
+
+### Registry decisions
+
+- **Curated, not authoritative.** The registry is the audit starting point. Every
+  entry has a classification confidence and note, provenance rows cite public
+  trackers (UCDP, ACLED, CrisisWatch, RULAC, CFR), and statuses for the 14
+  pre-existing conflicts are the admin's own — review them against current
+  reporting (notably Israel–Gaza after the late-2025 ceasefire arrangements and
+  Syria after the transition).
+- **`countries` is legacy.** It still feeds the draft-extraction conflict
+  suggestion; it no longer means anything to scoring.
+- **Existing conflicts are not overwritten.** Only Korean Peninsula and Taiwan
+  Strait had their status corrected (to dormant): they were recorded as active
+  fighting, but the registry classifies them as tension with no fighting venue.
+
+### Deferred (not caused by this milestone)
+
+- Registry status, severity and intensity for the 18 added conflicts are
+  curated estimates, not derived from ingested events; they need periodic review.
+- The mock UI data (homepage, for-you, conflict pages) still ships as mock
+  conflicts; only its geography/status now comes from the registry. Moving those
+  pages onto the database registry is a larger change.
+- Candidate-source URLs were not verified for RSS/API availability or reuse terms.
+- Coverage does not yet weigh source language/regional fit beyond country match.

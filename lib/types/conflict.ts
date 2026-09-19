@@ -6,7 +6,7 @@ export interface Conflict {
   name: string;
   shortName: string;
   region: Region;
-  status: "active" | "dormant" | "resolved";
+  status: "active" | "reduced" | "dormant" | "ended" | "resolved";
   severity: Severity;
   intensity: number; // 0-100
   intensityChange24h: number; // signed
@@ -17,10 +17,15 @@ export interface Conflict {
   summary: string;
   eventCount: number;
   lastUpdateMinutesAgo: number;
-  /** ISO codes of the countries whose territory or armed forces are PARTY to
-   * the fighting (belligerents and the country it is fought in). Not
-   * suppliers, mediators or alliance members: the scoring engine's hard rules
-   * treat every code here as "the war is in that country", so listing a
-   * bystander would wrongly floor its impact at 100. */
+  /** ISO codes of the belligerent / party countries. Being a participant does
+   * NOT make a country a place where the war is fought — see fightingCountryCodes. */
   countryCodesInvolved: string[];
+  /** ISO codes where fighting actually occurs (from the Global Conflict
+   * Registry). The ONLY set the scoring hard rules use: same-country war = 100,
+   * bordering war >= 75. */
+  fightingCountryCodes: string[];
+  /** Belligerent / party countries (same as countryCodesInvolved). */
+  participantCountryCodes: string[];
+  /** External supporters / interveners — never trigger a scoring floor. */
+  supporterCountryCodes: string[];
 }

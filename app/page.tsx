@@ -62,7 +62,7 @@ export default function HomePage() {
           </div>
           <div className="pointer-events-none absolute inset-x-0 top-24 flex justify-center">
             <p className="text-[11px] font-medium text-ink-faint">
-              {MOCK_EVENTS.length} tracked events · {MOCK_CONFLICTS.length} active conflicts
+              {MOCK_EVENTS.length} tracked events · {MOCK_CONFLICTS.filter((c) => c.status === "active" || c.status === "reduced").length} active conflicts
             </p>
           </div>
           <div

@@ -75,7 +75,7 @@ export function computeImpact(country: Country, conflict: Conflict): ConflictImp
   const dist = distanceKm(country, conflict);
   const proximity = clamp(100 - dist / 120, 0, 100);
   const sameRegion = country.region === conflict.region;
-  const involved = conflict.countryCodesInvolved.includes(country.code);
+  const involved = conflict.participantCountryCodes.includes(country.code);
   const effects = new Set(conflict.primaryEffects);
 
   const severity = computeSeverityScore({
@@ -88,7 +88,8 @@ export function computeImpact(country: Country, conflict: Conflict): ConflictImp
     severityScore: severity.severityScore,
     conflictStatus: conflict.status,
     userCountryCode: country.code,
-    conflictCountryCodes: conflict.countryCodesInvolved,
+    // Where the fighting actually is — participants and supporters never floor the score.
+    conflictCountryCodes: conflict.fightingCountryCodes,
     userCountryPoint: country,
     conflictPoint: conflict,
     sameRegion,

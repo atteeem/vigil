@@ -139,7 +139,10 @@ export function computeSeverityScore(input: SeverityScoreInput): SeverityScoreRe
   if (input.status === "dormant") {
     score *= 0.7;
     reasons.push("Conflict is currently dormant");
-  } else if (input.status === "resolved" || input.status === "archived") {
+  } else if (input.status === "reduced") {
+    score *= 0.85;
+    reasons.push("Conflict is at reduced intensity");
+  } else if (input.status === "resolved" || input.status === "archived" || input.status === "ended") {
     score *= 0.4;
     reasons.push("Conflict has been resolved");
   }

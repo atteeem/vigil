@@ -819,6 +819,168 @@ async function seedMyanmarReference() {
   console.log("Seeded Myanmar reference data: 7 actors, 4 territorial-change candidates, 1 area of operation.");
 }
 
+// ---------------------------------------------------------------------------
+// Global Conflict Registry (data/conflict-registry.json, data/actor-registry.json).
+// Idempotent. Existing conflicts KEEP their name/severity/intensity/status/
+// summary/legacy `countries`; the registry only adds geography (fighting vs
+// participants vs supporters), classification, family, actor links, provenance
+// and dedicated-source links — except entries flagged statusAudit, whose status
+// is corrected because the record is a tension, not fighting. New conflicts are
+// created in full. Candidate sources are stored only — nothing is fetched.
+import { readFileSync } from "node:fs";
+
+function severityForIntensity(n) {
+  if (n < 30) return "stable";
+  if (n < 50) return "guarded";
+  if (n < 70) return "elevated";
+  if (n < 80) return "high";
+  if (n < 90) return "severe";
+  return "extreme";
+}
+
+async function seedRegistry() {
+  const registry = JSON.parse(readFileSync(new URL("../data/conflict-registry.json", import.meta.url), "utf8"));
+  const actorRegistry = JSON.parse(readFileSync(new URL("../data/actor-registry.json", import.meta.url), "utf8"));
+  const curatedAt = new Date(registry.curatedAt);
+
+  const familyIds = new Map();
+  for (const f of registry.families) {
+    const row = await prisma.conflictFamily.upsert({
+      where: { slug: f.slug },
+      update: { name: f.name, description: f.description },
+      create: { slug: f.slug, name: f.name, description: f.description },
+    });
+    familyIds.set(f.slug, row.id);
+  }
+
+  const norm = (v) => v.toLowerCase().replace(/[’‘`]/g, "'").replace(/^the\s+/, "").replace(/\s+/g, " ").trim();
+  const actorByName = new Map();
+  for (const a of actorRegistry.actors) {
+    actorByName.set(norm(a.canonical), a);
+    for (const al of a.aliases) actorByName.set(norm(typeof al === "string" ? al : al.alias), a);
+  }
+
+  async function findOrCreateUnit(name, conflictId) {
+    const entry = actorByName.get(norm(name));
+    const canonical = entry ? entry.canonical : name;
+    const variants = entry ? [entry.canonical, ...entry.aliases.map((al) => (typeof al === "string" ? al : al.alias))] : [name];
+    const all = await prisma.militaryUnit.findMany({ select: { id: true, name: true } });
+    const found =
+      all.find((u) => u.name === canonical) ?? all.find((u) => variants.some((v) => norm(v) === norm(u.name)));
+    if (found) return found;
+    return prisma.militaryUnit.create({
+      data: {
+        name: canonical,
+        unitType: entry && entry.kind === "state" ? "State military" : entry && entry.kind === "organization" ? "Organization" : "Armed group",
+        status: "active",
+        primaryConflictId: conflictId,
+        sourceName: "Global Conflict Registry",
+      },
+    });
+  }
+
+  let created = 0;
+  for (const e of registry.conflicts) {
+    const registryFields = {
+      fullScaleWar: e.fullScaleWar,
+      fightingCountries: JSON.stringify(e.fightingCountries),
+      participantCountries: JSON.stringify(e.participantCountries),
+      supporterCountries: JSON.stringify(e.supporterCountries),
+      regions: JSON.stringify(e.regions),
+      geographyBasis: "curated",
+      classificationConfidence: e.classification.confidence,
+      classificationNote: e.classification.note,
+      familyId: e.familySlug ? familyIds.get(e.familySlug) : null,
+      curatedAt,
+    };
+    let conflict = await prisma.conflict.findUnique({ where: { slug: e.slug } });
+    if (conflict) {
+      const update = { ...registryFields };
+      if (e.statusAudit && e.status) update.status = e.status;
+      if (!conflict.startedAt && e.startedAt) update.startedAt = new Date(e.startedAt);
+      conflict = await prisma.conflict.update({ where: { slug: e.slug }, data: update });
+    } else {
+      const intensity = e.intensity ?? 40;
+      conflict = await prisma.conflict.create({
+        data: {
+          slug: e.slug,
+          name: e.name,
+          shortName: e.shortName,
+          region: e.region,
+          status: e.status ?? "active",
+          severity: e.severity ?? severityForIntensity(intensity),
+          intensity,
+          intensityChange24h: 0,
+          startedAt: e.startedAt ? new Date(e.startedAt) : null,
+          lat: e.lat ?? null,
+          lng: e.lng ?? null,
+          primaryEffects: JSON.stringify(e.primaryEffects ?? ["Security"]),
+          summary: e.summary ?? null,
+          ...registryFields,
+        },
+      });
+      created += 1;
+    }
+
+    for (const link of e.actors) {
+      const unit = await findOrCreateUnit(link.name, conflict.id);
+      await prisma.conflictParticipant.upsert({
+        where: { conflictId_unitId: { conflictId: conflict.id, unitId: unit.id } },
+        update: { role: link.role },
+        create: { conflictId: conflict.id, unitId: unit.id, role: link.role },
+      });
+    }
+
+    const fields = ["status", "fightingCountries", "participantCountries", "supporterCountries", "classification", "fullScaleWar"];
+    if (e.startedAt) fields.push("startedAt");
+    for (const field of fields) {
+      for (const tracker of registry.trackers.filter((t) => t.covers.includes(field))) {
+        await prisma.conflictMetadataSource.upsert({
+          where: { conflictId_field_sourceName: { conflictId: conflict.id, field, sourceName: tracker.name } },
+          update: { sourceUrl: tracker.url, retrievedAt: curatedAt },
+          create: {
+            conflictId: conflict.id,
+            field,
+            sourceName: tracker.name,
+            sourceUrl: tracker.url,
+            note: field === "classification" ? e.classification.note : "Curated registry entry — consult the tracker for current detail.",
+            retrievedAt: curatedAt,
+          },
+        });
+      }
+    }
+
+    for (const sourceName of e.dedicatedSources ?? []) {
+      const source = await prisma.source.findFirst({ where: { name: sourceName } });
+      if (!source) continue;
+      await prisma.sourceConflictLink.upsert({
+        where: { sourceId_conflictId: { sourceId: source.id, conflictId: conflict.id } },
+        update: { scope: "dedicated" },
+        create: { sourceId: source.id, conflictId: conflict.id, scope: "dedicated" },
+      });
+    }
+  }
+
+  for (const c of registry.sourceCandidates) {
+    const conflict = await prisma.conflict.findUnique({ where: { slug: c.conflictSlug } });
+    if (!conflict) continue;
+    const existing = await prisma.sourceCandidate.findFirst({ where: { conflictId: conflict.id, name: c.name } });
+    if (existing) continue;
+    await prisma.sourceCandidate.create({
+      data: {
+        name: c.name,
+        url: c.url,
+        conflictId: conflict.id,
+        sourceType: c.sourceType,
+        language: c.language,
+        status: "candidate",
+        notes: "Suggested during the registry audit. RSS/API availability and reuse terms are unverified; nothing is fetched or scraped.",
+      },
+    });
+  }
+  console.log(`Seeded conflict registry: ${registry.conflicts.length} entries (${created} new), ${registry.sourceCandidates.length} candidate sources.`);
+}
+
 async function main() {
   for (const source of sources) {
     const existing = await prisma.source.findFirst({ where: { name: source.name } });
@@ -841,6 +1003,7 @@ async function main() {
 
   await seedMilitaryReference();
   await seedMyanmarReference();
+  await seedRegistry();
 }
 
 main()

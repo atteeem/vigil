@@ -57,7 +57,14 @@ export function ConflictDetailClient({ conflict }: { conflict: Conflict }) {
           <h1 className="mt-2 text-2xl font-semibold text-ink sm:text-[32px]">{conflict.name}</h1>
           <p className="mt-1 text-sm text-ink-dim">
             Active since {new Date(conflict.startedAt).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
-            {" · "}Status: {conflict.status === "active" ? "Active" : conflict.status}
+            {" · "}Status: {conflict.status === "active" ? "Active" : conflict.status === "reduced" ? "Reduced intensity" : conflict.status}
+          </p>
+          {/* Geography from the Global Conflict Registry: where fighting occurs is
+              kept separate from who is party to it and who supports whom. */}
+          <p className="mt-1 text-xs text-ink-faint" data-testid="conflict-geography">
+            Fighting in: {conflict.fightingCountryCodes.length > 0 ? conflict.fightingCountryCodes.join(", ") : "no active fighting recorded"}
+            {" · "}Participants: {conflict.participantCountryCodes.join(", ") || "—"}
+            {conflict.supporterCountryCodes.length > 0 ? ` · External supporters: ${conflict.supporterCountryCodes.join(", ")}` : ""}
           </p>
         </div>
         <CountrySelector />

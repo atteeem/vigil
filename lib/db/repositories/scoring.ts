@@ -5,6 +5,7 @@ import { computeConfidenceScore } from "@/lib/scoring/confidence";
 import { computeImpactScore } from "@/lib/scoring/impact";
 import type { SeverityScoreResult, ImpactScoreResult, ConfidenceScoreResult } from "@/lib/scoring/types";
 import { getCountryByCode } from "@/lib/data/mock-countries";
+import { conflictGeographyOf } from "@/lib/registry/geography";
 import { distanceKm } from "@/lib/utils/geo";
 
 // Central Conflict Scoring Engine v1 §6/§8 — the ONE place real,
@@ -87,7 +88,9 @@ export async function scoreConflict(conflictId: string, userCountryCode?: string
         severityScore: severity.severityScore,
         conflictStatus: conflict.status as import("@/lib/scoring/types").ConflictStatusLike,
         userCountryCode,
-        conflictCountryCodes: jsonArray(conflict.countries),
+        // Fighting geography only: participants and supporters never trigger
+        // the same-country / bordering-country floors.
+        conflictCountryCodes: conflictGeographyOf(conflict).fighting,
         userCountryPoint: userCountry,
         conflictPoint: { lat: conflict.lat, lng: conflict.lng },
         sameRegion: userCountry.region === conflict.region,

@@ -1,3 +1,5 @@
+import { textMatchTable } from "@/lib/actors/registry";
+
 // A small curated table of state/non-state actors and organizations
 // relevant to the seeded conflicts (see prisma/seed.mjs), in the same
 // spirit as lib/geocoding/gazetteer.ts and lib/ingestion/event-type-
@@ -7,22 +9,9 @@
 // actor mentioned two different ways in one report doesn't produce two
 // near-duplicate facts, but distinct actors (e.g. Israel AND Hamas named
 // in the same report) still do — spec's "multiple actors" case.
-const ACTOR_ALIASES: [canonical: string, aliases: string[]][] = [
-  ["Israel", ["israeli forces", "israel defense forces", "idf", "israeli military", "israel"]],
-  ["Hamas", ["hamas"]],
-  ["Hezbollah", ["hezbollah", "hizbullah"]],
-  ["Palestinian Islamic Jihad", ["palestinian islamic jihad", "pij"]],
-  ["Russia", ["russian forces", "russian military", "russian troops", "kremlin", "russia"]],
-  ["Ukraine", ["ukrainian forces", "ukrainian military", "ukrainian troops", "kyiv government", "ukraine"]],
-  ["Houthi movement", ["houthi", "houthis", "ansar allah"]],
-  ["United States", ["u.s. military", "us military", "pentagon", "washington", "united states"]],
-  ["United Nations", ["united nations", "un peacekeepers", "u.n."]],
-  ["NATO", ["nato"]],
-  ["Syrian government", ["syrian army", "syrian government", "damascus government"]],
-  ["Iran", ["iranian forces", "revolutionary guard", "irgc", "tehran", "iran"]],
-  ["Sudanese Armed Forces", ["sudanese armed forces", "saf"]],
-  ["Rapid Support Forces", ["rapid support forces", "rsf"]],
-];
+// The alias table lives in the central actor registry (lib/actors/registry.ts,
+// data/actor-registry.json) so every consumer shares one set of spellings.
+const ACTOR_ALIASES: [canonical: string, aliases: string[]][] = textMatchTable();
 
 export interface ActorMatch {
   name: string;

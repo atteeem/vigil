@@ -31,4 +31,4 @@ export interface ConfidenceScoreResult {
   reasons: string[];
 }
 
-export type ConflictStatusLike = "active" | "dormant" | "resolved" | "archived" | null | undefined;
+export type ConflictStatusLike = "active" | "reduced" | "dormant" | "ended" | "resolved" | "archived" | null | undefined;

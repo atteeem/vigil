@@ -15,7 +15,13 @@ interface ConflictFormState {
   name: string;
   shortName: string;
   region: string;
-  countries: string; // comma-separated in the form, JSON array over the wire
+  countries: string; // LEGACY associated countries; comma-separated in the form, JSON array over the wire
+  // Registry geography (comma-separated ISO codes): where fighting occurs is what
+  // scoring floors use; participants and supporters never trigger a floor.
+  fighting: string;
+  participants: string;
+  supporters: string;
+  fullScaleWar: boolean;
   status: ConflictStatus;
   severity: string;
   intensity: string;
@@ -29,6 +35,10 @@ const EMPTY_FORM: ConflictFormState = {
   shortName: "",
   region: "",
   countries: "",
+  fighting: "",
+  participants: "",
+  supporters: "",
+  fullScaleWar: false,
   status: "active",
   severity: "guarded",
   intensity: "30",
@@ -36,8 +46,20 @@ const EMPTY_FORM: ConflictFormState = {
   description: "",
 };
 
-function toPayload(form: ConflictFormState) {
+const codes = (text: string) =>
+  text
+    .split(",")
+    .map((c) => c.trim().toUpperCase())
+    .filter(Boolean);
+
+function toPayload(form: ConflictFormState, editing: boolean) {
   return {
+    // Geography keys are sent only when filled (or when editing), so a new
+    // conflict with just the legacy list still gets the flagged backfill.
+    ...(editing || form.fighting.trim() ? { fightingCountries: codes(form.fighting) } : {}),
+    ...(editing || form.participants.trim() ? { participantCountries: codes(form.participants) } : {}),
+    ...(editing || form.supporters.trim() ? { supporterCountries: codes(form.supporters) } : {}),
+    fullScaleWar: form.fullScaleWar,
     slug: form.slug.trim(),
     name: form.name.trim(),
     shortName: form.shortName.trim() || null,
@@ -77,7 +99,7 @@ export default function AdminConflictsPage() {
     const res = await fetch(editingId ? `/api/admin/conflicts/${editingId}` : "/api/admin/conflicts", {
       method: editingId ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(toPayload(form)),
+      body: JSON.stringify(toPayload(form, editingId !== null)),
     });
     if (!res.ok) {
       const err = await res.json();
@@ -99,6 +121,10 @@ export default function AdminConflictsPage() {
       shortName: c.shortName ?? "",
       region: c.region,
       countries: c.countries.join(", "),
+      fighting: c.fightingCountries.join(", "),
+      participants: c.participantCountries.join(", "),
+      supporters: c.supporterCountries.join(", "),
+      fullScaleWar: c.fullScaleWar,
       status: c.status,
       severity: c.severity,
       intensity: String(c.intensity),
@@ -192,6 +218,40 @@ export default function AdminConflictsPage() {
                 onChange={(e) => setForm({ ...form, countries: e.target.value })}
                 placeholder="UA, RU"
               />
+              <span className="mt-0.5 block text-[11px] text-ink-faint">Associated countries (legacy) — not where fighting occurs; see the fields below.</span>
+            </label>
+            <label className="text-xs text-ink-faint">
+              Fighting occurs in (ISO codes)
+              <input
+                className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+                value={form.fighting}
+                onChange={(e) => setForm({ ...form, fighting: e.target.value })}
+                placeholder="UA, RU"
+                data-testid="conflict-fighting-input"
+              />
+              <span className="mt-0.5 block text-[11px] text-ink-faint">Drives the same-country (100) and bordering-country (75+) scoring floors.</span>
+            </label>
+            <label className="text-xs text-ink-faint">
+              Belligerents / participants (ISO codes)
+              <input
+                className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+                value={form.participants}
+                onChange={(e) => setForm({ ...form, participants: e.target.value })}
+                data-testid="conflict-participants-input"
+              />
+            </label>
+            <label className="text-xs text-ink-faint">
+              External supporters (ISO codes)
+              <input
+                className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
+                value={form.supporters}
+                onChange={(e) => setForm({ ...form, supporters: e.target.value })}
+                data-testid="conflict-supporters-input"
+              />
+            </label>
+            <label className="flex items-center gap-2 text-xs text-ink-faint">
+              <input type="checkbox" checked={form.fullScaleWar} onChange={(e) => setForm({ ...form, fullScaleWar: e.target.checked })} />
+              Active full-scale war
             </label>
             <label className="text-xs text-ink-faint">
               Status

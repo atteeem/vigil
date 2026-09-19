@@ -1,5 +1,6 @@
 import type { Conflict } from "@/lib/types";
 import { severityFromScore } from "@/lib/utils/severity";
+import { registryEntryByMockSlug } from "@/lib/registry/conflict-registry";
 
 /**
  * Fictionalized development data. Intensity/counts are illustrative mock
@@ -11,7 +12,7 @@ import { severityFromScore } from "@/lib/utils/severity";
  * contradict its intensity number — see TASKS.md decision log ("severity
  * vs intensity consistency").
  */
-type ConflictInput = Omit<Conflict, "severity">;
+type ConflictInput = Omit<Conflict, "severity" | "fightingCountryCodes" | "participantCountryCodes" | "supporterCountryCodes">;
 
 const MOCK_CONFLICTS_INPUT: ConflictInput[] = [
   {
@@ -282,10 +283,23 @@ const MOCK_CONFLICTS_INPUT: ConflictInput[] = [
   },
 ];
 
-export const MOCK_CONFLICTS: Conflict[] = MOCK_CONFLICTS_INPUT.map((c) => ({
-  ...c,
-  severity: severityFromScore(c.intensity),
-}));
+// Geography and (audited) status come from the Global Conflict Registry so the
+// mock UI data, the scoring engine, admin and the database read one set of
+// facts: `countryCodesInvolved` is the participant set, and only
+// `fightingCountryCodes` feeds the scoring hard rules.
+export const MOCK_CONFLICTS: Conflict[] = MOCK_CONFLICTS_INPUT.map((c) => {
+  const registry = registryEntryByMockSlug(c.slug);
+  const participants = registry?.participantCountries ?? c.countryCodesInvolved;
+  return {
+    ...c,
+    severity: severityFromScore(c.intensity),
+    status: registry?.statusAudit && registry.status ? registry.status : c.status,
+    countryCodesInvolved: participants,
+    participantCountryCodes: participants,
+    fightingCountryCodes: registry?.fightingCountries ?? c.countryCodesInvolved,
+    supporterCountryCodes: registry?.supporterCountries ?? [],
+  };
+});
 
 export function getConflictBySlug(slug: string): Conflict | undefined {
   return MOCK_CONFLICTS.find((c) => c.slug === slug);

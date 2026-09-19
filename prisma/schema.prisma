@@ -70,6 +70,7 @@ model Source {
 
   rawItems    RawIngestionItem[]
   ingestionLogs IngestionLog[]
+  conflictLinks SourceConflictLink[]
 
   @@map("sources")
 }
@@ -200,10 +201,42 @@ model Conflict {
   lat         Float?
   lng         Float?
   primaryEffects String? @map("primary_effects") // JSON-encoded string[]
+  // LEGACY "associated countries" (pre-registry): kept for the draft-extraction
+  // conflict suggestion (findConflictByCountryCode) and existing admin data.
+  // It does NOT say where fighting happens — scoring reads fightingCountries.
   countries   String?  // JSON-encoded string[] of ISO country codes
   summary     String?  // doubles as "description" per spec §1's field list
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // ---- Global Conflict Registry ------------------------------------------
+  // status widens to active | reduced | dormant | ended (legacy resolved /
+  // archived are read as "ended").
+  endedAt     DateTime? @map("ended_at")
+  // Active full-scale war (state armies engaged at scale) — a registry fact,
+  // separate from severity/intensity.
+  fullScaleWar Boolean  @default(false) @map("full_scale_war")
+  // GEOGRAPHY, kept apart on purpose (JSON string[] of ISO codes):
+  //   fighting     = countries where fighting actually occurs. The ONLY set the
+  //                  scoring hard rules (own-country 100, bordering >= 75) use.
+  //   participants = belligerent / party states (not necessarily a fighting venue)
+  //   supporters   = external supporters / interveners (never trigger a floor)
+  fightingCountries     String? @map("fighting_countries")
+  participantCountries  String? @map("participant_countries")
+  supporterCountries    String? @map("supporter_countries")
+  // Finer geographic regions ("Eastern Ukraine", "Lake Chad basin", ...).
+  regions     String?
+  // "curated" (registry audit) | "legacy_countries" (backfilled from the old
+  // `countries` list, geography not yet reviewed) | "admin" (set by an admin).
+  geographyBasis String @default("admin") @map("geography_basis")
+  // How sure we are this is an "active armed conflict": established |
+  // uncertain | disputed. Tension/dispute records stay visible without being
+  // forced into "active armed conflict".
+  classificationConfidence String @default("established") @map("classification_confidence")
+  classificationNote String? @map("classification_note")
+  familyId    String?  @map("family_id")
+  family      ConflictFamily? @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  curatedAt   DateTime? @map("curated_at")
 
   events      Event[]
   actors      ConflictActor[]
@@ -211,8 +244,104 @@ model Conflict {
   militaryUnits MilitaryUnit[]
   areasOfOperation AreaOfOperation[]
   territorialChangeCandidates TerritorialChangeCandidate[]
+  participants ConflictParticipant[]
+  metadataSources ConflictMetadataSource[]
+  sourceLinks SourceConflictLink[]
+  sourceCandidates SourceCandidate[]
 
+  @@index([familyId])
   @@map("conflicts")
+}
+
+// A group of related but separately trackable conflicts (Sahel country
+// records, the Kurdish fronts, Israel/Gaza/Lebanon/Iran). Never collapses
+// them: each member keeps its own status, geography, actors and scoring.
+model ConflictFamily {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  conflicts   Conflict[]
+
+  @@map("conflict_families")
+}
+
+// Actor <-> conflict link, reusing the canonical MilitaryUnit row (one row per
+// armed actor, deduplicated through lib/actors/registry.ts aliases).
+model ConflictParticipant {
+  id         String   @id @default(cuid())
+  conflictId String   @map("conflict_id")
+  conflict   Conflict @relation(fields: [conflictId], references: [id], onDelete: Cascade)
+  unitId     String   @map("unit_id")
+  unit       MilitaryUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  // "belligerent" | "participant" | "supporter"
+  role       String   @default("belligerent")
+  note       String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([conflictId, unitId])
+  @@index([unitId])
+  @@map("conflict_participants")
+}
+
+// Where an important piece of conflict metadata came from.
+model ConflictMetadataSource {
+  id         String   @id @default(cuid())
+  conflictId String   @map("conflict_id")
+  conflict   Conflict @relation(fields: [conflictId], references: [id], onDelete: Cascade)
+  // "status" | "fightingCountries" | "participantCountries" | "supporterCountries"
+  // | "startedAt" | "classification" | "fullScaleWar" | "severity" ...
+  field      String
+  sourceName String   @map("source_name")
+  sourceUrl  String?  @map("source_url")
+  note       String?
+  retrievedAt DateTime? @map("retrieved_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([conflictId, field, sourceName])
+  @@map("conflict_metadata_sources")
+}
+
+// Which conflicts an ingestion source is relevant to. "dedicated" = the source
+// exists for this conflict (specialist/local); "general" = a broader source
+// that also covers it. Derived relevance (country/region match) is computed at
+// read time and does not need a row.
+model SourceConflictLink {
+  id         String   @id @default(cuid())
+  sourceId   String   @map("source_id")
+  source     Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  conflictId String   @map("conflict_id")
+  conflict   Conflict @relation(fields: [conflictId], references: [id], onDelete: Cascade)
+  scope      String   @default("dedicated")
+  note       String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([sourceId, conflictId])
+  @@index([conflictId])
+  @@map("source_conflict_links")
+}
+
+// Backlog of sources worth integrating for under-covered conflicts. Storing a
+// row never fetches or scrapes anything.
+model SourceCandidate {
+  id         String   @id @default(cuid())
+  name       String
+  url        String?
+  conflictId String?  @map("conflict_id")
+  conflict   Conflict? @relation(fields: [conflictId], references: [id], onDelete: SetNull)
+  // "news" | "local_media" | "ngo" | "official" | "monitor" | "social" | "other"
+  sourceType String   @default("news") @map("source_type")
+  language   String?
+  // "candidate" | "approved" | "integrated" | "rejected"
+  status     String   @default("candidate")
+  notes      String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([conflictId, status])
+  @@map("source_candidates")
 }
 
 // Territorial Control Mode: a controlling actor is scoped to ONE conflict
@@ -510,6 +639,7 @@ model MilitaryUnit {
   articleLinks      ArticleMilitaryUnitLink[]
   eventLinks        MilitaryUnitEvent[]
   areasOfOperation  AreaOfOperation[]
+  conflictLinks     ConflictParticipant[]
   claimedInChanges  TerritorialChangeCandidate[] @relation("ClaimedActor")
   previousInChanges TerritorialChangeCandidate[] @relation("PreviousActor")
 

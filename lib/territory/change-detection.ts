@@ -1,4 +1,5 @@
 import { detectActors } from "@/lib/ingestion/actors";
+import { canonicalizeActor, isRegisteredActor } from "@/lib/actors/registry";
 import type { TerritorialChangeType } from "@/lib/territory/change-types";
 
 // Central territorial-change phrase normalizer. Every phrasing ("seized",
@@ -182,23 +183,7 @@ const HEDGE = /\b(reportedly|allegedly|claimed?|claims|claiming|unconfirmed|unve
 
 // ---- actor normalization ---------------------------------------------------
 
-interface AliasRule {
-  canonical: string;
-  patterns: RegExp[];
-  countryCode?: string;
-}
-
-// Country-scoped aliases (a bare "junta" is only the Tatmadaw in Myanmar).
-const ACTOR_ALIAS_RULES: AliasRule[] = [
-  { canonical: "Tatmadaw", countryCode: "MM", patterns: [/^(?:the\s+)?(?:myanmar\s+)?(?:military\s+)?junta$/i, /^(?:the\s+)?tatmadaw$/i, /^sac$/i, /^state administration council$/i, /^(?:myanmar|burmese)\s+(?:military|army|forces|troops)$/i, /^regime$/i, /^government\s+forces$/i] },
-  { canonical: "Arakan Army", patterns: [/^(?:the\s+)?(?:arakan army|aa)$/i] },
-  { canonical: "MNDAA", patterns: [/^(?:the\s+)?(?:mndaa|myanmar national democratic alliance army)$/i] },
-  { canonical: "TNLA", patterns: [/^(?:the\s+)?(?:tnla|ta'?ang national liberation army)$/i] },
-  { canonical: "KIA", patterns: [/^(?:the\s+)?(?:kia|kachin independence army)$/i] },
-  { canonical: "KNLA", patterns: [/^(?:the\s+)?(?:knla|karen national liberation army)$/i] },
-  { canonical: "KNDF", patterns: [/^(?:the\s+)?(?:kndf|karenni nationalities defence force)$/i] },
-  { canonical: "PDF", patterns: [/^(?:the\s+)?(?:pdf|people'?s defen[cs]e forces?)$/i] },
-];
+// Names resolve through the central registry (lib/actors/registry.ts).
 
 const UNNAMED_ACTOR = /^(?:the\s+)?(?:military\s+)?(?:rebels?|rebel forces|insurgents|militants|separatists|resistance forces|opposition forces)$/i;
 const UNNAMED_ACTOR_2 = /^(?:the\s+)?(?:rebel|resistance|opposition|local|armed|insurgent|government)\s+(?:fighters|forces|groups?|troops)$/i;
@@ -209,10 +194,8 @@ export function canonicalActorName(raw: string | null | undefined, context: Dete
   if (!raw) return null;
   const name = raw.trim().replace(/\s+/g, " ");
   if (!name || UNNAMED_ACTOR.test(name) || UNNAMED_ACTOR_2.test(name)) return null;
-  for (const rule of ACTOR_ALIAS_RULES) {
-    if (rule.countryCode && rule.countryCode !== context.countryCode) continue;
-    if (rule.patterns.some((p) => p.test(name))) return rule.canonical;
-  }
+  const registered = canonicalizeActor(name, context);
+  if (registered) return registered;
   // The shared actor table ("Russian forces" -> "Russia") — only when it
   // resolves the phrase to exactly one actor.
   const shared = detectActors(name);
@@ -270,7 +253,7 @@ export function detectTerritorialChangeMentions(text: string, context: Detection
         const previous = canonicalActorName(slot.previous, context);
         // Context gate: military wording in the sentence, or a recognized armed actor.
         if (!hasContext && !claimed && !previous) continue;
-        if (!hasContext && !ACTOR_ALIAS_RULES.some((r) => r.canonical === claimed || r.canonical === previous)) continue;
+        if (!hasContext && !(claimed && isRegisteredActor(claimed)) && !(previous && isRegisteredActor(previous))) continue;
         // An actor phrase that is itself the location is a false parse.
         if (claimed && normalizeLocationKey(claimed) === normalizeLocationKey(location)) continue;
 
