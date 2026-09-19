@@ -63,6 +63,35 @@ const FEEDS: Record<string, string> = {
 </item>
 </channel>
 </rss>`,
+  // MilitaryLand Phase 1 (tests/militaryland.spec.ts) — deliberately
+  // written fresh for this fixture, not copied from any real MilitaryLand
+  // article; only the entity NAMES (unit designations, a rank+name,
+  // an equipment model) are real, verified facts, chosen so
+  // lib/military/extract-entities.ts's deterministic patterns reliably
+  // match: an ordinal-numbered unit, a ranked commander name, and a
+  // cataloged equipment model, each appearing twice across the two items
+  // to exercise entity-dedup (same MilitaryUnit/Commander row reused, not
+  // duplicated, per findOrCreateMilitaryUnit &c.).
+  "militaryland-feed": `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+<title>Vigil Test Fixture — MilitaryLand-style Feed</title>
+<item>
+<title>25th Airborne Brigade receives new Bohdana artillery systems</title>
+<link>https://fixture.test/militaryland/25th-airborne-bohdana</link>
+<guid>fixture-militaryland-25th-airborne-bohdana</guid>
+<pubDate>Wed, 01 Jan 2026 08:00:00 GMT</pubDate>
+<description>The 25th Airborne Brigade has taken delivery of several 2P22 Bohdana self-propelled guns, according to unit sources. Brigadier General Svyatoslav Zaits welcomed the delivery during a visit to the brigade's staging area.</description>
+</item>
+<item>
+<title>Zaits reviews 25th Airborne Brigade readiness</title>
+<link>https://fixture.test/militaryland/zaits-readiness-review</link>
+<guid>fixture-militaryland-zaits-readiness-review</guid>
+<pubDate>Wed, 01 Jan 2026 09:00:00 GMT</pubDate>
+<description>Brigadier General Svyatoslav Zaits conducted a readiness review of the 25th Airborne Brigade this week, inspecting newly fielded 2P22 Bohdana batteries.</description>
+</item>
+</channel>
+</rss>`,
 };
 
 export function getRssFixture(name: string): string | null {

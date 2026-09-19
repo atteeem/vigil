@@ -17,6 +17,15 @@ import {
 } from "@/lib/db/repositories/sources";
 import { recordIngestionAttempt } from "@/lib/db/repositories/ingestion-logs";
 import { HttpFetchError } from "@/lib/ingestion/errors";
+import { extractUnitMentions, extractCommanderMentions, extractEquipmentMentions } from "@/lib/military/extract-entities";
+import {
+  findOrCreateMilitaryUnit,
+  findOrCreateMilitaryEquipment,
+  findOrCreateCommander,
+  linkArticleToUnit,
+  linkArticleToEquipment,
+  linkArticleToCommander,
+} from "@/lib/db/repositories/military";
 
 export interface FetchResult {
   fetched: number;
@@ -112,6 +121,39 @@ async function computeAndStoreFacts(item: RawIngestionItemDTO): Promise<void> {
   }
 }
 
+/** MilitaryLand Phase 1 (spec "article/report -> referenced unit/
+ * equipment/commander... route its articles through ingestion -> incoming
+ * report -> extraction -> matching/corroboration"): runs the deterministic
+ * unit/commander/equipment mention extraction against a freshly created
+ * item's title+text and links whatever it finds, creating reference
+ * entities on first mention and reusing them on every later one (spec "do
+ * not duplicate entities when later articles mention them again"). Not
+ * gated to any particular source — any article's text can mention a known
+ * unit/commander/equipment, not just MilitaryLand's — same
+ * never-block-ingestion error handling as the other extraction steps. */
+async function computeAndStoreMilitaryEntities(item: RawIngestionItemDTO): Promise<void> {
+  try {
+    const text = [item.originalTitle, item.originalText].filter(Boolean).join("\n");
+    if (!text) return;
+    const provenance = { sourceName: item.originalTitle ?? undefined, sourceUrl: item.originalUrl ?? undefined };
+
+    for (const mention of extractUnitMentions(text)) {
+      const unit = await findOrCreateMilitaryUnit({ name: mention.name, unitType: mention.unitType, ...provenance });
+      await linkArticleToUnit(item.id, unit.id);
+    }
+    for (const mention of extractEquipmentMentions(text)) {
+      const equipment = await findOrCreateMilitaryEquipment({ name: mention.name, category: mention.category, ...provenance });
+      await linkArticleToEquipment(item.id, equipment.id);
+    }
+    for (const mention of extractCommanderMentions(text)) {
+      const commander = await findOrCreateCommander({ name: mention.name, rank: mention.rank, ...provenance });
+      await linkArticleToCommander(item.id, commander.id);
+    }
+  } catch (err) {
+    console.error(`[ingestion] military entity extraction failed for item ${item.id}:`, err);
+  }
+}
+
 /** Fetches, normalizes, and dedupes one source's latest items into
  * raw_ingestion_items — never publishes anything. Shared by the scheduler
  * (lib/ingestion/scheduler.ts, enabled+auto-ingest sources only, on their
@@ -144,6 +186,7 @@ export async function pollSource(source: Source): Promise<FetchResult> {
       for (const item of createdItems) {
         await computeAndStoreSnapshot(item, source);
         await computeAndStoreFacts(item);
+        await computeAndStoreMilitaryEntities(item);
       }
     }
 

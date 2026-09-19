@@ -206,6 +206,29 @@ const sources = [
     autoProcessing: true,
     pollIntervalMinutes: 5,
   },
+  // MilitaryLand Phase 1 (spec "Add MilitaryLand News as a distinct
+  // source"). militaryland.net serves a standard WordPress RSS 2.0 feed
+  // (verified live before seeding, same as every other RSS source above)
+  // — no scraping needed, the existing RSSAdapter handles it unmodified.
+  // Polled every 30 minutes rather than the 5-minute news-feed default:
+  // this is an analysis/reference site with an hourly update cadence, not
+  // breaking news, so a shorter interval would just be unnecessary load.
+  {
+    name: "MilitaryLand News",
+    type: "rss",
+    url: "https://militaryland.net/feed/",
+    country: "UA",
+    region: "Europe",
+    language: "en",
+    sourceCategory: "Military Analysis",
+    sourceRole: "local_media",
+    reliabilityTier: "B",
+    permissionStatus: "authorized",
+    enabled: true,
+    autoIngest: true,
+    autoProcessing: true,
+    pollIntervalMinutes: 30,
+  },
 ];
 
 // Full conflict registry for /admin/conflicts (spec §1). The
@@ -440,6 +463,213 @@ const conflicts = [
   },
 ];
 
+// MilitaryLand Phase 1 reference-entity seed: a small REAL sample (spec
+// "Use a small real sample first: several units, several equipment
+// entries, at least one commander if available") drawn from
+// militaryland.net's own public unit/equipment/commander database (CC
+// BY-SA 4.0, attributed via sourceUrl on every row below) — names,
+// ranks, branches, and parent-formation facts are real; the prose is
+// written fresh for Vigil, never copied from the site. Idempotent
+// (upsert on name, MilitaryUnit/MilitaryEquipment/Commander.name is
+// @unique) so re-running seed never creates duplicates — the same
+// "do not duplicate entities" contract the ingestion-side extractor
+// (lib/military/extract-entities.ts + findOrCreateMilitaryUnit &c.) is
+// held to.
+async function seedMilitaryReference() {
+  const conflict = await prisma.conflict.findUnique({ where: { slug: "russia-ukraine" } });
+  const src = { sourceName: "MilitaryLand.net" };
+
+  async function upsertUnit(name, data) {
+    return prisma.militaryUnit.upsert({
+      where: { name },
+      update: { ...src, ...data },
+      create: { name, ...src, ...data },
+    });
+  }
+
+  const groundForces = await upsertUnit("Ground Forces of Ukraine", {
+    branch: "Ground Forces",
+    unitType: "Service Branch",
+    status: "active",
+    primaryConflictId: conflict?.id ?? null,
+    sourceUrl: "https://militaryland.net/ukraine/",
+  });
+  const unmannedSystemsForces = await upsertUnit("Unmanned Systems Forces", {
+    branch: "Unmanned Systems Forces",
+    unitType: "Service Branch",
+    status: "active",
+    primaryConflictId: conflict?.id ?? null,
+    sourceUrl: "https://militaryland.net/ukraine/",
+  });
+  const rapidResponseCorps = await upsertUnit("7th Rapid Response Corps", {
+    branch: "Ground Forces",
+    unitType: "Corps",
+    parentUnitId: groundForces.id,
+    status: "active",
+    primaryConflictId: conflict?.id ?? null,
+    sourceUrl: "https://militaryland.net/units/25th-airborne-brigade/",
+  });
+  const airborne25 = await upsertUnit("25th Airborne Brigade", {
+    branch: "Air Assault Forces",
+    unitType: "Airborne Brigade",
+    parentUnitId: rapidResponseCorps.id,
+    status: "active",
+    primaryConflictId: conflict?.id ?? null,
+    sourceUrl: "https://militaryland.net/units/25th-airborne-brigade/",
+  });
+  await upsertUnit("8th Air Assault Corps", {
+    branch: "Air Assault Forces",
+    unitType: "Corps",
+    parentUnitId: groundForces.id,
+    status: "active",
+    primaryConflictId: conflict?.id ?? null,
+    sourceUrl: "https://militaryland.net/news/zaits-appointed-commander-of-ground-forces/",
+  });
+  await upsertUnit("20th Army Corps", {
+    branch: "Ground Forces",
+    unitType: "Corps",
+    parentUnitId: groundForces.id,
+    status: "active",
+    primaryConflictId: conflict?.id ?? null,
+    sourceUrl: "https://militaryland.net/news/zaits-appointed-commander-of-ground-forces/",
+  });
+  const marineCorps30 = await upsertUnit("30th Marine Corps", {
+    branch: "Naval Forces",
+    unitType: "Corps",
+    status: "active",
+    primaryConflictId: conflict?.id ?? null,
+    sourceUrl: "https://militaryland.net/news/144th-mechanized-brigade-reformed-into-42nd-marine-brigade/",
+  });
+  await upsertUnit("15th Army Corps", {
+    branch: "Ground Forces",
+    unitType: "Corps",
+    status: "active",
+    primaryConflictId: conflict?.id ?? null,
+    sourceUrl: "https://militaryland.net/news/144th-mechanized-brigade-reformed-into-42nd-marine-brigade/",
+  });
+  await upsertUnit("144th Mechanized Brigade", {
+    branch: "Ground Forces",
+    unitType: "Mechanized Brigade",
+    status: "reformed",
+    primaryConflictId: conflict?.id ?? null,
+    sourceUrl: "https://militaryland.net/news/144th-mechanized-brigade-reformed-into-42nd-marine-brigade/",
+  });
+  await upsertUnit("42nd Marine Brigade", {
+    branch: "Naval Forces",
+    unitType: "Marine Brigade",
+    parentUnitId: marineCorps30.id,
+    status: "active",
+    primaryConflictId: conflict?.id ?? null,
+    sourceUrl: "https://militaryland.net/news/144th-mechanized-brigade-reformed-into-42nd-marine-brigade/",
+  });
+  await upsertUnit("446th Unmanned Systems Brigade", {
+    branch: "Unmanned Systems Forces",
+    unitType: "Unmanned Systems Brigade",
+    parentUnitId: unmannedSystemsForces.id,
+    status: "forming",
+    primaryConflictId: conflict?.id ?? null,
+    sourceUrl: "https://militaryland.net/news/army-creates-446th-unmanned-systems-brigade/",
+  });
+  const heavyMechanized125 = await upsertUnit("125th Heavy Mechanized Brigade", {
+    branch: "Ground Forces",
+    unitType: "Heavy Mechanized Brigade",
+    status: "active",
+    primaryConflictId: conflict?.id ?? null,
+    sourceUrl: "https://militaryland.net/equipment/2p22-bohdana/",
+  });
+
+  const bohdana = await prisma.militaryEquipment.upsert({
+    where: { name: "2P22 Bohdana" },
+    update: { ...src, category: "Towed Artillery", countryOfOrigin: "Ukraine", sourceUrl: "https://militaryland.net/equipment/2p22-bohdana/" },
+    create: {
+      name: "2P22 Bohdana",
+      ...src,
+      category: "Towed Artillery",
+      countryOfOrigin: "Ukraine",
+      sourceUrl: "https://militaryland.net/equipment/2p22-bohdana/",
+    },
+  });
+  await prisma.militaryEquipment.upsert({
+    where: { name: "2S1 Gvozdika" },
+    update: { ...src, category: "Self-Propelled Artillery", sourceUrl: "https://militaryland.net/equipment/2s1-gvozdika/" },
+    create: {
+      name: "2S1 Gvozdika",
+      ...src,
+      category: "Self-Propelled Artillery",
+      sourceUrl: "https://militaryland.net/equipment/2s1-gvozdika/",
+    },
+  });
+  await prisma.militaryEquipment.upsert({
+    where: { name: "2K22 Tunguska" },
+    update: { ...src, category: "Anti-Aircraft", sourceUrl: "https://militaryland.net/equipment/2k22-tunguska/" },
+    create: {
+      name: "2K22 Tunguska",
+      ...src,
+      category: "Anti-Aircraft",
+      sourceUrl: "https://militaryland.net/equipment/2k22-tunguska/",
+    },
+  });
+
+  // 2P22 Bohdana is documented as fielded by 25+ formations including the
+  // 125th Heavy Mechanized Brigade (militaryland.net/equipment/2p22-bohdana/).
+  await prisma.militaryUnitEquipment.upsert({
+    where: { unitId_equipmentId: { unitId: heavyMechanized125.id, equipmentId: bohdana.id } },
+    update: {},
+    create: { unitId: heavyMechanized125.id, equipmentId: bohdana.id, ...src, sourceUrl: "https://militaryland.net/equipment/2p22-bohdana/" },
+  });
+
+  const zaits = await prisma.commander.upsert({
+    where: { name: "Svyatoslav Zaits" },
+    update: { ...src, rank: "Brigadier General", currentUnitId: groundForces.id, sourceUrl: "https://militaryland.net/news/zaits-appointed-commander-of-ground-forces/" },
+    create: {
+      name: "Svyatoslav Zaits",
+      ...src,
+      rank: "Brigadier General",
+      currentUnitId: groundForces.id,
+      sourceUrl: "https://militaryland.net/news/zaits-appointed-commander-of-ground-forces/",
+    },
+  });
+  await prisma.commanderAppointment.upsert({
+    where: { id: `${zaits.id}-ground-forces-seed` }, // never a real cuid, so this always creates on first run
+    update: {},
+    create: {
+      id: `${zaits.id}-ground-forces-seed`,
+      commanderId: zaits.id,
+      unitId: groundForces.id,
+      role: "commander",
+      startDate: new Date("2026-09-02"),
+      ...src,
+      sourceUrl: "https://militaryland.net/news/zaits-appointed-commander-of-ground-forces/",
+    },
+  });
+
+  const turchyn = await prisma.commander.upsert({
+    where: { name: "Andriy Turchyn" },
+    update: { ...src, rank: "Colonel", currentUnitId: airborne25.id, sourceUrl: "https://militaryland.net/units/25th-airborne-brigade/" },
+    create: {
+      name: "Andriy Turchyn",
+      ...src,
+      rank: "Colonel",
+      currentUnitId: airborne25.id,
+      sourceUrl: "https://militaryland.net/units/25th-airborne-brigade/",
+    },
+  });
+  await prisma.commanderAppointment.upsert({
+    where: { id: `${turchyn.id}-airborne25-seed` },
+    update: {},
+    create: {
+      id: `${turchyn.id}-airborne25-seed`,
+      commanderId: turchyn.id,
+      unitId: airborne25.id,
+      role: "commander",
+      ...src,
+      sourceUrl: "https://militaryland.net/units/25th-airborne-brigade/",
+    },
+  });
+
+  console.log("Seeded MilitaryLand Phase 1 reference data: 12 units, 3 equipment, 2 commanders.");
+}
+
 async function main() {
   for (const source of sources) {
     const existing = await prisma.source.findFirst({ where: { name: source.name } });
@@ -459,6 +689,8 @@ async function main() {
     });
   }
   console.log(`Seeded ${conflicts.length} conflict(s).`);
+
+  await seedMilitaryReference();
 }
 
 main()

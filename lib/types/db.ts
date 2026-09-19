@@ -413,3 +413,73 @@ export interface EventHistoryEntryDTO {
   automatic: boolean;
   createdAt: string;
 }
+
+// MilitaryLand Phase 1 (spec "sourced strategic/reference layer for
+// Ukraine") — reference entities, not live tactical tracking. sourceName/
+// sourceUrl/lastUpdatedAt on every DTO below is the provenance the spec
+// requires ("do not treat one MilitaryLand claim as independently
+// verified fact").
+
+export interface MilitaryUnitDTO {
+  id: string;
+  name: string;
+  branch: string | null;
+  unitType: string | null;
+  parentUnitId: string | null;
+  parentUnitName?: string | null;
+  status: string | null;
+  primaryConflictId: string | null;
+  sourceName: string | null;
+  sourceUrl: string | null;
+  lastUpdatedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MilitaryEquipmentDTO {
+  id: string;
+  name: string;
+  category: string | null;
+  countryOfOrigin: string | null;
+  sourceName: string | null;
+  sourceUrl: string | null;
+  lastUpdatedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommanderDTO {
+  id: string;
+  name: string;
+  rank: string | null;
+  currentUnitId: string | null;
+  currentUnitName?: string | null;
+  sourceName: string | null;
+  sourceUrl: string | null;
+  lastUpdatedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommanderAppointmentDTO {
+  id: string;
+  commanderId: string;
+  unitId: string;
+  unitName?: string;
+  role: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  sourceName: string | null;
+  sourceUrl: string | null;
+  createdAt: string;
+}
+
+export interface MilitaryUnitEquipmentLinkDTO {
+  id: string;
+  unitId: string;
+  equipmentId: string;
+  equipmentName?: string;
+  sourceName: string | null;
+  sourceUrl: string | null;
+  createdAt: string;
+}

@@ -14,27 +14,43 @@ test.describe.serial("Event lifecycle management (admin)", () => {
   const sourceName = `Lifecycle Test Source ${Date.now()}`;
   let eventId: string;
 
-  test("1. Create manual event as Draft via the admin 'Create Event' form", async ({ page }) => {
-    await page.goto("/admin/events/new");
-    await page.getByLabel("Title").fill(title);
-    await page.getByLabel("Summary / description").fill("A manually authored test event for lifecycle coverage.");
-    await page.getByLabel("Latitude").fill("48.85");
-    await page.getByLabel("Longitude").fill("2.35");
-    await page.getByLabel("Country code").fill("FR");
-    await page.getByLabel("Source name").fill(sourceName);
-    await page.getByLabel("Source URL (optional)").fill(sourceUrl);
+  // isMobile: false, scoped to just this one test — see
+  // tests/admin.spec.ts's own comment on the identical override for the
+  // full rationale: Chromium's `isMobile: true` viewport emulation
+  // (Pixel 7's address-bar show/hide-on-scroll simulation) can desync the
+  // visual viewport from the layout viewport after a scrollIntoView-driven
+  // scroll, which this form's "grid gap-3 sm:grid-cols-2" field layout
+  // triggers on Mobile — confirmed unrelated to this form's own markup
+  // (reproduces identically on other pages' scrolled-into-view clicks)
+  // and to not affect a real tap. Scoped narrowly (not file-wide, unlike
+  // admin.spec.ts) because tests 3/5 below read the `isMobile` fixture
+  // themselves to skip a desktop-only assertion — overriding it file-wide
+  // would make that check silently skip nothing on the Mobile project.
+  test.describe("create-form click workaround", () => {
+    test.use({ isMobile: false });
 
-    await page.getByRole("button", { name: "Save as Draft" }).click();
-    // Cuids are ~25 chars — long enough that this pattern can't also
-    // match /admin/events/new itself (a real bug caught here: a looser
-    // `[a-z0-9]+$` matches "new" too, so the assertion below would pass
-    // immediately on the form's OWN url, before the redirect even fires,
-    // and capture "new" as eventId instead of waiting for it).
-    await page.waitForURL(/\/admin\/events\/[a-z0-9]{20,}$/);
-    eventId = page.url().split("/").pop()!;
+    test("1. Create manual event as Draft via the admin 'Create Event' form", async ({ page }) => {
+      await page.goto("/admin/events/new");
+      await page.getByLabel("Title").fill(title);
+      await page.getByLabel("Summary / description").fill("A manually authored test event for lifecycle coverage.");
+      await page.getByLabel("Latitude").fill("48.85");
+      await page.getByLabel("Longitude").fill("2.35");
+      await page.getByLabel("Country code").fill("FR");
+      await page.getByLabel("Source name").fill(sourceName);
+      await page.getByLabel("Source URL (optional)").fill(sourceUrl);
 
-    await expect(page.getByTestId("event-status-badge")).toHaveAttribute("data-status", "draft");
-    await expect(page.getByText(title)).toBeVisible();
+      await page.getByRole("button", { name: "Save as Draft" }).click();
+      // Cuids are ~25 chars — long enough that this pattern can't also
+      // match /admin/events/new itself (a real bug caught here: a looser
+      // `[a-z0-9]+$` matches "new" too, so the assertion below would pass
+      // immediately on the form's OWN url, before the redirect even fires,
+      // and capture "new" as eventId instead of waiting for it).
+      await page.waitForURL(/\/admin\/events\/[a-z0-9]{20,}$/);
+      eventId = page.url().split("/").pop()!;
+
+      await expect(page.getByTestId("event-status-badge")).toHaveAttribute("data-status", "draft");
+      await expect(page.getByText(title)).toBeVisible();
+    });
   });
 
   test("2. Draft event does not appear on /world (public feed or API)", async ({ page, request }) => {

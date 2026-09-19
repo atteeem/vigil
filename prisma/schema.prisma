@@ -139,6 +139,9 @@ model RawIngestionItem {
   extractedFacts  ExtractedFact[]
   updateProposals EventUpdateProposal[]
   historyEntries  EventHistory[]
+  militaryUnitLinks      ArticleMilitaryUnitLink[]
+  militaryEquipmentLinks ArticleMilitaryEquipmentLink[]
+  militaryCommanderLinks ArticleMilitaryCommanderLink[]
 
   @@unique([sourceId, externalId])
   @@map("raw_ingestion_items")
@@ -205,6 +208,7 @@ model Conflict {
   events      Event[]
   actors      ConflictActor[]
   territories ConflictTerritory[]
+  militaryUnits MilitaryUnit[]
 
   @@map("conflicts")
 }
@@ -435,4 +439,174 @@ model EventSource {
 
   @@unique([eventId, rawIngestionItemId])
   @@map("event_sources")
+}
+
+// MilitaryLand Phase 1 (spec "sourced strategic/reference layer for
+// Ukraine" — NOT live tactical tracking, see the deliberate absence of any
+// position/route/readiness field anywhere below). MilitaryUnit,
+// MilitaryEquipment, and Commander are genuinely new reference entities —
+// nothing existing models a standing military organization: ConflictActor
+// is deliberately conflict-scoped for territorial-control coloring only
+// (see its own comment above), and lib/ingestion/actors.ts's alias table
+// is a free-text NLP helper with no DB row/id/relationships at all. Every
+// model here carries its own sourceName/sourceUrl + lastUpdatedAt (the
+// same provenance convention ConflictTerritory already uses) — spec
+// "do not treat one MilitaryLand claim as independently verified fact":
+// these are attributed reference data, always traceable back to where a
+// fact came from, never presented as Vigil's own verified conclusion.
+model MilitaryUnit {
+  id                String   @id @default(cuid())
+  name              String   @unique
+  branch            String?
+  unitType          String?  @map("unit_type")
+  // Self-relation (spec "unit -> parent formation"). Nullable: a top-level
+  // command (e.g. "Ground Forces of Ukraine") has no parent of its own.
+  parentUnitId      String?  @map("parent_unit_id")
+  parentUnit        MilitaryUnit?  @relation("UnitParent", fields: [parentUnitId], references: [id], onDelete: SetNull)
+  childUnits        MilitaryUnit[] @relation("UnitParent")
+  // "active" | "disbanded" | "reformed" | "forming" — free text (SQLite has
+  // no enum type, same convention as every other status field in this
+  // schema), sourced from MilitaryLand's own unit-page status.
+  status            String?
+  // Spec "unit -> related Vigil events/conflicts" — kept as a single
+  // primary-conflict pointer (nearly all MilitaryLand content maps to one
+  // conflict) rather than a many-to-many join; a unit's specific event
+  // mentions are still derivable transitively via
+  // ArticleMilitaryUnitLink -> RawIngestionItem -> EventSource -> Event
+  // without a second direct relation to maintain.
+  primaryConflictId String?  @map("primary_conflict_id")
+  primaryConflict   Conflict? @relation(fields: [primaryConflictId], references: [id], onDelete: SetNull)
+  sourceName        String?  @map("source_name")
+  sourceUrl         String?  @map("source_url")
+  lastUpdatedAt     DateTime @default(now()) @map("last_updated_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  commandersCurrent Commander[]
+  appointments      CommanderAppointment[]
+  equipmentLinks    MilitaryUnitEquipment[]
+  articleLinks      ArticleMilitaryUnitLink[]
+
+  @@map("military_units")
+}
+
+model MilitaryEquipment {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  category        String?
+  countryOfOrigin String?  @map("country_of_origin")
+  sourceName      String?  @map("source_name")
+  sourceUrl       String?  @map("source_url")
+  lastUpdatedAt   DateTime @default(now()) @map("last_updated_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  unitLinks       MilitaryUnitEquipment[]
+  articleLinks    ArticleMilitaryEquipmentLink[]
+
+  @@map("military_equipment")
+}
+
+model Commander {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  rank          String?
+  // Denormalized "latest known" pointer (spec "commander -> linked/current
+  // unit") for fast lookups without scanning CommanderAppointment; the
+  // appointment table below is the actual sourced history, including this
+  // same current assignment as its own (endDate: null) row.
+  currentUnitId String?  @map("current_unit_id")
+  currentUnit   MilitaryUnit? @relation(fields: [currentUnitId], references: [id], onDelete: SetNull)
+  sourceName    String?  @map("source_name")
+  sourceUrl     String?  @map("source_url")
+  lastUpdatedAt DateTime @default(now()) @map("last_updated_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  appointments  CommanderAppointment[]
+  articleLinks  ArticleMilitaryCommanderLink[]
+
+  @@map("commanders")
+}
+
+// Appointment/history where sourced (spec) — a commander's unit
+// assignments over time, distinct from Commander.currentUnitId (the live
+// pointer above). A new appointment does not delete or overwrite a prior
+// one — same immutable-ledger convention as EventHistory — so a
+// commander's full sourced career stays reconstructable.
+model CommanderAppointment {
+  id          String    @id @default(cuid())
+  commanderId String    @map("commander_id")
+  commander   Commander @relation(fields: [commanderId], references: [id], onDelete: Cascade)
+  unitId      String    @map("unit_id")
+  unit        MilitaryUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  role        String? // free text, e.g. "commander" | "deputy commander" — as sourced, not a controlled vocabulary
+  startDate   DateTime? @map("start_date")
+  endDate     DateTime? @map("end_date")
+  sourceName  String?   @map("source_name")
+  sourceUrl   String?   @map("source_url")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([commanderId])
+  @@index([unitId])
+  @@map("commander_appointments")
+}
+
+// unit -> equipment (spec). Many-to-many: one piece of equipment is
+// typically fielded by many units, and a unit fields many equipment types.
+model MilitaryUnitEquipment {
+  id          String   @id @default(cuid())
+  unitId      String   @map("unit_id")
+  unit        MilitaryUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  equipmentId String   @map("equipment_id")
+  equipment   MilitaryEquipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  sourceName  String?  @map("source_name")
+  sourceUrl   String?  @map("source_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([unitId, equipmentId])
+  @@map("military_unit_equipment")
+}
+
+// article/report -> referenced unit/equipment/commander (spec) — one join
+// table per entity kind, mirroring EventSource's explicit-junction
+// convention rather than a polymorphic FK (SQLite/Prisma has no native
+// support for one). rawIngestionItemId IS "the article" — the same
+// RawIngestionItem row every source's content already flows through, so a
+// MilitaryLand article is never a specially-shaped row; any source's
+// article can carry these links.
+model ArticleMilitaryUnitLink {
+  id                 String   @id @default(cuid())
+  rawIngestionItemId String   @map("raw_ingestion_item_id")
+  rawIngestionItem   RawIngestionItem @relation(fields: [rawIngestionItemId], references: [id], onDelete: Cascade)
+  unitId             String   @map("unit_id")
+  unit               MilitaryUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@unique([rawIngestionItemId, unitId])
+  @@map("article_military_unit_links")
+}
+
+model ArticleMilitaryEquipmentLink {
+  id                 String   @id @default(cuid())
+  rawIngestionItemId String   @map("raw_ingestion_item_id")
+  rawIngestionItem   RawIngestionItem @relation(fields: [rawIngestionItemId], references: [id], onDelete: Cascade)
+  equipmentId        String   @map("equipment_id")
+  equipment          MilitaryEquipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@unique([rawIngestionItemId, equipmentId])
+  @@map("article_military_equipment_links")
+}
+
+model ArticleMilitaryCommanderLink {
+  id                 String   @id @default(cuid())
+  rawIngestionItemId String   @map("raw_ingestion_item_id")
+  rawIngestionItem   RawIngestionItem @relation(fields: [rawIngestionItemId], references: [id], onDelete: Cascade)
+  commanderId        String   @map("commander_id")
+  commander          Commander @relation(fields: [commanderId], references: [id], onDelete: Cascade)
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@unique([rawIngestionItemId, commanderId])
+  @@map("article_military_commander_links")
 }
