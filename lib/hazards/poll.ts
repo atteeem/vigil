@@ -1,5 +1,6 @@
 import type { Source } from "@prisma/client";
 import { getHazardProvider, missingCredentials } from "./registry";
+import { alertsForGlobalEvents, alertsSweep } from "@/lib/alerts/hooks";
 import { ingestGlobalEvents, runHazardRetention, runLifecycleRetention } from "./store";
 import { HttpFetchError, parseRetryAfter } from "@/lib/ingestion/errors";
 import { nextPollDelayMinutes, applyRetryAfterFloor } from "@/lib/ingestion/backoff";
@@ -41,6 +42,9 @@ export async function pollStructuredSource(source: Source): Promise<FetchResult>
     const url = source.feedUrl ?? source.url ?? provider.defaultUrl;
     const result = await provider.fetch({ url, now: new Date(), fetchText });
     const stats = await ingestGlobalEvents(provider.key, source.id, result);
+    // Only state changes reach the alert service (thermal detections are filtered there); expiry is swept after each pass.
+    await alertsForGlobalEvents(stats.changedIds);
+    await alertsSweep();
     if (Date.now() - lastRetention > RETENTION_EVERY_MS) {
       lastRetention = Date.now();
       await runHazardRetention().catch((err) => console.error("[hazards] retention failed:", err));

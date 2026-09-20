@@ -13,6 +13,8 @@ export interface IngestStats {
   unchanged: number;
   withdrawn: number;
   superseded: number;
+  /** Rows whose state changed (created, revised, ended): the only ones the alert service looks at. */
+  changedIds: string[];
 }
 
 const CHUNK = 500;
@@ -98,9 +100,10 @@ export function snapshotOf(row: Pick<GlobalEvent, "status" | "title" | "descript
   };
 }
 
-async function markEnded(rows: { id: string; revision: number }[], now: Date): Promise<number> {
+async function markEnded(rows: { id: string; revision: number }[], now: Date, changed?: string[]): Promise<number> {
   let n = 0;
   for (const r of rows) {
+    changed?.push(r.id);
     const updated = await prisma.globalEvent.update({ where: { id: r.id }, data: { endedAt: now, revision: { increment: 1 }, lastSeenAt: now } });
     await prisma.globalEventRevision.create({ data: { globalEventId: r.id, revision: updated.revision, providerUpdatedAt: now, snapshot: JSON.stringify(snapshotOf(updated)) } });
     n += 1;
@@ -109,7 +112,7 @@ async function markEnded(rows: { id: string; revision: number }[], now: Date): P
 }
 
 export async function ingestGlobalEvents(provider: string, sourceId: string | null, result: ProviderResult, now: Date = new Date()): Promise<IngestStats> {
-  const stats: IngestStats = { created: 0, updated: 0, unchanged: 0, withdrawn: 0, superseded: 0 };
+  const stats: IngestStats = { created: 0, updated: 0, unchanged: 0, withdrawn: 0, superseded: 0, changedIds: [] };
   // Duplicate ids inside one feed collapse to the last occurrence.
   const events = [...new Map(result.events.filter((e) => e.provider === provider).map((e) => [e.providerEventId, e])).values()];
 
@@ -129,6 +132,7 @@ export async function ingestGlobalEvents(provider: string, sourceId: string | nu
     const row = await prisma.globalEvent.create({ data: { ...data, firstSeenAt: now, lastSeenAt: now } });
     await prisma.globalEventRevision.create({ data: { globalEventId: row.id, revision: 1, providerUpdatedAt: row.providerUpdatedAt, snapshot: JSON.stringify(snapshotOf(row)) } });
     stats.created += 1;
+    stats.changedIds.push(row.id);
   }
 
   const untouched: string[] = [];
@@ -143,7 +147,9 @@ export async function ingestGlobalEvents(provider: string, sourceId: string | nu
     const data = rowData(ev, sourceId);
     // An out-of-order older copy of the event never overwrites a newer one.
     const outdated = row.providerUpdatedAt && ev.providerUpdatedAt && ev.providerUpdatedAt.getTime() < row.providerUpdatedAt.getTime();
-    if (outdated || data.contentHash === row.contentHash) {
+    // An event the provider withdrew and now lists again (same content) is re-opened, not "unchanged".
+    const reopened = !!row.endedAt && !ev.endedAt;
+    if (outdated || (data.contentHash === row.contentHash && !reopened)) {
       stats.unchanged += 1;
       untouched.push(row.id);
       continue;
@@ -159,6 +165,7 @@ export async function ingestGlobalEvents(provider: string, sourceId: string | nu
     });
     await prisma.globalEventRevision.create({ data: { globalEventId: row.id, revision: updated.revision, providerUpdatedAt: updated.providerUpdatedAt, snapshot: JSON.stringify(snapshotOf(updated)) } });
     stats.updated += 1;
+    stats.changedIds.push(row.id);
   }
   for (const ids of chunks(untouched, 800)) await prisma.globalEvent.updateMany({ where: { id: { in: ids } }, data: { lastSeenAt: now } });
 
@@ -166,14 +173,14 @@ export async function ingestGlobalEvents(provider: string, sourceId: string | nu
   if (result.snapshot) {
     const seen = new Set(result.seenProviderIds ?? events.map((e) => e.providerEventId));
     const active = await prisma.globalEvent.findMany({ where: { provider, endedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }, select: { id: true, providerEventId: true, revision: true } });
-    stats.withdrawn = await markEnded(active.filter((r) => !seen.has(r.providerEventId)), now);
+    stats.withdrawn = await markEnded(active.filter((r) => !seen.has(r.providerEventId)), now, stats.changedIds);
   }
 
   // Messages the feed says are replaced by newer ones (CAP references) are ended too.
   if (result.supersedes?.length) {
     const live = new Set(events.map((e) => e.providerEventId));
     const stale = await prisma.globalEvent.findMany({ where: { provider, endedAt: null, providerEventId: { in: result.supersedes.filter((id) => !live.has(id)) } }, select: { id: true, revision: true } });
-    stats.superseded = await markEnded(stale, now);
+    stats.superseded = await markEnded(stale, now, stats.changedIds);
   }
   return stats;
 }

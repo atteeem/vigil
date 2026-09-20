@@ -100,6 +100,8 @@ export interface WorldMapProps {
   // drawn with their own visual language, independent of the conflict layers above. Optional, so the
   // per-conflict detail map is unaffected.
   hazards?: HazardCollection | null;
+  /** Centre the map here once (notification deep links). */
+  focus?: { lat: number; lng: number; zoom: number } | null;
   hazardLayers?: readonly HazardLayer[];
   onSelectHazard?: (id: string) => void;
   onViewportChange?: (viewport: HazardViewport) => void;
@@ -522,6 +524,7 @@ export function WorldMap({
   showTerritorial = false,
   onSelectTerritory = () => {},
   hazards = null,
+  focus = null,
   hazardLayers = [],
   onSelectHazard = () => {},
   onViewportChange = () => {},
@@ -806,6 +809,12 @@ export function WorldMap({
     if (!map) return;
     applyTerritorialVisibility(map);
   }, [showTerritorial]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focus) return;
+    map.jumpTo({ center: [focus.lng, focus.lat], zoom: focus.zoom }); // camera moves are valid before the style finishes loading
+  }, [focus]);
 
   // Hazard data and toggles: setData on the existing sources (never rebuilt), visibility per layer.
   const hazardData = useMemo(() => (hazards ? hazardsToSources(hazards.features) : EMPTY_HAZARD_SOURCES), [hazards]);

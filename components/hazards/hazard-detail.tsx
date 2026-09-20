@@ -1,6 +1,7 @@
 "use client";
 
 import { ExternalLink } from "lucide-react";
+import { FollowButton } from "@/components/watch/follow-button";
 import { RelativeTime } from "@/components/ui/relative-time";
 import type { HazardDetail } from "@/lib/hazards/public-types";
 import { hazardHeadline } from "@/lib/hazards/headline";
@@ -42,6 +43,16 @@ const DOMAIN_STATUS: Record<string, string> = {
   security_incident: "Security incident",
 };
 
+/** The stable followable entity behind a hazard record (airport, chokepoint, volcano, other infrastructure); none for one-off observations. */
+function followTarget(d: HazardDetail): { entityType: "airport" | "chokepoint" | "volcano" | "watchkey"; entityKey: string; label: string } | null {
+  if (!d.entityKey) return null;
+  if (d.category === "airport_status") return { entityType: "airport", entityKey: d.entityKey, label: d.title };
+  if (d.category === "chokepoint_status") return { entityType: "chokepoint", entityKey: d.entityKey, label: d.title };
+  if (d.category === "volcano") return { entityType: "volcano", entityKey: d.entityKey, label: String((d.metadata as { volcano?: string }).volcano ?? d.title.replace(/ — alert level.*/, "")) };
+  if (d.category === "energy_disruption" || d.category === "internet_disruption") return { entityType: "watchkey", entityKey: `${d.category}:${d.entityKey}`, label: d.title };
+  return null;
+}
+
 const isTransportInfra = (c: string) => ["airport_status", "airspace_event", "port_disruption", "chokepoint_status", "maritime_incident", "energy_disruption", "internet_disruption"].includes(c);
 
 function statusText(d: HazardDetail): string {
@@ -68,6 +79,7 @@ export function HazardDetailView({ detail: d, className }: { detail: HazardDetai
       <h2 className="text-lg font-semibold text-ink" data-testid="hazard-title">
         {hazardHeadline(d)}
       </h2>
+      {followTarget(d) && <FollowButton entityType={followTarget(d)!.entityType} entityKey={followTarget(d)!.entityKey} label={followTarget(d)!.label} className="mt-1.5" />}
       {d.category === "earthquake" && d.description && <p className="text-xs text-ink-dim" data-testid="hazard-place">{d.description}</p>}
       {d.asOf && <p className="mt-1 text-[11px] text-accent" data-testid="hazard-asof">Reconstructed as known at {utc(d.asOf)}</p>}
 

@@ -1263,3 +1263,134 @@ model GlobalEventClaim {
   @@index([globalEventId])
   @@map("global_event_claims")
 }
+
+// ---------------------------------------------------------------------------------------------
+// Watchlists, notifications and alert rules. There are no server accounts yet (auth is local), so a
+// "watcher" is a per-device profile identified by a random client id that acts as its bearer secret.
+// When real accounts arrive, a Watcher can be attached to one without touching watches or history.
+// ---------------------------------------------------------------------------------------------
+model Watcher {
+  id        String   @id
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  // Notification settings (enabled, minPriority, categories, partyClaims, resolutionAlerts, quietHours,
+  // baseCountry): JSON so new settings never need a migration. See lib/alerts/types.ts.
+  settings  String   @default("{}")
+
+  watches       Watch[]
+  notifications Notification[]
+
+  @@map("watchers")
+}
+
+// One generic watch: (entityType, entityKey) is the thing followed. New entity types need no schema
+// change: country | conflict | actor | unit | airport | port | chokepoint | volcano | watchkey | layer.
+model Watch {
+  id         String    @id @default(cuid())
+  watcherId  String    @map("watcher_id")
+  watcher    Watcher   @relation(fields: [watcherId], references: [id], onDelete: Cascade)
+  entityType String    @map("entity_type")
+  entityKey  String    @map("entity_key")
+  label      String
+  // major | important | custom
+  mode       String    @default("major")
+  // Custom rules (validated per entity type). Kept even when the mode is not custom, so switching
+  // back and forth never loses a user's edits.
+  rules      String    @default("{}")
+  muted      Boolean   @default(false)
+  pausedUntil DateTime? @map("paused_until")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  @@unique([watcherId, entityType, entityKey])
+  // The matching path: development -> candidate (type, key) pairs -> this index. Never a scan.
+  @@index([entityType, entityKey])
+  @@map("watches")
+}
+
+model Notification {
+  id           String    @id @default(cuid())
+  watcherId    String    @map("watcher_id")
+  watcher      Watcher   @relation(fields: [watcherId], references: [id], onDelete: Cascade)
+  watchId      String?   @map("watch_id")
+  // watcher + development + state + material version: one real-world development -> one notification.
+  fingerprint  String
+  alertType    String    @map("alert_type")
+  category     String
+  // LOW | MEDIUM | HIGH | CRITICAL (priority is not severity)
+  priority     String
+  priorityScore Int      @map("priority_score")
+  title        String
+  summary      String
+  entityType   String    @map("entity_type")
+  entityKey    String    @map("entity_key")
+  entityLabel  String    @map("entity_label")
+  eventId      String?   @map("event_id")
+  globalEventId String?  @map("global_event_id")
+  conflictSlug String?   @map("conflict_slug")
+  deepLink     String    @map("deep_link")
+  // Everything known when this was generated (statuses, values, evidence summary, times): the
+  // notification never changes when the underlying event later does.
+  snapshot     String
+  // Why it was sent (rule text, what the user follows, priority factors).
+  reason       String
+  isPartyClaim Boolean   @default(false) @map("is_party_claim")
+  isResolution Boolean   @default(false) @map("is_resolution")
+  // Development repeats swallowed into this one (other sources, same state).
+  suppressedCount Int    @default(0) @map("suppressed_count")
+  quiet        Boolean   @default(false)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  readAt       DateTime? @map("read_at")
+  dismissedAt  DateTime? @map("dismissed_at")
+  archivedAt   DateTime? @map("archived_at")
+
+  @@unique([watcherId, fingerprint])
+  @@index([watcherId, createdAt])
+  @@index([watcherId, readAt])
+  @@map("notifications")
+}
+
+// The underlying state ledger: last known state per (kind, key, alertType), so "closed -> closed" is
+// not a change and "closed -> reopened -> closed" is two. `version` increments on every material
+// change and is part of the fingerprint.
+model AlertState {
+  id        String   @id @default(cuid())
+  kind      String
+  key       String
+  alertType String   @map("alert_type")
+  state     String
+  value     Float?
+  data      String?
+  version   Int      @default(1)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([kind, key, alertType])
+  @@map("alert_states")
+}
+
+// Alert inspector: one row per (development, matched watch) decision. Short retention (30 days).
+model AlertRecord {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now()) @map("created_at")
+  signalKind     String   @map("signal_kind")
+  signalRef      String   @map("signal_ref")
+  fingerprint    String
+  alertType      String   @map("alert_type")
+  entityType     String   @map("entity_type")
+  entityKey      String   @map("entity_key")
+  watchId        String?  @map("watch_id")
+  watcherId      String?  @map("watcher_id")
+  // notified | suppressed_duplicate | below_threshold | party_claim_hidden | muted | paused |
+  // disabled | category_off | below_min_priority | resolution_off | not_material
+  decision       String
+  rule           String?
+  priority       String?
+  reason         String?
+  notificationId String?  @map("notification_id")
+  detail         String?
+
+  @@index([createdAt])
+  @@index([fingerprint])
+  @@map("alert_records")
+}

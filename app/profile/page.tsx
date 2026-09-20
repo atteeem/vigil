@@ -256,7 +256,7 @@ export default function ProfilePage() {
             <FutureFeature
               icon={Bell}
               label="Alerts & notifications"
-              description="Push or email alerts when a followed conflict or country changes materially."
+              description="Push or email delivery (later). In-app alerts for followed conflicts, countries and places are already on the Watchlist."
             />
           </ul>
         </Card>

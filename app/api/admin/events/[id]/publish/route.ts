@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { alertsForEvent } from "@/lib/alerts/hooks";
 import { getEvent, setEventPublished } from "@/lib/db/repositories/events";
 
 // Publish/republish an existing event (Draft -> Published, or
@@ -12,5 +13,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   if (!existing) return NextResponse.json({ error: "Event not found" }, { status: 404 });
 
   const updated = await setEventPublished(id, true);
+  await alertsForEvent(updated.id);
   return NextResponse.json(updated);
 }

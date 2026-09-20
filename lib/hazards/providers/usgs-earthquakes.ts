@@ -1,5 +1,6 @@
 import type { HazardProvider, NormalizedGlobalEvent, ProviderResult } from "../types";
 import { earthquakeProminence } from "../significance";
+import { countryFromPlace } from "../reference";
 
 // USGS Earthquake Hazards Program GeoJSON summary feeds. Public domain (US Government work);
 // keyless; feeds regenerate about every minute; each event has a stable `id` and an `updated`
@@ -42,6 +43,7 @@ export function parseUsgsEarthquakes(json: unknown): NormalizedGlobalEvent[] {
       origin: "scientific_observation",
       category: "earthquake",
       layer: "earthquakes",
+      countryCode: countryFromPlace(p.place),
       provider: "usgs_earthquakes",
       providerEventId: f.id,
       title: `M${p.mag.toFixed(1)} Earthquake`,

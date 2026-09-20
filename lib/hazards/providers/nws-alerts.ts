@@ -86,6 +86,7 @@ export function normalizeCapAlert(f: CapFeature, geometry: GeoJSON.Geometry | nu
     category: "weather_alert",
     layer: "weather",
     subtype: p.event,
+    countryCode: "US",
     provider: "nws_alerts",
     providerEventId: p.id,
     title: p.event,

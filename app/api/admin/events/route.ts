@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { alertsForEvent } from "@/lib/alerts/hooks";
 import { prisma } from "@/lib/db/client";
 import { listAllEventsWithSources } from "@/lib/db/repositories/events";
 import { toEventAdminDTO } from "@/lib/data/world-events";
@@ -96,5 +97,6 @@ export async function POST(request: Request) {
     return created;
   });
 
+  await alertsForEvent(event.id);
   return NextResponse.json(event, { status: 201 });
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { alertsForEvent } from "@/lib/alerts/hooks";
 import { prisma } from "@/lib/db/client";
 import { propagateEntityLinksToEvent } from "@/lib/military/link-entities";
 import type { EventType, Severity } from "@/lib/types";
@@ -89,5 +90,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // over to the newly published Event.
   await propagateEntityLinksToEvent(rawItem.id, event.id);
 
+  await alertsForEvent(event.id);
   return NextResponse.json(event, { status: 201 });
 }

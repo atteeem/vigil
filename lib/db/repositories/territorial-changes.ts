@@ -1,3 +1,4 @@
+import { alertsForTerritorialChange } from "@/lib/alerts/hooks";
 import { prisma } from "@/lib/db/client";
 import type { ConflictTerritory } from "@prisma/client";
 import {
@@ -337,7 +338,7 @@ export async function rejectCandidate(id: string, note?: string | null): Promise
 }
 
 /** "Mark uncertain" keeps the candidate open for later — nothing is applied. */
-export async function markCandidateUncertain(id: string, note?: string | null): Promise<TerritorialChangeCandidateDTO> {
+async function markCandidateUncertainCore(id: string, note?: string | null): Promise<TerritorialChangeCandidateDTO> {
   const row = await prisma.territorialChangeCandidate.findUnique({ where: { id } });
   if (!row) throw new Error("Candidate not found");
   assertOpen(row.status);
@@ -402,7 +403,7 @@ export interface ApproveOptions {
  * SUPERSEDED (old row closed with validTo, new row created with validFrom)
  * via the existing supersedeTerritory workflow; with no safe geometry the
  * change is recorded "pending geometry" and no polygon is fabricated. */
-export async function approveCandidate(id: string, options: ApproveOptions = {}): Promise<TerritorialChangeCandidateDTO> {
+async function approveCandidateCore(id: string, options: ApproveOptions = {}): Promise<TerritorialChangeCandidateDTO> {
   const row = await prisma.territorialChangeCandidate.findUnique({ where: { id }, include: CANDIDATE_INCLUDE });
   if (!row) throw new Error("Candidate not found");
   assertOpen(row.status);
@@ -604,4 +605,18 @@ export async function applyCandidateGeometry(
     data: { status: "approved", appliedTerritoryId: appliedId, geometryPending: false, reviewedAt: now },
   });
   return (await getReviewCandidate(id))!;
+}
+
+/** Reviewed outcomes feed the alert service (approved change / conflicting claims); best-effort, never fails the review. */
+export async function approveCandidate(id: string, options: ApproveOptions = {}): Promise<TerritorialChangeCandidateDTO> {
+  const result = await approveCandidateCore(id, options);
+  await alertsForTerritorialChange(id);
+  return result;
+}
+
+/** Reviewed outcomes feed the alert service (approved change / conflicting claims); best-effort, never fails the review. */
+export async function markCandidateUncertain(id: string, note?: string | null): Promise<TerritorialChangeCandidateDTO> {
+  const result = await markCandidateUncertainCore(id, note);
+  await alertsForTerritorialChange(id);
+  return result;
 }

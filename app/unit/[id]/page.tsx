@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { FollowButton } from "@/components/watch/follow-button";
 import type { Metadata } from "next";
 import { getPublicEntity } from "@/lib/public/entities";
 import { EmptyState } from "@/components/public/data-states";
@@ -28,6 +29,7 @@ export default async function UnitPage({ params }: { params: Promise<{ id: strin
       <h1 className="mt-1 text-2xl font-semibold text-ink" data-testid="unit-name">
         {unit.name}
       </h1>
+      <FollowButton entityType="unit" entityKey={unit.id} label={unit.name} className="mt-2" />
       {unit.nativeName && <p className="text-sm text-ink-dim">{unit.nativeName}</p>}
       <p className="mt-1 text-xs text-ink-dim" data-testid="unit-overview-line">
         {[unit.unitType, unit.branch, country ? `${country.flag} ${country.name}` : unit.country, unit.status ? `Status: ${unit.status}` : "Status not recorded"].filter(Boolean).join(" · ")}

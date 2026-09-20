@@ -52,6 +52,22 @@ export default function WorldPage() {
       /* private mode / blocked storage: start with none */
     }
   }, []);
+  // Notification deep links: /world?layers=aviation&hazard=<id>&focus=lat,lng,zoom&at=<iso>. Applied once on
+  // load; the same map, layers, selection and timeline as everywhere else (no separate experience).
+  const [focus, setFocus] = useState<{ lat: number; lng: number; zoom: number } | null>(null);
+  const [deepLinkAt, setDeepLinkAt] = useState<Date | null>(null);
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const layers = (p.get("layers") ?? "").split(",").filter((l): l is HazardLayer => (HAZARD_LAYERS as readonly string[]).includes(l));
+    if (layers.length) setHazardLayers((prev) => [...new Set([...prev, ...layers])]); // eslint-disable-line react-hooks/set-state-in-effect -- one-time URL application
+    const hazard = p.get("hazard");
+    if (hazard) setSelectedHazardId(hazard);
+    const f = (p.get("focus") ?? "").split(",").map(Number);
+    if (f.length === 3 && f.every(Number.isFinite)) setFocus({ lat: f[0]!, lng: f[1]!, zoom: f[2]! });
+    const at = p.get("at");
+    if (at && !Number.isNaN(new Date(at).getTime())) setDeepLinkAt(new Date(at));
+  }, []);
+
   const toggleHazardLayer = useCallback((layer: HazardLayer) => {
     setHazardLayers((prev) => {
       const next = prev.includes(layer) ? prev.filter((l) => l !== layer) : [...prev, layer];
@@ -72,6 +88,10 @@ export default function WorldPage() {
   // selected — see hooks/use-world-timeline.ts for why that single value
   // is enough state for a later Play/Pause animation too.
   const timeline = useWorldTimeline();
+  useEffect(() => {
+    if (deepLinkAt) timeline.selectCustomTimestamp(deepLinkAt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply the deep-link timestamp once
+  }, [deepLinkAt]);
   const { events: historicalEvents, loading: historicalLoading } = useWorldEvents(timeline.asOf, timeline.previewNextAsOf);
   // Territorial Control Mode: the SAME asOf/previewNextAsOf drives
   // territorial polygons too (spec §5 "do not create a second timeline
@@ -188,6 +208,7 @@ export default function WorldPage() {
             showTerritorial={showTerritorial}
             onSelectTerritory={selectTerritory}
             hazards={hazards}
+            focus={focus}
             hazardLayers={hazardLayers}
             onSelectHazard={selectHazard}
             onViewportChange={setViewport}

@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { FollowButton } from "@/components/watch/follow-button";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getPublicEntity } from "@/lib/public/entities";
@@ -54,6 +55,7 @@ export default async function ActorPage({ params }: { params: Promise<{ ref: str
       <h1 className="mt-1 text-2xl font-semibold text-ink" data-testid="actor-name">
         {entity.name}
       </h1>
+      <FollowButton entityType="actor" entityKey={entity.id} label={entity.name} className="mt-2" />
       {entity.nativeName && <p className="text-sm text-ink-dim">{entity.nativeName}</p>}
       <p className="mt-1 text-xs text-ink-dim" data-testid="actor-overview-line">
         {[country ? `${country.flag} ${country.name}` : entity.country, entity.status ? `Status: ${entity.status}` : "Status not recorded", entity.branch, entity.unitType].filter(Boolean).join(" · ")}

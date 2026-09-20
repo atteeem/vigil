@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { alertsForEvent } from "@/lib/alerts/hooks";
 import { getEventWithSources, updateEvent, deleteEventCleanly } from "@/lib/db/repositories/events";
 import { dbEventToConflictEvent } from "@/lib/data/world-events";
 import { eventStatus } from "@/lib/data/event-status";
@@ -50,6 +51,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     ...(body.verificationStatus !== undefined && { verificationStatus: body.verificationStatus }),
     ...(body.conflictId !== undefined && { conflictId: body.conflictId }),
   });
+  await alertsForEvent(updated.id);
   return NextResponse.json(updated);
 }
 

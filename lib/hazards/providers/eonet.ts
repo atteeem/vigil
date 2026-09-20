@@ -58,6 +58,7 @@ export function parseEonet(json: unknown, categoryId: "wildfires" | "volcanoes")
     const upstream = e.sources?.[0];
     const closed = e.closed ? new Date(e.closed) : null;
     const base = {
+      entityKey: categoryId === "volcanoes" ? e.id : null,
       provider: categoryId === "wildfires" ? "eonet_wildfires" : "eonet_volcanoes",
       providerEventId: e.id,
       lat: where.lat,

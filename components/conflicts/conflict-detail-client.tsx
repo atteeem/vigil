@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { FollowButton } from "@/components/watch/follow-button";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { ArrowUp, ArrowDown, Minus } from "lucide-react";
@@ -77,6 +78,7 @@ export function ConflictDetailClient({ detail }: { detail: PublicConflictDetail 
           <h1 className="mt-2 text-2xl font-semibold text-ink sm:text-[32px]" data-testid="conflict-name">
             {conflict.name}
           </h1>
+          <FollowButton entityType="conflict" entityKey={conflict.slug} label={conflict.shortName ?? conflict.name} className="mt-2" />
           <p className="mt-1 text-sm text-ink-dim" data-testid="conflict-overview-line">
             Status: {detail.statusLabel}
             {detail.family && <span data-testid="conflict-family">{" · "}{detail.family.name} family</span>}

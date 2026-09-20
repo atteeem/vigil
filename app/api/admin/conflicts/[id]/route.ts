@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
+import { alertsForConflict } from "@/lib/alerts/hooks";
 import { updateConflict, deleteConflictIfSafe, toConflictDTO, type ConflictInput } from "@/lib/db/repositories/conflicts";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = (await request.json()) as Partial<ConflictInput>;
   const conflict = await updateConflict(id, body);
+  await alertsForConflict(conflict.id);
   return NextResponse.json(toConflictDTO(conflict));
 }
 

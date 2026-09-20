@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { alertsForEvent } from "@/lib/alerts/hooks";
 import { prisma } from "@/lib/db/client";
 import { linkEventSource } from "@/lib/db/repositories/event-sources";
 import { setProcessingStatus } from "@/lib/db/repositories/raw-ingestion-items";
@@ -46,5 +47,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // carry over to the event it's attached to.
   await propagateEntityLinksToEvent(id, body.eventId);
 
+  await alertsForEvent(body.eventId);
   return NextResponse.json({ ...item, proposalsCreated: proposals.length });
 }

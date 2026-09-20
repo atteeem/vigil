@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { NotificationBell } from "@/components/notifications/notification-center";
 import { usePathname } from "next/navigation";
-import { Bell, Search, UserRound } from "lucide-react";
+import { Search, UserRound } from "lucide-react";
 import { BrandMark } from "./brand-mark";
 import { LiveIndicator } from "./live-indicator";
 import { useAppStore } from "@/hooks/use-app-store";
@@ -54,12 +55,7 @@ export function NavBar() {
           >
             <Search className="h-4 w-4" />
           </button>
-          <button
-            aria-label="Alerts"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface/60 text-ink-dim backdrop-blur-xl transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            <Bell className="h-4 w-4" />
-          </button>
+          <NotificationBell />
           <Link
             href="/profile"
             aria-label="Profile"

@@ -47,6 +47,8 @@ export function parseHansNotices(json: unknown, locate: (vnum: string) => HansVo
       category: "volcano",
       layer: "volcanoes",
       subtype: "alert_status",
+      entityKey: `hans-${n.vnum}`,
+      countryCode: "US",
       provider: "usgs_volcanoes",
       providerEventId: `hans-${n.vnum}`,
       title: `${n.volcano_name} — alert level ${level}`,

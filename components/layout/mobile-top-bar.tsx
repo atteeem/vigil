@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { NotificationBell } from "@/components/notifications/notification-center";
 import { Search, UserRound } from "lucide-react";
 import { BrandMark } from "./brand-mark";
 import { LiveIndicator } from "./live-indicator";
@@ -22,6 +23,7 @@ export function MobileTopBar() {
         >
           <Search className="h-4 w-4" />
         </button>
+        <NotificationBell />
         <Link
           href="/profile"
           aria-label="Profile"

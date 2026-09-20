@@ -39,6 +39,12 @@ export function getHazardFixture(path: string[], variant: string, now: number = 
     });
   }
 
+  // Two Japan quakes for the alert tests: a big one, and one whose magnitude is revised (5.8 -> 6.4) by v2.
+  if (key === "usgs-jp") {
+    const q = (id: string, mag: number, place: string, lng: number, lat: number, agoMin: number, extra: Record<string, unknown> = {}) => ({ type: "Feature", id, geometry: { type: "Point", coordinates: [lng, lat, 20] }, properties: { mag, place, time: now - agoMin * MIN, updated: now - (agoMin - 5) * MIN, url: `https://earthquake.usgs.gov/earthquakes/eventpage/${id}`, tsunami: 0, sig: Math.round(mag * 100), status: "reviewed", magType: "mww", net: "us", type: "earthquake", ...extra } });
+    return json({ type: "FeatureCollection", features: [q("fx-jp-big", 6.9, "45 km E of Tokyo, Japan", 140.4, 35.7, 40, { tsunami: 1 }), q("fx-jp-small", 4.6, "20 km S of Sendai, Japan", 141.0, 38.0, 50), q("fx-jp-rev", v2 ? 6.6 : 5.8, "70 km NE of Hachinohe, Japan", 142.0, 41.0, 30), q("fx-jp-rev2", v2 ? 5.9 : 5.8, "10 km W of Kobe, Japan", 135.0, 34.7, 20)] });
+  }
+
   if (key === "firms") {
     const d = new Date(now - 90 * MIN);
     const date = d.toISOString().slice(0, 10);

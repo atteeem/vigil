@@ -50,6 +50,7 @@ export function parseGdacs(json: unknown): NormalizedGlobalEvent[] {
       category: kind.category,
       layer: "weather",
       subtype: p.eventtype,
+      countryCode: (p as { affectedcountries?: { iso2?: string }[] }).affectedcountries?.[0]?.iso2 ?? null,
       provider: "gdacs",
       providerEventId: `${p.eventtype}-${p.eventid}`,
       title: p.name ?? kind.label,

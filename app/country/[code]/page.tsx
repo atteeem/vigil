@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { FollowButton } from "@/components/watch/follow-button";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getCountryByCode } from "@/lib/reference/countries";
@@ -50,7 +51,10 @@ export default async function CountryPage({
             <p className="text-sm text-ink-faint">{country.region}</p>
           </div>
         </div>
-        <SetBaseCountryButton code={country.code} />
+        <div className="flex items-center gap-2">
+          <FollowButton entityType="country" entityKey={country.code} label={country.name} />
+          <SetBaseCountryButton code={country.code} />
+        </div>
       </div>
 
       <div className="mt-6 rounded-2xl border border-border bg-card/70 p-6">

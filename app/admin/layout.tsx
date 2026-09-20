@@ -70,6 +70,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           >
             Live Data
           </Link>
+          <Link
+            href="/admin/alerts"
+            className="rounded-full px-3 py-1.5 text-sm font-medium text-ink-dim hover:bg-white/5 hover:text-ink"
+          >
+            Alerts
+          </Link>
         </nav>
         {children}
       </div>

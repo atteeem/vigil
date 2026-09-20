@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { alertsForClaim } from "@/lib/alerts/hooks";
 import { prisma } from "@/lib/db/client";
 
 // A party statement about an infrastructure/transport state or its cause ("we closed the strait",
@@ -22,5 +23,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const claim = await prisma.globalEventClaim.create({
     data: { globalEventId: id, entityKey: event.entityKey, claimant: body.claimant, claimType: CLAIM_TYPES.includes(body.claimType ?? "") ? body.claimType! : "other", text: body.text, sourceName: body.sourceName ?? null, sourceUrl: body.sourceUrl ?? null, observedAt: body.observedAt ? new Date(body.observedAt) : new Date(), verification: "unverified" },
   });
+  await alertsForClaim(claim.id);
   return NextResponse.json(claim, { status: 201 });
 }
