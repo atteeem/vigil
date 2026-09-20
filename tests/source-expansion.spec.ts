@@ -237,14 +237,12 @@ test.describe("Seeded expansion sources", () => {
     const list = async () => (await request.get("/api/admin/sources").then((r) => r.json())) as { id: string; name: string; url: string | null; telegramHandle: string | null; sourceRole: string | null; enabled: boolean }[];
     const before = await list();
     for (const s of expansion.sources) {
-      const matches = before.filter((x) => (s.type === "telegram" ? x.telegramHandle === s.telegramHandle : x.url === s.url));
+      // Other specs may add their own rows with a real feed URL; the seeder's record is the one carrying the seeded name.
+      const matches = before.filter((x) => x.name === s.name && (s.type === "telegram" ? x.telegramHandle === s.telegramHandle : x.url === s.url));
       expect(matches, s.name).toHaveLength(1);
       expect(matches[0]!.sourceRole).toBe(s.sourceRole);
       expect(matches[0]!.enabled).toBe(s.enabled ?? true);
     }
-    // Seeding upserts by URL / handle, so the names and URLs stay unique.
-    const after = await list();
-    expect(new Set(after.filter((s) => s.url).map((s) => s.url)).size).toBe(after.filter((s) => s.url).length);
   });
 
   test("relevance is explicit: a multi-conflict specialist appears only where it is linked, a global feed appears nowhere by default", async ({ request }) => {
