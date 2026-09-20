@@ -17,6 +17,11 @@ export const INDEPENDENCE_CLASSES = [
   "state_media",
   "aligned_media",
   "osint_aggregator",
+  // Structured measurement/alert providers: authoritative for the observations they issue themselves.
+  "scientific_official",
+  "government_alert",
+  "sensor_provider",
+  "humanitarian_monitor",
 ] as const;
 export type IndependenceClass = (typeof INDEPENDENCE_CLASSES)[number];
 

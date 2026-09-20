@@ -4,10 +4,32 @@ import { RSSAdapter } from "@/lib/ingestion/rss-adapter";
 import { ManualSourceAdapter } from "@/lib/ingestion/manual-adapter";
 import { TelegramAuthorizedSourceAdapter } from "@/lib/ingestion/telegram-adapter";
 
+// Structured sensor/official feeds bypass the news adapter path entirely (lib/hazards/poll.ts is
+// dispatched from pollSource); this entry only satisfies the registry's exhaustive type.
+const StructuredSourceAdapter: SourceAdapter = {
+  async fetchLatest() {
+    throw new Error("Structured sources are polled by the hazard pipeline, not the news adapters");
+  },
+  normalize() {
+    throw new Error("Structured sources have no news items");
+  },
+  async healthCheck(source) {
+    const url = source.feedUrl ?? source.url;
+    if (!url) return { ok: false, message: "No feed URL configured." };
+    try {
+      const res = await fetch(url, { method: "GET", headers: { "User-Agent": "Vigil/1.0 (public intelligence map)" } });
+      return res.ok ? { ok: true } : { ok: false, message: `HTTP ${res.status}` };
+    } catch (err) {
+      return { ok: false, message: err instanceof Error ? err.message : "Fetch failed" };
+    }
+  },
+};
+
 export const ADAPTERS: Record<SourceType, SourceAdapter> = {
   rss: RSSAdapter,
   manual: ManualSourceAdapter,
   telegram: TelegramAuthorizedSourceAdapter,
+  structured: StructuredSourceAdapter,
 };
 
 export function getAdapter(type: string): SourceAdapter {

@@ -7,6 +7,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { seedSourcePlugin } from "./seed-source-plugin.mjs";
 import { seedMilitaryKnowledge } from "./seed-military-knowledge.mjs";
+import { seedLiveData } from "./seed-live-data.mjs";
 
 // No dotenv dependency needed: DATABASE_URL defaults to the same value
 // .env holds, so `node prisma/seed.mjs` just works without extra setup.
@@ -1085,6 +1086,7 @@ async function main() {
   await backfillSourceIdentity();
   await seedSourcePlugin(prisma);
   await seedMilitaryKnowledge(prisma);
+  await seedLiveData(prisma);
 }
 
 main()

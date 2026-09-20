@@ -2,9 +2,10 @@ import { prisma } from "@/lib/db/client";
 import { COUNTRIES } from "@/lib/reference/countries";
 import { normalizeEntityText } from "@/lib/military/aliases";
 import { entityHref } from "./entities";
+import { searchHazards } from "@/lib/hazards/query";
 
 export interface SearchResult {
-  type: "country" | "conflict" | "event" | "actor" | "commander" | "equipment";
+  type: "country" | "conflict" | "event" | "actor" | "commander" | "equipment" | "hazard";
   id: string;
   title: string;
   subtitle: string;
@@ -71,5 +72,9 @@ export async function searchPublic(query: string, limit = 8): Promise<SearchResu
   for (const e of events) {
     results.push({ type: "event", id: e.id, title: e.title, subtitle: `${e.region ?? "Global"} · ${e.occurredAt.toISOString().slice(0, 10)}`, href: `/event/${e.slug}` });
   }
-  return results.slice(0, limit);
+  // Major earthquakes, named volcanoes and significant active weather (never raw thermal detections).
+  for (const h of await searchHazards(q, 4)) {
+    results.push({ type: "hazard", id: h.id, title: h.title, subtitle: `${h.subtitle}${h.stale ? " · stale record" : ""}`, href: `/hazard/${h.id}` });
+  }
+  return results.slice(0, limit + 4);
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { MapFilters, type TypeFilter, type RegionFilter, type ViewMode } from "@/components/map/map-filters";
 import { EventCard } from "@/components/events/event-card";
@@ -22,6 +22,9 @@ import { TimelineControls } from "@/components/map/timeline-controls";
 import { TerritoryLegend } from "@/components/map/territory-legend";
 import { TerritoryDetailPanel } from "@/components/map/territory-detail-panel";
 import type { TerritoryFeatureProperties } from "@/lib/types/territorial-control";
+import { HAZARD_LAYERS, type HazardLayer } from "@/lib/hazards/types";
+import { useHazards, type HazardViewport } from "@/hooks/use-hazards";
+import { HazardPanel } from "@/components/hazards/hazard-panel";
 
 const WorldMap = dynamic(() => import("@/components/map/world-map").then((m) => m.WorldMap), {
   ssr: false,
@@ -36,6 +39,30 @@ export default function WorldPage() {
   const [selected, setSelected] = useState<ConflictEvent | null>(null);
   const [showTerritorial, setShowTerritorial] = useState(false);
   const [selectedTerritory, setSelectedTerritory] = useState<TerritoryFeatureProperties | null>(null);
+  // Natural-hazard layers: independent toggles (all off by default), remembered per browser.
+  const [hazardLayers, setHazardLayers] = useState<HazardLayer[]>([]);
+  const [selectedHazardId, setSelectedHazardId] = useState<string | null>(null);
+  const [viewport, setViewport] = useState<HazardViewport | null>(null);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("vigil.hazardLayers") ?? "[]") as string[];
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- restoring persisted UI state after mount (SSR renders the default)
+      setHazardLayers(HAZARD_LAYERS.filter((l) => saved.includes(l)));
+    } catch {
+      /* private mode / blocked storage: start with none */
+    }
+  }, []);
+  const toggleHazardLayer = useCallback((layer: HazardLayer) => {
+    setHazardLayers((prev) => {
+      const next = prev.includes(layer) ? prev.filter((l) => l !== layer) : [...prev, layer];
+      try {
+        localStorage.setItem("vigil.hazardLayers", JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
   const basemapMode = useAppStore((s) => s.mapBasemapMode);
   const setBasemapMode = useAppStore((s) => s.setMapBasemapMode);
   const liveEvents = useLiveEvents();
@@ -51,6 +78,8 @@ export default function WorldPage() {
   // system") — Live and historical/playback both flow through this one
   // hook exactly like useWorldEvents above.
   const { featureCollection: territorialFeatures } = useTerritorialControl(timeline.asOf, timeline.previewNextAsOf);
+  // Hazards ride the SAME asOf as events and territory — no second timeline.
+  const { data: hazards } = useHazards(hazardLayers, timeline.asOf, viewport, timeline.previewNextAsOf);
 
   // Animated playback (spec "opening event details during playback must
   // show data for the current historical timestamp"): pausing first
@@ -62,13 +91,22 @@ export default function WorldPage() {
   function selectEvent(event: ConflictEvent) {
     if (timeline.isPlaying) timeline.pause();
     setSelectedTerritory(null);
+    setSelectedHazardId(null);
     setSelected(event);
   }
 
   function selectTerritory(properties: TerritoryFeatureProperties) {
     if (timeline.isPlaying) timeline.pause();
     setSelected(null);
+    setSelectedHazardId(null);
     setSelectedTerritory(properties);
+  }
+
+  function selectHazard(id: string) {
+    if (timeline.isPlaying) timeline.pause();
+    setSelected(null);
+    setSelectedTerritory(null);
+    setSelectedHazardId(id);
   }
 
   // Live: the bounded published-event window from the database (the same data
@@ -149,6 +187,10 @@ export default function WorldPage() {
             territorialFeatures={territorialFeatures}
             showTerritorial={showTerritorial}
             onSelectTerritory={selectTerritory}
+            hazards={hazards}
+            hazardLayers={hazardLayers}
+            onSelectHazard={selectHazard}
+            onViewportChange={setViewport}
             className={cn(
               "absolute inset-0 h-full w-full",
               // Avoid users mistaking historical data for live data: a
@@ -192,6 +234,9 @@ export default function WorldPage() {
                 onBasemapMode={setBasemapMode}
                 showTerritorial={showTerritorial}
                 onToggleTerritorial={setShowTerritorial}
+                hazardLayers={hazardLayers}
+                onToggleHazardLayer={toggleHazardLayer}
+                hazardHealth={hazards?.meta.health}
               />
             </div>
             {showTerritorial && (
@@ -224,6 +269,16 @@ export default function WorldPage() {
               </button>
               <TerritoryDetailPanel territory={selectedTerritory} />
             </>
+          ) : selectedHazardId ? (
+            <>
+              <button
+                onClick={() => setSelectedHazardId(null)}
+                className="mb-3 inline-flex items-center gap-1 text-xs text-ink-faint hover:text-ink"
+              >
+                <X className="h-3.5 w-3.5" /> Close
+              </button>
+              <HazardPanel id={selectedHazardId} asOf={timeline.asOf} />
+            </>
           ) : (
             <p className="mt-8 text-center text-sm text-ink-faint">
               Select an event on the map or feed to see details.
@@ -235,6 +290,9 @@ export default function WorldPage() {
       {/* Mobile bottom sheet */}
       <BottomSheet open={!!selected} onClose={() => setSelected(null)} label={selected?.title}>
         {selected && <EventDetailPanel event={selected} conflict={selectedConflictRef} />}
+      </BottomSheet>
+      <BottomSheet open={!!selectedHazardId} onClose={() => setSelectedHazardId(null)} label="Hazard details">
+        {selectedHazardId && <HazardPanel id={selectedHazardId} asOf={timeline.asOf} />}
       </BottomSheet>
       <BottomSheet
         open={!!selectedTerritory}

@@ -9,7 +9,7 @@
 // than modified in place — this is new, parallel ingestion-pipeline
 // infrastructure, not a change to the Phase 1/1.5 mock-data shape.
 
-export const SOURCE_TYPES = ["rss", "telegram", "manual"] as const;
+export const SOURCE_TYPES = ["rss", "telegram", "manual", "structured"] as const;
 export type SourceType = (typeof SOURCE_TYPES)[number];
 
 export const PERMISSION_STATUSES = ["authorized", "unauthorized", "pending"] as const;

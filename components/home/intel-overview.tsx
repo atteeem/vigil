@@ -7,6 +7,7 @@ import { RelativeTime } from "@/components/ui/relative-time";
 import { EmptyState, LoadingLine } from "@/components/public/data-states";
 import { rankMajorConflicts, rankSignificantEvents } from "@/lib/data/priority";
 import { useNowMs } from "@/hooks/use-now";
+import { GlobalEvents } from "@/components/home/global-events";
 
 const VERIFIED = new Set(["confirmed", "multiple_sources"]);
 const WEEK_MS = 7 * 86_400_000;
@@ -67,6 +68,8 @@ export function IntelOverview({ conflicts, events, loading, className }: { confl
           </ul>
         )}
       </section>
+
+      <GlobalEvents className="mt-6" />
 
       <section className="mt-6" data-testid="verified-updates">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-faint">Latest verified updates</h2>

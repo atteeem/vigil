@@ -6,6 +6,9 @@ import { EVENT_TYPE_LABEL } from "@/components/events/event-type-icon";
 import { EVENT_TYPES, REGIONS, type EventType, type Region, type TimeRange } from "@/lib/types";
 import { MAP_BASEMAP_MODES, MAP_BASEMAP_MODE_LABEL, type MapBasemapMode } from "@/lib/map/style";
 import { cn } from "@/lib/utils";
+import { HazardLayerPanel } from "@/components/map/hazard-layer-panel";
+import type { HazardLayer } from "@/lib/hazards/types";
+import type { HazardLayerHealth } from "@/lib/hazards/public-types";
 
 export type TypeFilter = "all" | EventType;
 export type RegionFilter = "Global" | Region;
@@ -31,6 +34,9 @@ export function MapFilters({
   onBasemapMode,
   showTerritorial,
   onToggleTerritorial,
+  hazardLayers = [],
+  onToggleHazardLayer,
+  hazardHealth,
   className,
 }: {
   typeFilter: TypeFilter;
@@ -49,6 +55,10 @@ export function MapFilters({
   // "Both" mode.
   showTerritorial: boolean;
   onToggleTerritorial: (v: boolean) => void;
+  // Natural-hazard layers (Live Global Data Layers): a compact expandable group, all off by default.
+  hazardLayers?: readonly HazardLayer[];
+  onToggleHazardLayer?: (layer: HazardLayer) => void;
+  hazardHealth?: readonly HazardLayerHealth[];
   className?: string;
 }) {
   return (
@@ -117,6 +127,7 @@ export function MapFilters({
         >
           <Flag className="h-3.5 w-3.5" /> Territorial Control
         </button>
+        {onToggleHazardLayer && <HazardLayerPanel enabled={hazardLayers} onToggle={onToggleHazardLayer} health={hazardHealth} />}
       </div>
     </div>
   );

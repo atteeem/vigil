@@ -17,6 +17,7 @@ function event(overrides: Partial<Event>): Event {
     title: "Airstrike hits Kyiv",
     summary: "An airstrike struck Kyiv.",
     eventType: "airstrike",
+    origin: "conflict_news",
     locationName: "Kyiv, Ukraine",
     latitude: 50.45,
     longitude: 30.52,

@@ -23,6 +23,8 @@ export interface SourceTrust {
   perspective: string | null;
   /** Does a report from this source count toward independent confirmation? */
   countsAsIndependent: boolean;
+  /** Set for measurement/alert providers: what their authority actually covers. */
+  authorityScope: string | null;
 }
 
 export interface TrustInput {
@@ -34,6 +36,11 @@ export interface TrustInput {
 
 const PARTY_CLASSES = new Set(["state_media", "aligned_media", "official_government", "official_military", "representative_advocacy"]);
 const PERSPECTIVE_CLASSES = new Set(["independent_standard", "advocacy_independent", "international_media", "specialist_reference"]);
+
+/** Providers authoritative for the measurements/alerts they issue themselves (USGS for its earthquakes,
+ * NWS for its warnings) — and for nothing else: never evidence about a conflict event. */
+export const MEASUREMENT_AUTHORITY_CLASSES = new Set(["scientific_official", "government_alert", "sensor_provider", "humanitarian_monitor"]);
+export const MEASUREMENT_AUTHORITY_SCOPE = "Authoritative for the measurements or alerts it issues itself; not a source on unrelated events.";
 
 export const TRUST_LABEL: Record<TrustCategory, string> = {
   strong: "Independent / Strong Verification",
@@ -51,9 +58,11 @@ export function sourceTrust(input: TrustInput): SourceTrust {
     badge,
     perspective,
     countsAsIndependent: category === "strong" || category === "perspective" || category === "unclassified",
+    authorityScope: null,
   });
   if (input.claimPolicy === "discovery_only" || input.independenceClass === "osint_aggregator") return make("discovery", "DISCOVERY LEAD");
   if (input.claimPolicy === "party_claim" || (input.independenceClass && PARTY_CLASSES.has(input.independenceClass))) return make("party_claim", "PARTY CLAIM");
+  if (input.independenceClass && MEASUREMENT_AUTHORITY_CLASSES.has(input.independenceClass)) return { ...make("strong"), countsAsIndependent: false, authorityScope: MEASUREMENT_AUTHORITY_SCOPE };
   if (input.independenceClass === "independent_high") return make("strong");
   if (input.independenceClass && PERSPECTIVE_CLASSES.has(input.independenceClass)) return make("perspective");
   if (input.sourceRole === "aggregator" || input.sourceRole === "relay") return make("discovery", "DISCOVERY LEAD");

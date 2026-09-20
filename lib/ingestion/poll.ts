@@ -17,6 +17,8 @@ import {
 } from "@/lib/db/repositories/sources";
 import { recordIngestionAttempt } from "@/lib/db/repositories/ingestion-logs";
 import { HttpFetchError } from "@/lib/ingestion/errors";
+import { nextPollDelayMinutes, applyRetryAfterFloor } from "@/lib/ingestion/backoff";
+import { pollStructuredSource } from "@/lib/hazards/poll";
 import { linkEntitiesFromReport } from "@/lib/military/link-entities";
 import {
   findOrCreateMilitaryUnit,
@@ -62,27 +64,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
       },
     );
   });
-}
-
-// Exponential backoff on repeated failures, capped — "sensible backoff"
-// per spec, without a source that's down for a day hammering the network
-// every poll interval. consecutiveFailures is read from the row *after*
-// recordIngestionError's increment, so failure #1 already backs off 2x.
-const MAX_BACKOFF_MULTIPLIER = 8;
-
-function nextPollDelayMinutes(pollIntervalMinutes: number, consecutiveFailures: number): number {
-  if (consecutiveFailures <= 0) return pollIntervalMinutes;
-  const multiplier = Math.min(2 ** consecutiveFailures, MAX_BACKOFF_MULTIPLIER);
-  return pollIntervalMinutes * multiplier;
-}
-
-/** A 429/503 response with a Retry-After header is the server telling us
- * exactly when it's safe to come back — that's a floor on the delay, not
- * just a suggestion, so it always wins over a shorter backoff-computed
- * delay (never over a longer one, e.g. after several prior failures). */
-function applyRetryAfterFloor(delayMinutes: number, retryAfterSeconds: number | null): number {
-  if (retryAfterSeconds === null) return delayMinutes;
-  return Math.max(delayMinutes, retryAfterSeconds / 60);
 }
 
 /** Runs the automated draft-extraction heuristic once for a freshly
@@ -214,6 +195,9 @@ async function computeAndStoreTerritorialChangeCandidates(item: RawIngestionItem
  * nextPollAt (with backoff on failure), so this is the single place all
  * of a source's health bookkeeping happens regardless of what triggered it. */
 export async function pollSource(source: Source): Promise<FetchResult> {
+  // Structured sensor/official feeds (earthquakes, fire detections, alerts...) are not news: they go
+  // through the hazard store, sharing this function's health bookkeeping and backoff.
+  if (source.type === "structured") return pollStructuredSource(source);
   await recordAttemptStarted(source.id);
   try {
     const adapter = getAdapter(source.type);

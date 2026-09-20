@@ -24,6 +24,11 @@ import { createEventIconImageData } from "@/lib/map/event-icons";
 import { createContestedPatternImageData } from "@/lib/map/territorial-pattern";
 import { SEVERITY_HEX } from "@/lib/utils/severity";
 import type { TerritoryFeatureProperties } from "@/lib/types/territorial-control";
+import type { HazardCollection, HazardFeatureProps } from "@/lib/hazards/public-types";
+import type { HazardLayer } from "@/lib/hazards/types";
+import { createHazardIconImageData, HAZARD_ICON_IDS } from "@/lib/map/hazard-icons";
+import { EMPTY_HAZARD_SOURCES, hazardsToSources, type HazardSourceData } from "@/lib/map/hazards-to-geojson";
+import type { HazardViewport } from "@/hooks/use-hazards";
 
 // Simplified colored-dot markers ("medium zoom") give way to full
 // category icons ("high zoom") at this threshold — see Map Requirements.md
@@ -91,6 +96,13 @@ export interface WorldMapProps {
   territorialFeatures?: GeoJSON.FeatureCollection;
   showTerritorial?: boolean;
   onSelectTerritory?: (properties: TerritoryFeatureProperties) => void;
+  // Natural-hazard layers (earthquakes, fires, weather, volcanoes): structured sensor/official data
+  // drawn with their own visual language, independent of the conflict layers above. Optional, so the
+  // per-conflict detail map is unaffected.
+  hazards?: HazardCollection | null;
+  hazardLayers?: readonly HazardLayer[];
+  onSelectHazard?: (id: string) => void;
+  onViewportChange?: (viewport: HazardViewport) => void;
   className?: string;
 }
 
@@ -369,6 +381,74 @@ function addEventLayers(
   });
 }
 
+
+// ---- Natural-hazard layers ------------------------------------------------------------------
+// Visual language (deliberately unlike conflict markers, whose colour encodes conflict severity):
+//   earthquakes  violet RINGS sized by magnitude, "M6.4" labels, clustered when zoomed out
+//   thermal      amber DIAMONDS; dense detections arrive already aggregated as counted discs
+//   wildfires    red-orange flame-notched diamonds (reported incidents, not raw detections)
+//   volcanoes    rose TRIANGLES (faded when the record is stale)
+//   weather      teal alert AREAS (dashed outline, opacity by CAP severity) with a warning marker
+const HZ = { quake: "#C77DFF", thermal: "#FFB020", wildfire: "#FF5A36", volcano: "#FF6F91", weather: "#2EC4B6" };
+const HAZARD_LAYER_IDS: Record<HazardLayer, string[]> = {
+  earthquakes: ["hz-quake-cluster", "hz-quake-cluster-count", "hz-quake-circle", "hz-quake-label-major", "hz-quake-label-mid", "hz-quake-label-all"],
+  fires: ["hz-thermal-cluster", "hz-thermal-cluster-count", "hz-thermal-point", "hz-fire-point"],
+  weather: ["hz-weather-fill", "hz-weather-outline", "hz-weather-icon"],
+  volcanoes: ["hz-volcano"],
+};
+const HAZARD_CLICK_LAYERS = ["hz-quake-circle", "hz-thermal-point", "hz-fire-point", "hz-volcano", "hz-weather-icon", "hz-weather-fill"];
+const QUAKE_RADIUS: DataDrivenPropertyValueSpecification<number> = ["interpolate", ["linear"], ["coalesce", ["get", "value"], 2.5], 2.5, 4, 4, 7, 5, 11, 6, 18, 7, 28, 8, 38];
+const AREA_FILTER: ExpressionSpecification = ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]];
+
+function addHazardLayers(map: MapLibreMap, initial: HazardSourceData) {
+  if (map.getSource("hz-quakes")) return;
+  for (const id of HAZARD_ICON_IDS) if (!map.hasImage(id)) map.addImage(id, createHazardIconImageData(id), { sdf: true });
+  // Below the conflict layers, so a conflict marker always stays on top and clickable.
+  const before = map.getLayer("clusters") ? "clusters" : undefined;
+  const halo = { "text-color": "#F3F5F7", "text-halo-color": "rgba(8,10,13,0.9)", "text-halo-width": 1.4 };
+
+  map.addSource("hz-weather", { type: "geojson", data: initial.weather });
+  map.addLayer({ id: "hz-weather-fill", type: "fill", source: "hz-weather", filter: AREA_FILTER, layout: { visibility: "none" }, paint: { "fill-color": HZ.weather, "fill-opacity": ["interpolate", ["linear"], ["coalesce", ["get", "value"], 1], 1, 0.1, 2, 0.16, 3, 0.24, 4, 0.34] } }, before);
+  map.addLayer({ id: "hz-weather-outline", type: "line", source: "hz-weather", filter: AREA_FILTER, layout: { visibility: "none" }, paint: { "line-color": HZ.weather, "line-width": ["interpolate", ["linear"], ["coalesce", ["get", "value"], 1], 1, 1, 4, 2.5], "line-dasharray": ["literal", [3, 2]], "line-opacity": 0.9 } }, before);
+  map.addLayer({ id: "hz-weather-icon", type: "symbol", source: "hz-weather", layout: { visibility: "none", "icon-image": "hz-icon-warning", "icon-size": ["interpolate", ["linear"], ["zoom"], 1, 0.3, 8, 0.5], "icon-allow-overlap": true }, paint: { "icon-color": HZ.weather, "icon-halo-color": "rgba(8,10,13,0.9)", "icon-halo-width": 1.2 } }, before);
+
+  map.addSource("hz-thermal", { type: "geojson", data: initial.thermal });
+  map.addLayer({ id: "hz-thermal-cluster", type: "circle", source: "hz-thermal", filter: ["==", ["get", "kind"], "thermal_cluster"], layout: { visibility: "none" }, paint: { "circle-color": HZ.thermal, "circle-opacity": 0.32, "circle-stroke-width": 1.5, "circle-stroke-color": HZ.thermal, "circle-radius": ["interpolate", ["linear"], ["coalesce", ["get", "count"], 1], 1, 6, 20, 10, 200, 16, 2000, 24] } }, before);
+  map.addLayer({ id: "hz-thermal-cluster-count", type: "symbol", source: "hz-thermal", filter: ["==", ["get", "kind"], "thermal_cluster"], layout: { visibility: "none", "text-field": ["to-string", ["get", "count"]], "text-font": ["Noto Sans Regular"], "text-size": 10, "text-allow-overlap": true }, paint: halo }, before);
+  map.addLayer({ id: "hz-thermal-point", type: "symbol", source: "hz-thermal", filter: ["!=", ["get", "kind"], "thermal_cluster"], layout: { visibility: "none", "icon-image": "hz-icon-thermal", "icon-size": ["interpolate", ["linear"], ["zoom"], 6, 0.28, 12, 0.5], "icon-allow-overlap": true }, paint: { "icon-color": HZ.thermal, "icon-halo-color": "rgba(8,10,13,0.85)", "icon-halo-width": 1 } }, before);
+
+  map.addSource("hz-points", { type: "geojson", data: initial.points });
+  map.addLayer({ id: "hz-fire-point", type: "symbol", source: "hz-points", filter: ["==", ["get", "kind"], "confirmed_wildfire"], layout: { visibility: "none", "icon-image": "hz-icon-wildfire", "icon-size": ["interpolate", ["linear"], ["zoom"], 2, 0.34, 10, 0.6], "icon-allow-overlap": true }, paint: { "icon-color": HZ.wildfire, "icon-halo-color": "rgba(8,10,13,0.9)", "icon-halo-width": 1.2 } }, before);
+  map.addLayer({ id: "hz-volcano", type: "symbol", source: "hz-points", filter: ["==", ["get", "kind"], "volcano"], layout: { visibility: "none", "icon-image": "hz-icon-volcano", "icon-size": ["interpolate", ["linear"], ["zoom"], 2, 0.36, 10, 0.62], "icon-allow-overlap": true }, paint: { "icon-color": HZ.volcano, "icon-opacity": ["case", ["get", "stale"], 0.4, 1], "icon-halo-color": "rgba(8,10,13,0.9)", "icon-halo-width": 1.2 } }, before);
+
+  // Earthquakes cluster while zoomed out (the number is how many quakes).
+  map.addSource("hz-quakes", { type: "geojson", data: initial.quakes, cluster: true, clusterMaxZoom: 5, clusterRadius: 38, clusterProperties: { maxMag: ["max", ["coalesce", ["get", "value"], 0]] } });
+  map.addLayer({ id: "hz-quake-cluster", type: "circle", source: "hz-quakes", filter: ["has", "point_count"], layout: { visibility: "none" }, paint: { "circle-color": HZ.quake, "circle-opacity": 0.22, "circle-stroke-width": 2, "circle-stroke-color": HZ.quake, "circle-radius": ["step", ["get", "point_count"], 13, 5, 18, 20, 26] } }, before);
+  map.addLayer({ id: "hz-quake-cluster-count", type: "symbol", source: "hz-quakes", filter: ["has", "point_count"], layout: { visibility: "none", "text-field": ["to-string", ["get", "point_count"]], "text-font": ["Noto Sans Regular"], "text-size": 11, "text-allow-overlap": true }, paint: halo }, before);
+  map.addLayer({ id: "hz-quake-circle", type: "circle", source: "hz-quakes", filter: ["!", ["has", "point_count"]], layout: { visibility: "none" }, paint: { "circle-radius": QUAKE_RADIUS, "circle-color": HZ.quake, "circle-opacity": 0.16, "circle-stroke-width": 2, "circle-stroke-color": HZ.quake, "circle-stroke-opacity": 0.95 } }, before);
+  const label = (id: string, filter: ExpressionSpecification, minzoom: number) =>
+    map.addLayer({ id, type: "symbol", source: "hz-quakes", filter, minzoom, layout: { visibility: "none", "text-field": ["get", "label"], "text-font": ["Noto Sans Regular"], "text-size": 11, "text-offset": [0, 1.4], "text-anchor": "top", "text-allow-overlap": false }, paint: halo }, before);
+  label("hz-quake-label-major", ["all", ["!", ["has", "point_count"]], [">=", ["coalesce", ["get", "value"], 0], 5]], 0);
+  label("hz-quake-label-mid", ["all", ["!", ["has", "point_count"]], [">=", ["coalesce", ["get", "value"], 0], 3.5], ["<", ["coalesce", ["get", "value"], 0], 5]], 5);
+  label("hz-quake-label-all", ["all", ["!", ["has", "point_count"]], ["<", ["coalesce", ["get", "value"], 0], 3.5]], 7);
+}
+
+function setHazardData(map: MapLibreMap, data: HazardSourceData) {
+  (map.getSource("hz-quakes") as GeoJSONSource | undefined)?.setData(data.quakes);
+  (map.getSource("hz-thermal") as GeoJSONSource | undefined)?.setData(data.thermal);
+  (map.getSource("hz-points") as GeoJSONSource | undefined)?.setData(data.points);
+  (map.getSource("hz-weather") as GeoJSONSource | undefined)?.setData(data.weather);
+}
+
+function applyHazardVisibility(map: MapLibreMap, enabled: readonly HazardLayer[]) {
+  (Object.keys(HAZARD_LAYER_IDS) as HazardLayer[]).forEach((layer) => {
+    const vis = enabled.includes(layer) ? "visible" : "none";
+    HAZARD_LAYER_IDS[layer].forEach((id) => {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", vis);
+    });
+  });
+}
+
 /** "99+"-capped display text for a numeric report-count expression. */
 function REPORT_LABEL_EXPRESSION(value: ExpressionSpecification): ExpressionSpecification {
   return ["case", [">", value, REPORT_COUNT_CAP], `${REPORT_COUNT_CAP}+`, ["to-string", value]];
@@ -417,6 +497,10 @@ export function WorldMap({
   territorialFeatures = EMPTY_FEATURE_COLLECTION,
   showTerritorial = false,
   onSelectTerritory = () => {},
+  hazards = null,
+  hazardLayers = [],
+  onSelectHazard = () => {},
+  onViewportChange = () => {},
   className,
 }: WorldMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -427,6 +511,10 @@ export function WorldMap({
   const showTerritorialRef = useRef(showTerritorial);
   const onSelectTerritoryRef = useRef(onSelectTerritory);
   const territorialFeaturesRef = useRef(territorialFeatures);
+  const hazardDataRef = useRef<HazardSourceData>(EMPTY_HAZARD_SOURCES);
+  const hazardLayersRef = useRef(hazardLayers);
+  const onSelectHazardRef = useRef(onSelectHazard);
+  const onViewportChangeRef = useRef(onViewportChange);
   const appliedModeRef = useRef<MapBasemapMode | null>(null);
   const apiKey = getMapTilerKey();
   const [missingKeyNotice, setMissingKeyNotice] = useState(false);
@@ -452,6 +540,9 @@ export function WorldMap({
     showTerritorialRef.current = showTerritorial;
     onSelectTerritoryRef.current = onSelectTerritory;
     territorialFeaturesRef.current = territorialFeatures;
+    hazardLayersRef.current = hazardLayers;
+    onSelectHazardRef.current = onSelectHazard;
+    onViewportChangeRef.current = onViewportChange;
   });
 
   const applyViewModeVisibility = (map: MapLibreMap) => {
@@ -492,6 +583,13 @@ export function WorldMap({
     appliedModeRef.current = basemapMode;
     // Hotspot labels regroup with zoom (registered once; style.load re-adds sources).
     map.on("zoomend", () => refreshReportHeatLabels(map, eventsRef.current));
+    // Viewport for the bounded hazard queries (clamped: the world wraps at low zoom).
+    const reportViewport = () => {
+      const b = map.getBounds();
+      onViewportChangeRef.current({ bbox: [Math.max(-180, b.getWest()), Math.max(-90, b.getSouth()), Math.min(180, b.getEast()), Math.min(90, b.getNorth())], zoom: map.getZoom() });
+    };
+    map.on("moveend", reportViewport);
+    map.once("load", reportViewport);
     // Dev/test-only escape hatch: exposes the live map instance so
     // Playwright tests can compute an exact click pixel for a given
     // lng/lat via map.project(...) instead of guessing screen
@@ -526,6 +624,35 @@ export function WorldMap({
       refreshReportHeatLabels(map, eventsRef.current);
       applyViewModeVisibility(map);
       applyTerritorialVisibility(map);
+      addHazardLayers(map, hazardDataRef.current);
+      applyHazardVisibility(map, hazardLayersRef.current);
+
+      // Hazard interactions. A conflict marker stacked on a hazard keeps priority (checked below);
+      // clusters zoom in rather than select.
+      const CONFLICT_MARKERS = ["clusters", "unclustered-point", "unclustered-point-icon"];
+      const selectHazard = (e: MapLayerMouseEvent) => {
+        if (map.queryRenderedFeatures(e.point, { layers: CONFLICT_MARKERS.filter((l) => map.getLayer(l)) }).length > 0) return;
+        const feature = e.features?.[0];
+        if (!feature) return;
+        const props = feature.properties as HazardFeatureProps;
+        if (props.kind === "thermal_cluster" && feature.geometry.type === "Point") {
+          map.easeTo({ center: feature.geometry.coordinates as [number, number], zoom: Math.min(map.getZoom() + 2.5, 8) });
+          return;
+        }
+        // Point layers beat an area beneath them.
+        if (feature.layer.id === "hz-weather-fill" && map.queryRenderedFeatures(e.point, { layers: HAZARD_CLICK_LAYERS.filter((l) => l !== "hz-weather-fill" && map.getLayer(l)) }).length > 0) return;
+        onSelectHazardRef.current(props.id);
+      };
+      for (const layer of HAZARD_CLICK_LAYERS) {
+        map.on("click", layer, selectHazard);
+        map.on("mouseenter", layer, () => (map.getCanvas().style.cursor = "pointer"));
+        map.on("mouseleave", layer, () => (map.getCanvas().style.cursor = ""));
+      }
+      map.on("click", "hz-thermal-cluster", selectHazard);
+      map.on("click", "hz-quake-cluster", (e: MapLayerMouseEvent) => {
+        const f = e.features?.[0];
+        if (f?.geometry.type === "Point") map.easeTo({ center: f.geometry.coordinates as [number, number], zoom: map.getZoom() + 2 });
+      });
 
       map.on("click", "territory-fill", (e: MapLayerMouseEvent) => {
         // "Heatmap/event hotspots must remain clickable above territorial
@@ -535,7 +662,7 @@ export function WorldMap({
         // BOTH handlers for one click; querying the marker layers first
         // and yielding to them keeps markers taking priority when stacked.
         const markerHit = map.queryRenderedFeatures(e.point, {
-          layers: ["clusters", "unclustered-point", "unclustered-point-icon"],
+          layers: ["clusters", "unclustered-point", "unclustered-point-icon", ...HAZARD_CLICK_LAYERS.filter((l) => l !== "hz-weather-fill" && map.getLayer(l))],
         });
         if (markerHit.length > 0) return;
         const feature = e.features?.[0];
@@ -656,8 +783,22 @@ export function WorldMap({
     applyTerritorialVisibility(map);
   }, [showTerritorial]);
 
+  // Hazard data and toggles: setData on the existing sources (never rebuilt), visibility per layer.
+  const hazardData = useMemo(() => (hazards ? hazardsToSources(hazards.features) : EMPTY_HAZARD_SOURCES), [hazards]);
+  useEffect(() => {
+    hazardDataRef.current = hazardData;
+    const map = mapRef.current;
+    if (map) setHazardData(map, hazardData);
+  }, [hazardData]);
+  const hazardLayerKey = hazardLayers.join(",");
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map) applyHazardVisibility(map, hazardLayers);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the joined list
+  }, [hazardLayerKey]);
+
   return (
-    <div className={className} style={{ position: "relative" }} data-heat-signature={heatField?.signature} data-heat-peak={heatField ? Math.round(heatField.peak) : undefined}>
+    <div className={className} style={{ position: "relative" }} data-heat-signature={heatField?.signature} data-heat-peak={heatField ? Math.round(heatField.peak) : undefined} data-hazard-layers={hazardLayerKey} data-hazard-count={hazards ? hazards.features.length : 0}>
       <div ref={containerRef} className="h-full w-full" role="application" aria-label="Operational conflict map" />
       {viewMode === "heatmap" && <HeatLegend className="absolute bottom-20 left-3 z-10 sm:bottom-7" />}
       {missingKeyNotice && (

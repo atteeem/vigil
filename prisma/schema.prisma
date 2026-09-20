@@ -95,6 +95,7 @@ model Source {
   updatedAt               DateTime  @updatedAt @map("updated_at")
 
   rawItems      RawIngestionItem[]
+  globalEvents  GlobalEvent[]
   ingestionLogs IngestionLog[]
   conflictLinks SourceConflictLink[]
 
@@ -460,6 +461,10 @@ model Event {
   title              String
   summary            String
   eventType          String    @map("event_type")
+  // Where the event comes from (lib/hazards/types.ts EVENT_ORIGINS): a conflict/news report is the
+  // default; structured sensor/official/scientific feeds live in GlobalEvent instead and are never
+  // dressed up as news.
+  origin             String    @default("conflict_news")
   locationName       String?   @map("location_name")
   latitude           Float
   longitude          Float
@@ -1091,4 +1096,112 @@ model EntityMatchReview {
   @@unique([rawIngestionItemId, entityKind, matchedText])
   @@index([status])
   @@map("entity_match_reviews")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Live Global Data Layers: structured, non-news observations from authoritative providers
+// (earthquakes, thermal detections, wildfires, volcanoes, official weather/hazard alerts).
+// Deliberately NOT the conflict `Event` table: these are sensor readings and official alerts with
+// their own domain severity, provider revisions and expiry, and must never be mistaken for news.
+// ---------------------------------------------------------------------------------------------
+model GlobalEvent {
+  id                String    @id @default(cuid())
+  // official_alert | sensor | scientific_observation | humanitarian | infrastructure | other
+  origin            String
+  // earthquake | thermal_detection | confirmed_wildfire | volcano | weather_alert | cyclone | flood
+  category          String
+  // Map layer this belongs to: earthquakes | fires | weather | volcanoes
+  layer             String
+  subtype           String?
+  provider          String
+  providerEventId   String    @map("provider_event_id")
+  sourceId          String?   @map("source_id")
+  source            Source?   @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  title             String
+  description       String?
+  // Domain-specific severity: never converted to conflict severity. severityDomain names the scale
+  // (earthquake_magnitude | fire_radiative_power_mw | cap_severity | volcano_alert_level | gdacs_alert_level).
+  severityDomain    String?   @map("severity_domain")
+  severityValue     Float?    @map("severity_value")
+  severityLabel     String?   @map("severity_label")
+  // 0-100 display prominence WITHIN the domain (marker size, homepage cut-off); not a severity.
+  prominence        Float     @default(0)
+  // Provider-supplied confidence/certainty, verbatim semantics (FIRMS confidence, CAP certainty,
+  // earthquake solution status). Never invented.
+  confidenceLabel   String?   @map("confidence_label")
+  confidenceValue   Float?    @map("confidence_value")
+  geometryType      String    @default("point") @map("geometry_type")
+  // GeoJSON geometry (JSON) for area events (alert polygons); null for points.
+  geometry          String?
+  lat               Float
+  lng               Float
+  minLat            Float     @map("min_lat")
+  maxLat            Float     @map("max_lat")
+  minLng            Float     @map("min_lng")
+  maxLng            Float     @map("max_lng")
+  // exact | approximate | area_level | unknown
+  locationPrecision String    @default("exact") @map("location_precision")
+  observedAt        DateTime  @map("observed_at")
+  providerUpdatedAt DateTime? @map("provider_updated_at")
+  effectiveAt       DateTime? @map("effective_at")
+  expiresAt         DateTime? @map("expires_at")
+  // Set when the provider withdrew / ended the event before its expiry.
+  endedAt           DateTime? @map("ended_at")
+  sourceUrl         String?   @map("source_url")
+  metadata          String?
+  revision          Int       @default(1)
+  contentHash       String    @map("content_hash")
+  firstSeenAt       DateTime  @default(now()) @map("first_seen_at")
+  lastSeenAt        DateTime  @default(now()) @map("last_seen_at")
+
+  revisions GlobalEventRevision[]
+
+  @@unique([provider, providerEventId])
+  @@index([layer, observedAt])
+  @@index([category, observedAt])
+  @@index([layer, minLat, maxLat, minLng, maxLng])
+  @@index([expiresAt])
+  @@map("global_events")
+}
+
+// Every provider revision (a re-scored earthquake, an updated alert) — the volatile fields as they
+// were, so the timeline can reconstruct what was known at an earlier moment.
+model GlobalEventRevision {
+  id                String      @id @default(cuid())
+  globalEventId     String      @map("global_event_id")
+  globalEvent       GlobalEvent @relation(fields: [globalEventId], references: [id], onDelete: Cascade)
+  revision          Int
+  providerUpdatedAt DateTime?   @map("provider_updated_at")
+  recordedAt        DateTime    @default(now()) @map("recorded_at")
+  snapshot          String
+
+  @@unique([globalEventId, revision])
+  @@map("global_event_revisions")
+}
+
+// Archive tier for high-volume observations (thermal detections): raw rows leave the hot table after
+// the retention window and survive as per-day grid-cell aggregates.
+model GlobalEventAggregate {
+  id           String   @id @default(cuid())
+  provider     String
+  category     String
+  day          String
+  cellLat      Float    @map("cell_lat")
+  cellLng      Float    @map("cell_lng")
+  count        Int
+  maxIntensity Float?   @map("max_intensity")
+  sumIntensity Float?   @map("sum_intensity")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([provider, category, day, cellLat, cellLng])
+  @@map("global_event_aggregates")
+}
+
+// Cached alert-zone geometry (NWS alerts often reference zones instead of carrying a polygon).
+model HazardZone {
+  id        String   @id
+  geometry  String
+  fetchedAt DateTime @default(now()) @map("fetched_at")
+
+  @@map("hazard_zones")
 }
