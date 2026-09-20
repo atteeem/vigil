@@ -4,8 +4,10 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { GlassCard } from "@/components/ui/card";
 import { CountrySelector } from "./country-selector";
-import { getCountryByCode, getTopConflictsForCountry } from "@/lib/data";
-import type { Conflict } from "@/lib/types";
+import { getCountryByCode } from "@/lib/data";
+import { rankConflictsForCountry } from "@/lib/data/priority";
+import { useNowMs } from "@/hooks/use-now";
+import type { Conflict, ConflictEvent } from "@/lib/types";
 import { EmptyState } from "@/components/public/data-states";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -13,17 +15,20 @@ import { cn } from "@/lib/utils";
 export function RelevantToYouCard({
   baseCountryCode,
   conflicts,
+  events = [],
   onSelectConflict,
   className,
 }: {
   baseCountryCode: string;
   conflicts: readonly Conflict[];
+  events?: readonly ConflictEvent[];
   onSelectConflict?: (slug: string) => void;
   className?: string;
 }) {
   const country = getCountryByCode(baseCountryCode);
+  const now = useNowMs(events);
   if (!country) return null;
-  const top = getTopConflictsForCountry(country, conflicts, 3);
+  const top = rankConflictsForCountry(country, conflicts, events, now, 3);
 
   return (
     <GlassCard className={cn("w-full max-w-[300px] p-5", className)} data-testid="relevant-to-you-card">

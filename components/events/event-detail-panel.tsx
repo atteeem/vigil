@@ -6,7 +6,9 @@ import { ArrowRight, MapPin } from "lucide-react";
 import type { ConflictEvent } from "@/lib/types";
 import type { ActorLink } from "@/lib/public/actors";
 import { EventTypeIcon, getEventTypeLabel } from "./event-type-icon";
-import { SourceRoleIcon, getSourceRoleLabel } from "./source-role-icon";
+import { EvidencePanel, evidenceReports } from "./evidence-panel";
+import type { ConflictingClaims } from "@/lib/public/claims";
+import { describeEvidence, summarizeEvidence } from "@/lib/sources/trust";
 import { VerificationBadge } from "@/components/ui/verification-badge";
 import { SeverityBadge } from "@/components/ui/severity-badge";
 import { RelativeTime } from "@/components/ui/relative-time";
@@ -43,6 +45,7 @@ export function EventDetailPanel({
   conflict,
   actors,
   territorialChanges,
+  conflictingClaims,
   linkToFullPage = true,
 }: {
   event: ConflictEvent;
@@ -51,6 +54,8 @@ export function EventDetailPanel({
   /** Actor names with links where they exist as stored actors. Falls back to plain names. */
   actors?: ActorLink[];
   territorialChanges?: EventPanelTerritorialChange[];
+  /** Places where two sides both claim control (see lib/public/claims.ts). */
+  conflictingClaims?: ConflictingClaims[];
   /** Hide the "Open full event page" link when this panel IS the full event page (avoids a self-referential link). */
   linkToFullPage?: boolean;
 }) {
@@ -67,6 +72,10 @@ export function EventDetailPanel({
   }, []);
   const effectiveTimezone = mounted ? timezone : "UTC";
 
+  const evidence = summarizeEvidence(evidenceReports(event.sources));
+  // Accepted facts stay attributed while nothing independent backs the event.
+  const factPrefix = evidence.independentSources === 0 && evidence.partyClaims > 0 ? "Claimed (uncorroborated): " : "";
+  const firstPublished = event.sources.length > 0 ? event.sources.map((x) => x.publishedAt).sort()[0]! : null;
   const precision = event.locationPrecision ?? null;
   const actorList: ActorLink[] = actors ?? (event.actors ?? []).map((name) => ({ name, href: null }));
 
@@ -98,11 +107,26 @@ export function EventDetailPanel({
         <SeverityBadge severity={event.severity} size="sm" />
         <VerificationBadge status={event.verificationStatus} disputed={event.disputed} />
         <span className="text-[11px] text-ink-faint" data-testid="event-evidence-summary">
-          {event.sourceCount} independent source{event.sourceCount === 1 ? "" : "s"} · {event.sources.length} supporting report{event.sources.length === 1 ? "" : "s"}
+          {evidence.independentSources > 0 ? describeEvidence(evidence) : "No independent confirmation"} · {event.sources.length} report{event.sources.length === 1 ? "" : "s"} attached
         </span>
       </div>
 
       <p className="mt-4 text-sm leading-relaxed text-ink-dim">{event.summary}</p>
+
+      <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-1 text-[11px] text-ink-faint sm:grid-cols-3" data-testid="event-freshness">
+        <div>
+          <dt className="uppercase tracking-wide">Event occurred</dt>
+          <dd className="text-ink-dim">{formatAbsoluteTime(event.occurredAt, effectiveTimezone)}</dd>
+        </div>
+        <div>
+          <dt className="uppercase tracking-wide">First source published</dt>
+          <dd className="text-ink-dim">{firstPublished ? formatAbsoluteTime(firstPublished, effectiveTimezone) : "No source attached"}</dd>
+        </div>
+        <div>
+          <dt className="uppercase tracking-wide">Data last updated</dt>
+          <dd className="text-ink-dim">{event.updatedAt ? formatAbsoluteTime(event.updatedAt, effectiveTimezone) : "Unknown"}</dd>
+        </div>
+      </dl>
 
       {(actorList.length > 0 || event.casualtiesKilled != null || event.casualtiesInjured != null || (event.infrastructureDamage?.length ?? 0) > 0) && (
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-dim" data-testid="event-accepted-facts">
@@ -123,8 +147,8 @@ export function EventDetailPanel({
               ))}
             </span>
           )}
-          {event.casualtiesKilled != null && <span>Killed: {event.casualtiesKilled}</span>}
-          {event.casualtiesInjured != null && <span>Injured: {event.casualtiesInjured}</span>}
+          {event.casualtiesKilled != null && <span>{factPrefix}Killed: {event.casualtiesKilled}</span>}
+          {event.casualtiesInjured != null && <span>{factPrefix}Injured: {event.casualtiesInjured}</span>}
           {event.infrastructureDamage && event.infrastructureDamage.length > 0 && <span>Damage: {event.infrastructureDamage.join(", ")}</span>}
         </div>
       )}
@@ -190,53 +214,7 @@ export function EventDetailPanel({
         </div>
       )}
 
-      <div className="mt-5" data-testid="event-reports">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Supporting reports ({event.sources.length})</p>
-        <p className="mt-1 text-[11px] text-ink-faint">Articles and posts behind this event — evidence for it, not separate events.</p>
-        {event.sources.length === 0 ? (
-          <p className="mt-2 text-xs text-ink-faint" data-testid="event-no-reports">
-            No supporting report is attached to this event.
-          </p>
-        ) : (
-          <ul className="mt-2 space-y-2">
-            {event.sources.map((s, i) => (
-              // s.id is the outlet's id, not this link's: the same outlet can supply more than one
-              // report to one event, so the key is index-qualified.
-              <li key={`${s.id}-${i}`} className="rounded-lg border border-border px-3 py-2 text-xs" data-testid="event-report">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="flex items-center gap-1.5 font-medium text-ink">
-                    <SourceRoleIcon sourceRole={s.sourceRole} className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
-                    {s.name}
-                    {i === 0 && (
-                      <span className="ml-1.5 rounded-full border border-accent/30 bg-accent-dim px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-accent">
-                        Originating report
-                      </span>
-                    )}
-                  </p>
-                  <p className="shrink-0 text-ink-faint">
-                    <RelativeTime iso={s.publishedAt} />
-                  </p>
-                </div>
-                <p className="mt-0.5 text-ink-faint">
-                  Source type: {s.sourceType}
-                  {getSourceRoleLabel(s.sourceRole) && ` · ${getSourceRoleLabel(s.sourceRole)}`}
-                </p>
-                <p className="mt-0.5 text-ink-faint">Published: {formatAbsoluteTime(s.publishedAt, effectiveTimezone)}</p>
-                {s.url ? (
-                  <a href={s.url} target="_blank" rel="noopener noreferrer" className="mt-1 block truncate text-accent hover:underline" data-testid="original-source-link">
-                    Original source: {s.url}
-                  </a>
-                ) : (
-                  <p className="mt-1 text-ink-faint" data-testid="source-unavailable">
-                    Source unavailable
-                  </p>
-                )}
-                {s.note && <p className="mt-1 text-[10px] italic text-ink-faint">{s.note}</p>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      <EvidencePanel event={event} timezone={effectiveTimezone} conflictingClaims={conflictingClaims} />
 
       {linkToFullPage && (
         <Link href={`/event/${event.slug}`} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-5 w-full")}>

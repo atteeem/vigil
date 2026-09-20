@@ -36,6 +36,7 @@ export interface SourceInput {
   verificationNotes?: string | null;
   independenceClass?: string | null;
   claimPolicy?: string | null;
+  perspective?: string | null;
 }
 
 export function listSources(): Promise<Source[]> {

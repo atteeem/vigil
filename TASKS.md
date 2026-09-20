@@ -1099,3 +1099,20 @@ Deferred / notes:
 - [x] Tests: `tests/source-plugin.spec.ts`.
 
 Open follow-ups: get authorised Telegram credentials to verify and enable the Telegram channels; decide on El Universo's advertised feed; resolve the NEEDS_VERIFICATION placeholders (PDKI, Kuki Inpi, Libya Al Ahrar/Al Hadath/Review/Ean Libya, Sahel Monitor, KHRN/Mimi Mefo/CENTCOM/Lebanese Army/Faytuks social accounts); the RSS adapter reads RSS 2.0 only (Atom-only sites need an adapter); admin Sources UI does not yet display the new identity/verification fields.
+
+## Public Data Unification & Real Intelligence Experience (trust, claims, ranking)
+
+Builds on `4493249` (one DB-backed public layer, mock data isolated to `lib/dev-fixtures`, source-link integrity) and `3ff01d9` (source identity/verification).
+
+- [x] Audit re-run: production paths contain no mock conflicts/events, seeded randomness, example.com/localhost links or MOCK_* references (enforced by `tests/public-data.spec.ts`).
+- [x] Source trust presentation (`lib/sources/trust.ts`): stored `independenceClass` + `claimPolicy` -> Independent / Strong Verification, Independent / Perspective, Party / Aligned Claim (badge PARTY CLAIM), Discovery lead, or "not yet classified"; a new `Source.perspective` ("Israeli military", "Kurdish human-rights reporting") is shown beside the label. No internal enum is rendered publicly.
+- [x] Independence groups: an outlet counts once however many reports it files; the same article, relays and discovery leads never add; party claims are counted separately. `independentSourceCount` (stored event count) and the public evidence line use the same grouping ("4 independent sources · 1 strongly verified · 3 perspectives · 1 party claim").
+- [x] Party-claim setting: Profile -> Sources -> Show Party / Aligned Claims (default OFF, persisted, store v3). Off: party cards are hidden from event and conflict source lists with "N party claims hidden"; On: shown separately as PARTY CLAIM cards. Storage, ingestion and admin unchanged.
+- [x] Claims vs facts: event pages have separate Event / Reports and sources / Claims sections. A party report is worded "<source> reports: “<its headline>”" with Status: Uncorroborated / Corroborated by N independent sources; with no independent support the page says "No independent confirmation" and accepted casualty figures are prefixed "Claimed (uncorroborated)". Territorial claims from two different actors on one place render as CONFLICTING CLAIMS with no conclusion (`lib/public/claims.ts`; only reviewed approved/uncertain candidates are public).
+- [x] Freshness on events: Event occurred / First source published / Data last updated; nothing is called "live" because a page loaded.
+- [x] Homepage: `IntelOverview` — major active conflicts (severity 60% / most significant recent event 25% / recency 15%), significant events of the last 7 days (severity x importance, faded by age, +-15% by independent-outlet confidence — never article count), latest verified updates; selected-country ranking now uses `rankConflictsForCountry` (`lib/data/priority.ts`): own-country then bordering full-scale-war floors first, then impact/severity/recent significance/confidence/freshness, deterministic, with reasons shown on For You. Globe and /world share `selectHeatConflicts` (one conflict universe).
+- [x] Conflict page additions: family, actor roles, conflicting-claims section, trust labels + perspective on source cards, party-claim hiding in latest reports, "No dedicated source" state.
+- [x] Actor page: territorial-control relationship for units that also hold territory; search resolves commanders through the unit they lead.
+- [x] Tests: `tests/public-intelligence.spec.ts`; `public-data.spec.ts` wording updated.
+
+Deferred: equipment has no public page (not in search); perspective text exists only for sources seeded from `data/source-plugin.json`; territory geometry itself is still viewed on /world; claims are derived from source classification and reviewed territorial candidates (no NLP claim extraction from report text).

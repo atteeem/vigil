@@ -4,6 +4,7 @@ import { dbEventToConflictEvent } from "@/lib/data/world-events";
 import { WITH_SOURCES } from "@/lib/db/repositories/events";
 import { getPublicConflictBySlug } from "./conflicts";
 import { resolveActorLinks, type ActorLink } from "./actors";
+import { listConflictingClaims, type ConflictingClaims } from "./claims";
 import { parseJsonArray } from "@/lib/ingestion/event-update-proposals";
 
 // Bounded, published-only event reads for every public surface. Never returns
@@ -58,6 +59,8 @@ export interface PublicEventDetail {
   conflict: Conflict | null;
   actors: ActorLink[];
   related: ConflictEvent[];
+  /** Places tied to this event where two sides both claim control. */
+  conflictingClaims: ConflictingClaims[];
   territorialChanges: {
     id: string;
     description: string;
@@ -90,12 +93,15 @@ export async function getPublicEventDetail(slug: string): Promise<PublicEventDet
       ? prisma.territorialChangeCandidate.findMany({ where: { status: "approved", rawIngestionItemId: { in: rawIds } }, include: { conflict: { select: { slug: true } } }, take: 5 })
       : Promise.resolve([]),
   ]);
+  const locations = new Set(changes.map((c) => (c.locationName ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()).filter(Boolean));
+  const conflictingClaims = row.conflictId && locations.size > 0 ? (await listConflictingClaims(row.conflictId)).filter((g) => locations.has(g.location.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim())) : [];
   const names = [...parseJsonArray(row.actors), ...row.militaryUnitLinks.map((l) => l.unit.name)];
   return {
     event,
     conflict,
     actors: await resolveActorLinks(names),
     related: relatedRows.map((e) => dbEventToConflictEvent(e)),
+    conflictingClaims,
     territorialChanges: changes.map((c) => ({
       id: c.id,
       description: c.description,

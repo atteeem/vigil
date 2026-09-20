@@ -70,6 +70,8 @@ export default function ProfilePage() {
   const setTimeRange = useAppStore((s) => s.setTimeRange);
   const contentSensitivity = useAppStore((s) => s.contentSensitivity);
   const setContentSensitivity = useAppStore((s) => s.setContentSensitivity);
+  const showPartyClaims = useAppStore((s) => s.showPartyClaims);
+  const setShowPartyClaims = useAppStore((s) => s.setShowPartyClaims);
 
   function toggleRegion(region: Region) {
     setPreferredRegions(
@@ -198,6 +200,26 @@ export default function ProfilePage() {
             value={contentSensitivity}
             onChange={setContentSensitivity}
           />
+        </Card>
+
+        <Card className="p-5" data-testid="sources-settings">
+          <SectionLabel>Sources</SectionLabel>
+          <p className="mb-3 text-xs text-ink-faint">
+            Party and aligned claims are statements by a side in a conflict (a military, a state outlet, an aligned
+            channel). They are hidden from event source lists by default and are never counted as independent
+            confirmation. Turning this on shows them separately, labelled PARTY CLAIM. They stay stored either way.
+          </p>
+          <label className="flex items-center gap-2 text-sm text-ink" htmlFor="show-party-claims">
+            <input
+              id="show-party-claims"
+              type="checkbox"
+              checked={showPartyClaims}
+              onChange={(e) => setShowPartyClaims(e.target.checked)}
+              className="h-4 w-4 rounded border-border-strong accent-accent"
+              data-testid="show-party-claims"
+            />
+            Show Party / Aligned Claims
+          </label>
         </Card>
 
         <Card className="p-5">

@@ -9,7 +9,7 @@ import { evidenceRoleOf, isNonIndependentRole } from "@/lib/registry/source-tier
 
 interface LinkLike {
   isOriginatingSource: boolean;
-  rawIngestionItem: { originalUrl?: string | null; source: { sourceRole: string | null; claimPolicy?: string | null } };
+  rawIngestionItem: { originalUrl?: string | null; source: { id?: string; sourceRole: string | null; claimPolicy?: string | null } };
 }
 
 /** Comparable form of an article URL: scheme-less, lower-case host, no fragment,
@@ -35,11 +35,13 @@ export function independentSourceCount(links: readonly LinkLike[]): number {
   let independent = 0;
   for (const l of originating) {
     if (isNonIndependentRole(evidenceRoleOf(l.rawIngestionItem.source))) continue;
-    const key = normalizeSourceUrl(l.rawIngestionItem.originalUrl);
-    if (key) {
-      if (seen.has(key)) continue;
-      seen.add(key);
-    }
+    // Independence groups: one outlet is ONE group however many reports it files, and the
+    // same article attached twice is one report. Neither raises the independent count.
+    const outlet = l.rawIngestionItem.source.id ? `outlet:${l.rawIngestionItem.source.id}` : null;
+    const article = normalizeSourceUrl(l.rawIngestionItem.originalUrl);
+    if ((outlet && seen.has(outlet)) || (article && seen.has(`url:${article}`))) continue;
+    if (outlet) seen.add(outlet);
+    if (article) seen.add(`url:${article}`);
     independent++;
   }
   return independent > 0 ? independent : originating.length > 0 ? 1 : 0;

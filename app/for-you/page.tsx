@@ -8,7 +8,9 @@ import { SEVERITY_LABEL, SEVERITY_TEXT_CLASS, severityFromScore } from "@/lib/ut
 import { formatSigned, cn } from "@/lib/utils";
 import { distanceKm } from "@/lib/utils/geo";
 import { useAppStore } from "@/hooks/use-app-store";
-import { getCountryByCode, computeCountryExposure, getTopConflictsForCountry } from "@/lib/data";
+import { getCountryByCode, computeCountryExposure } from "@/lib/data";
+import { rankConflictsForCountry } from "@/lib/data/priority";
+import { useNowMs } from "@/hooks/use-now";
 import { usePublicOverview } from "@/hooks/use-public-overview";
 import { EmptyState, FreshnessStamp, LoadingLine } from "@/components/public/data-states";
 import { STALE_SOURCE_HOURS } from "@/lib/public/stale";
@@ -19,6 +21,7 @@ export default function ForYouPage() {
   // Real, DB-backed conflicts (the same set the homepage uses). Relevance comes only from the
   // explicitly selected country, through the centralized impact engine.
   const overview = usePublicOverview();
+  const now = useNowMs(overview.data);
   if (!country) return null;
   if (!overview.data) {
     return (
@@ -36,7 +39,7 @@ export default function ForYouPage() {
   const activeCount = conflicts.filter((c) => c.status === "active" || c.status === "reduced").length;
   const exposure = computeCountryExposure(country, conflicts);
   const severity = severityFromScore(exposure.score);
-  const topConflicts = getTopConflictsForCountry(country, conflicts, 6);
+  const topConflicts = rankConflictsForCountry(country, conflicts, overview.data.events, now, 6);
 
   return (
     <main className="mx-auto max-w-[1000px] px-4 pb-28 pt-24 sm:px-6 sm:pt-32">
@@ -87,7 +90,7 @@ export default function ForYouPage() {
       </h2>
       {topConflicts.length === 0 && <EmptyState title="No conflicts to rank" detail="Nothing tracked affects this country yet." testId="for-you-empty" />}
       <div className="space-y-2">
-        {topConflicts.map(({ conflict, impact }) => {
+        {topConflicts.map(({ conflict, impact, reasons }) => {
           const km = Math.round(distanceKm(country, conflict));
           const sec = impact.components.find((c) => c.dimension === "security")?.value ?? 0;
           const energy = impact.components.find((c) => c.dimension === "energy")?.value ?? 0;
@@ -100,7 +103,12 @@ export default function ForYouPage() {
             >
               <div className="min-w-[140px] flex-1">
                 <p className="text-sm font-medium text-ink">{conflict.shortName}</p>
-                <p className="text-xs text-ink-faint">{km.toLocaleString("en-US")} km away</p>
+                <p className="text-xs text-ink-faint">{conflict.locationKnown ? `${km.toLocaleString("en-US")} km away` : "Location unknown"}</p>
+                {reasons.length > 0 && (
+                  <p className="mt-0.5 text-[11px] text-ink-dim" data-testid="for-you-reasons">
+                    {reasons.join(" · ")}
+                  </p>
+                )}
               </div>
               <MiniMetric label="Impact" value={impact.score} accent />
               <MiniMetric label="Security" value={sec} />

@@ -8,6 +8,7 @@ import { EventCard } from "@/components/events/event-card";
 import { EventDetailPanel } from "@/components/events/event-detail-panel";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { usePublicOverview } from "@/hooks/use-public-overview";
+import { selectHeatConflicts } from "@/lib/heat/public-inputs";
 import { isWithinRange } from "@/lib/utils/time-range";
 import { cn } from "@/lib/utils";
 import type { ConflictEvent, TimeRange } from "@/lib/types";
@@ -91,7 +92,7 @@ export default function WorldPage() {
     return c ? { slug: c.slug, shortName: c.shortName } : null;
   }, [selected, realConflicts]);
   const heatConflicts = useMemo(
-    () => (timeline.isHistorical ? undefined : realConflicts?.filter((c) => c.locationKnown && (region === "Global" || c.region === region))),
+    () => (timeline.isHistorical ? undefined : selectHeatConflicts(realConflicts).filter((c) => region === "Global" || c.region === region)),
     [timeline.isHistorical, region, realConflicts],
   );
   // Live: real clock at the time the event set last changed. Historical: the timeline's asOf.

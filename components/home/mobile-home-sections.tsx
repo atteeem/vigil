@@ -6,8 +6,10 @@ import { Card } from "@/components/ui/card";
 import { SEVERITY_TEXT_CLASS, severityFromScore } from "@/lib/utils/severity";
 import { exposureLabel } from "@/lib/utils/exposure";
 import { formatSigned, cn } from "@/lib/utils";
-import { getCountryByCode, getTopConflictsForCountry, DIMENSION_LABEL } from "@/lib/data";
-import type { Conflict } from "@/lib/types";
+import { getCountryByCode, DIMENSION_LABEL } from "@/lib/data";
+import { rankConflictsForCountry } from "@/lib/data/priority";
+import { useNowMs } from "@/hooks/use-now";
+import type { Conflict, ConflictEvent } from "@/lib/types";
 
 export function MobileStatusStrip({ status }: { status: { score: number; change24h: number } | null }) {
   if (!status) return null;
@@ -34,15 +36,18 @@ export function MobileStatusStrip({ status }: { status: { score: number; change2
 export function MobileTopExposureCard({
   baseCountryCode,
   conflicts,
+  events = [],
   onSeeWhy,
 }: {
   baseCountryCode: string;
   conflicts: readonly Conflict[];
+  events?: readonly ConflictEvent[];
   onSeeWhy: (slug: string) => void;
 }) {
   const country = getCountryByCode(baseCountryCode);
+  const now = useNowMs(events);
   if (!country) return null;
-  const [top] = getTopConflictsForCountry(country, conflicts, 1);
+  const [top] = rankConflictsForCountry(country, conflicts, events, now, 1);
   if (!top) return null;
   const { conflict, impact } = top;
 

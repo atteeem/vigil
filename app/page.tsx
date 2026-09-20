@@ -18,6 +18,7 @@ import { useAppStore } from "@/hooks/use-app-store";
 import { getGlobalStatus } from "@/lib/data";
 import { usePublicOverview, useRefreshOnFocus } from "@/hooks/use-public-overview";
 import { LatestTerritorialChanges } from "@/components/home/latest-territorial-changes";
+import { IntelOverview } from "@/components/home/intel-overview";
 import { FreshnessStamp } from "@/components/public/data-states";
 import { STALE_SOURCE_HOURS } from "@/lib/public/stale";
 
@@ -73,6 +74,7 @@ export default function HomePage() {
             <RelevantToYouCard
               baseCountryCode={baseCountryCode}
               conflicts={conflicts}
+              events={events}
               onSelectConflict={setSelectedSlug}
             />
           </div>
@@ -106,11 +108,12 @@ export default function HomePage() {
       {/* Mobile stacked sections, overlapping the globe fold slightly */}
       <div className="relative z-10 -mt-6 space-y-4 rounded-t-3xl bg-bg pb-24 pt-5 sm:hidden">
         <MobileStatusStrip status={status} />
-        <MobileTopExposureCard baseCountryCode={baseCountryCode} conflicts={conflicts} onSeeWhy={setSelectedSlug} />
+        <MobileTopExposureCard baseCountryCode={baseCountryCode} conflicts={conflicts} events={events} onSeeWhy={setSelectedSlug} />
         <div className="px-4">
           <TimeLayerControls className="items-start" />
         </div>
-        <LatestEventsFeed className="px-4" events={events} loading={loading} limit={6} />
+        <IntelOverview className="px-4" conflicts={conflicts} events={events} loading={loading} />
+        <LatestEventsFeed className="px-4" events={events} loading={loading} limit={4} />
         <LatestTerritorialChanges className="px-4" changes={overview.data?.territorialChanges ?? []} />
         <Link href="/intel" className="mx-4 flex items-center gap-1.5 text-xs font-medium text-accent hover:underline">
           <Newspaper className="h-3.5 w-3.5" />
@@ -122,7 +125,8 @@ export default function HomePage() {
       {/* Desktop: latest activity below the fold */}
       <div className="mx-auto hidden max-w-[1600px] px-6 py-10 sm:block">
         <div className="max-w-2xl">
-          <LatestEventsFeed events={events} loading={loading} limit={8} />
+          <IntelOverview conflicts={conflicts} events={events} loading={loading} />
+          <LatestEventsFeed className="mt-8" events={events} loading={loading} limit={5} />
           <LatestTerritorialChanges className="mt-6" changes={overview.data?.territorialChanges ?? []} />
           <Link
             href="/intel"

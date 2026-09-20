@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Search, X, Globe2, Flame, Users, Newspaper } from "lucide-react";
+import { Search, X, Globe2, Flame, Users, UserRound, Newspaper } from "lucide-react";
 import { useAppStore } from "@/hooks/use-app-store";
 import type { SearchResult } from "@/lib/public/search";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ const ICON: Record<SearchResult["type"], React.ComponentType<{ className?: strin
   country: Globe2,
   conflict: Flame,
   actor: Users,
+  commander: UserRound,
   event: Newspaper,
 };
 

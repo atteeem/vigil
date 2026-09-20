@@ -89,6 +89,7 @@ export interface SourceDTO {
   verificationNotes: string | null;
   independenceClass: string | null;
   claimPolicy: string | null;
+  perspective: string | null;
   pollIntervalMinutes: number;
   nextPollAt: string | null;
   lastAttemptedAt: string | null;

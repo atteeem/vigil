@@ -71,6 +71,9 @@ model Source {
   // leads only (discovery_only) — neither counts as an independent confirmation.
   independenceClass String? @map("independence_class")
   claimPolicy String?  @map("claim_policy")
+  // Short public descriptor of who/what the source is ("Israeli military", "Kurdish human-rights
+  // reporting"); shown on public source cards next to the trust label.
+  perspective String?
   permissionStatus String @default("unauthorized") @map("permission_status")
   enabled     Boolean  @default(true)
   autoIngest  Boolean  @default(false) @map("auto_ingest")

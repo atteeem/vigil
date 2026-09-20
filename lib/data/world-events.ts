@@ -1,4 +1,5 @@
 import { independentSourceCount, normalizeSourceUrl } from "@/lib/data/independence";
+import { sourceTrust } from "@/lib/sources/trust";
 import type { ConflictEvent, SourceRef } from "@/lib/types";
 import type { EventType, Severity } from "@/lib/types";
 import type { DbVerificationStatus, EventAdminDTO } from "@/lib/types/db";
@@ -30,6 +31,16 @@ function toUiVerification(status: DbVerificationStatus): { verificationStatus: C
  * optional and only populated by getDbEventBySlug's single-event lookup
  * (spec "Live Event Updates" §7 "optionally show a concise update
  * history") — the /world feed and admin list don't need it per-event. */
+function authorOf(rawMetadata: string | null): string | null {
+  if (!rawMetadata) return null;
+  try {
+    const parsed = JSON.parse(rawMetadata) as { author?: unknown };
+    return typeof parsed.author === "string" && parsed.author.trim() ? parsed.author.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 export function dbEventToConflictEvent(event: EventWithSources & { history?: EventHistory[] }): ConflictEvent {
   const { verificationStatus, disputed } = toUiVerification(event.verificationStatus as DbVerificationStatus);
   const sources: SourceRef[] = event.sources.map((link) => ({
@@ -42,6 +53,15 @@ export function dbEventToConflictEvent(event: EventWithSources & { history?: Eve
       SOURCE_TYPE_LABEL[link.rawIngestionItem.source.type] ??
       "OSINT",
     sourceRole: link.rawIngestionItem.source.sourceRole,
+    trust: sourceTrust({
+      independenceClass: link.rawIngestionItem.source.independenceClass,
+      claimPolicy: link.rawIngestionItem.source.claimPolicy,
+      sourceRole: link.rawIngestionItem.source.sourceRole,
+      perspective: link.rawIngestionItem.source.perspective,
+    }),
+    relationship: link.relationship,
+    reportTitle: link.rawIngestionItem.originalTitle,
+    author: authorOf(link.rawIngestionItem.rawMetadata),
     url: link.rawIngestionItem.originalUrl && link.rawIngestionItem.originalUrl.trim() ? link.rawIngestionItem.originalUrl : null,
     publishedAt: (link.rawIngestionItem.publishedAt ?? link.rawIngestionItem.receivedAt).toISOString(),
     attachedAt: link.createdAt.toISOString(),

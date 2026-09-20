@@ -9,6 +9,15 @@ export interface SourceRef {
    * (components/events/source-role-icon.tsx); a missing/unrecognized
    * value always falls back to a generic source icon, never a blank one. */
   sourceRole?: string | null;
+  /** Public trust presentation (lib/sources/trust.ts): label, perspective, and whether the
+   * report can count as independent confirmation. Optional only for legacy shapes. */
+  trust?: import("@/lib/sources/trust").SourceTrust;
+  /** How this report is attached to the event: originating | relay | corroborating. */
+  relationship?: string;
+  /** The report's own headline as stored (used to word a party claim as "X reports: ..."). */
+  reportTitle?: string | null;
+  /** Author, where the feed publishes one. */
+  author?: string | null;
   /** The stored original article / post URL (publisher page, or the Telegram/public-feed
    * permalink). null when the report has none — the UI then says "Source unavailable"
    * and renders no link; it never invents one. */

@@ -101,6 +101,11 @@ export async function getPublicActor(ref: string): Promise<ActorPage | null> {
     prisma.commander.findMany({ where: { currentUnitId: unit.id }, select: { id: true, name: true, rank: true }, take: 10 }),
   ]);
 
+  // A unit that also holds published territory (same canonical name as a territorial-control actor).
+  const territoryActor = await prisma.conflictActor.findFirst({ where: { name: unit.name }, include: { conflict: { select: { slug: true, name: true } } } });
+  const territory = territoryActor
+    ? { areas: await prisma.conflictTerritory.count({ where: { actorId: territoryActor.id, published: true, validTo: null } }), conflictSlug: territoryActor.conflict.slug, conflictName: territoryActor.conflict.name }
+    : null;
   const conflicts = new Map<string, { slug: string; name: string }>();
   if (primaryConflict) conflicts.set(primaryConflict.slug, primaryConflict);
   for (const l of eventLinks) if (l.event.conflict) conflicts.set(l.event.conflict.slug, l.event.conflict);
@@ -119,7 +124,7 @@ export async function getPublicActor(ref: string): Promise<ActorPage | null> {
     events: eventLinks.map((l) => ({ slug: l.event.slug, title: l.event.title, occurredAt: l.event.occurredAt.toISOString() })),
     equipment: equipment.map((e) => ({ id: e.equipment.id, name: e.equipment.name, category: e.equipment.category })),
     commanders,
-    territory: null,
+    territory,
     provenance: { sourceName: unit.sourceName, sourceUrl: unit.sourceUrl, lastUpdatedAt: unit.lastUpdatedAt.toISOString() },
   };
 }

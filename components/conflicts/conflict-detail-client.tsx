@@ -13,6 +13,7 @@ import { ImpactBreakdown } from "@/components/impact/impact-breakdown";
 import { EventCard } from "@/components/events/event-card";
 import { GlobeLoading } from "@/components/globe/globe-loading";
 import { EmptyState, FreshnessStamp } from "@/components/public/data-states";
+import { ConflictingClaimsBlock } from "@/components/events/evidence-panel";
 import { useAppStore } from "@/hooks/use-app-store";
 import { getCountryByCode } from "@/lib/reference/countries";
 import { computeImpact } from "@/lib/data/impact";
@@ -49,12 +50,16 @@ export function ConflictDetailClient({ detail }: { detail: PublicConflictDetail 
   const [showMap, setShowMap] = useState(false);
   const baseCountryCode = useAppStore((s) => s.baseCountryCode);
   const basemapMode = useAppStore((s) => s.mapBasemapMode);
+  const showPartyClaims = useAppStore((s) => s.showPartyClaims);
   const country = getCountryByCode(baseCountryCode);
   const impact = country ? computeImpact(country, conflict) : null;
   const TrendIcon = conflict.intensityChange24h > 0 ? ArrowUp : conflict.intensityChange24h < 0 ? ArrowDown : Minus;
   const coverage = detail.coverage;
   const health = coverage ? HEALTH_LABEL[coverage.health] : null;
-  const latestReports = detail.recentEvents.flatMap((e) => e.sources.map((s) => ({ ...s, eventTitle: e.title, eventSlug: e.slug }))).slice(0, 8);
+  const allReports = detail.recentEvents.flatMap((e) => e.sources.map((s) => ({ ...s, eventTitle: e.title, eventSlug: e.slug })));
+  // Party / aligned claims are hidden by default (Profile -> Sources); they are counted, not dropped.
+  const hiddenPartyClaims = showPartyClaims ? 0 : allReports.filter((s) => s.trust?.category === "party_claim").length;
+  const latestReports = allReports.filter((s) => showPartyClaims || s.trust?.category !== "party_claim").slice(0, 8);
 
   return (
     <main className="mx-auto max-w-[1100px] px-4 pb-28 pt-24 sm:px-6 sm:pt-32" data-testid="conflict-page">
@@ -74,6 +79,7 @@ export function ConflictDetailClient({ detail }: { detail: PublicConflictDetail 
           </h1>
           <p className="mt-1 text-sm text-ink-dim" data-testid="conflict-overview-line">
             Status: {detail.statusLabel}
+            {detail.family && <span data-testid="conflict-family">{" · "}{detail.family.name} family</span>}
             {" · "}
             {conflict.startedAt ? `Started ${new Date(conflict.startedAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })}` : "Start date not recorded"}
             {" · "}
@@ -174,7 +180,7 @@ export function ConflictDetailClient({ detail }: { detail: PublicConflictDetail 
         ) : (
           <ul className="flex flex-wrap gap-2">
             {detail.actors.map((a) => (
-              <li key={a.name}>
+              <li key={a.name} className="flex flex-col items-start" data-testid="conflict-actor">
                 {a.href ? (
                   <Link href={a.href} data-testid="actor-link" className="rounded-full border border-border-strong px-3 py-1 text-xs text-accent hover:bg-white/5">
                     {a.name}
@@ -182,6 +188,9 @@ export function ConflictDetailClient({ detail }: { detail: PublicConflictDetail 
                 ) : (
                   <span className="rounded-full border border-border px-3 py-1 text-xs text-ink-dim">{a.name}</span>
                 )}
+                <span className="mt-0.5 pl-3 text-[10px] text-ink-faint" data-testid="actor-role">
+                  {a.role}
+                </span>
               </li>
             ))}
           </ul>
@@ -261,6 +270,14 @@ export function ConflictDetailClient({ detail }: { detail: PublicConflictDetail 
         )}
       </Section>
 
+      {detail.conflictingClaims.length > 0 && (
+        <Section title="Conflicting claims" testId="section-conflicting-claims">
+          {detail.conflictingClaims.map((g) => (
+            <ConflictingClaimsBlock key={g.location} group={g} />
+          ))}
+        </Section>
+      )}
+
       {/* Sources + coverage */}
       <Section title="Sources and coverage" testId="section-sources">
         {health && coverage ? (
@@ -270,6 +287,11 @@ export function ConflictDetailClient({ detail }: { detail: PublicConflictDetail 
             </p>
             <p className="mt-0.5 text-xs text-ink-dim">{health.detail}</p>
             {coverage.reasons.length > 0 && <p className="mt-1 text-xs text-ink-faint">{coverage.reasons.join(" ")}</p>}
+            {coverage.dedicatedSources === 0 && (
+              <p className="mt-1 text-xs text-elevated" data-testid="no-dedicated-sources">
+                No dedicated source: nothing is specifically tracking this conflict, so its coverage relies on general outlets.
+              </p>
+            )}
             <p className="mt-2 text-xs text-ink-faint">
               {coverage.enabledSources} enabled source{coverage.enabledSources === 1 ? "" : "s"} · {coverage.independentSources} independent · {coverage.tierDiversity} source tier{coverage.tierDiversity === 1 ? "" : "s"}
             </p>
@@ -279,7 +301,13 @@ export function ConflictDetailClient({ detail }: { detail: PublicConflictDetail 
               <ul className="mt-3 divide-y divide-border text-xs" data-testid="source-list">
                 {coverage.sources.map((s) => (
                   <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                    <span className="font-medium text-ink">{s.name}</span>
+                    <span className="font-medium text-ink" data-testid="source-card">
+                      {s.name}
+                      <span className={cn("ml-2 rounded-full border px-1.5 py-0.5 align-middle text-[9px] font-semibold uppercase tracking-wide", s.trust.category === "party_claim" ? "border-high/50 text-high" : s.trust.category === "strong" ? "border-stable/40 text-stable" : "border-border-strong text-ink-faint")} data-testid="trust-label">
+                        {s.trust.badge ?? s.trust.label}
+                      </span>
+                      {s.trust.perspective && <span className="block text-[11px] font-normal text-ink-dim">{s.trust.perspective}</span>}
+                    </span>
                     <span className="text-ink-faint">
                       {SOURCE_TIER_LABEL[s.tier]} · {s.kind === "specialist_local" ? "local / specialist" : s.kind}
                       {!s.enabled && " · disabled"}
@@ -294,6 +322,11 @@ export function ConflictDetailClient({ detail }: { detail: PublicConflictDetail 
           <EmptyState title="Coverage unavailable" />
         )}
         <h3 className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Latest reports</h3>
+        {hiddenPartyClaims > 0 && (
+          <p className="mb-2 text-xs text-ink-faint" data-testid="party-claims-hidden">
+            {hiddenPartyClaims} party claim{hiddenPartyClaims === 1 ? "" : "s"} hidden (Profile → Sources → Show Party / Aligned Claims)
+          </p>
+        )}
         {latestReports.length === 0 ? (
           <EmptyState title="No supporting reports yet" testId="reports-empty" />
         ) : (
@@ -301,7 +334,10 @@ export function ConflictDetailClient({ detail }: { detail: PublicConflictDetail 
             {latestReports.map((s, i) => (
               <li key={`${s.id}-${i}`} className="rounded-xl border border-border bg-card/70 p-3 text-xs" data-testid="latest-report">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="font-medium text-ink">{s.name}</p>
+                  <p className="font-medium text-ink">
+                    {s.name}
+                    {s.trust && <span className="ml-2 rounded-full border border-border-strong px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-ink-faint">{s.trust.badge ?? s.trust.label}</span>}
+                  </p>
                   <RelativeTime iso={s.publishedAt} className="shrink-0 text-ink-faint" />
                 </div>
                 <p className="text-ink-faint">

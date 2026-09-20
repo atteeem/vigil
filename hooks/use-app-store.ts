@@ -72,6 +72,11 @@ interface AppState {
   setMapBasemapMode: (m: MapBasemapMode) => void;
   contentSensitivity: ContentSensitivity;
   setContentSensitivity: (v: ContentSensitivity) => void;
+  /** Sources -> Show Party / Aligned Claims. Default OFF: party and aligned claim cards are
+   * hidden from public event source lists (counted in a summary instead). Never affects
+   * ingestion, storage or admin. */
+  showPartyClaims: boolean;
+  setShowPartyClaims: (v: boolean) => void;
   theme: "dark";
 
   // Reactive mirror of lib/auth/local-auth-provider.ts's own localStorage
@@ -107,6 +112,8 @@ export const useAppStore = create<AppState>()(
       setMapBasemapMode: (m) => set({ mapBasemapMode: m }),
       contentSensitivity: "standard",
       setContentSensitivity: (v) => set({ contentSensitivity: v }),
+      showPartyClaims: false,
+      setShowPartyClaims: (v) => set({ showPartyClaims: v }),
       theme: "dark",
 
       account: null,
@@ -122,7 +129,7 @@ export const useAppStore = create<AppState>()(
       // pinning both to the OLD default forever — "enabled in config" is
       // not the same as "actually visible in a real browser" for anyone
       // who'd loaded this app before this fix shipped.
-      version: 2,
+      version: 3,
       migrate: (persistedState, version) => {
         const state = persistedState as Partial<AppState>;
         if (version < 1 && state.globeLayers) {
@@ -132,6 +139,7 @@ export const useAppStore = create<AppState>()(
         if (version < 2 && state.globeLayers) {
           state.globeLayers = { ...state.globeLayers, heat: true };
         }
+        // v3: showPartyClaims is new and defaults OFF (absent => false).
         return state;
       },
       // Only persist the actual preference fields — transient UI state
@@ -146,6 +154,7 @@ export const useAppStore = create<AppState>()(
         globeLayers: s.globeLayers,
         mapBasemapMode: s.mapBasemapMode,
         contentSensitivity: s.contentSensitivity,
+        showPartyClaims: s.showPartyClaims,
       }),
       // Never hydrate at store-creation time: the client would then render
       // the saved preferences on its FIRST pass while the server rendered the

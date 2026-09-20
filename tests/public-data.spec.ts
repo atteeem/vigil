@@ -328,9 +328,9 @@ test.describe("Original source URLs survive end-to-end", () => {
     await expect(report.getByTestId("original-source-link")).toHaveAttribute("href", "https://fixture.test/expansion/local/fixtown-captured");
     await expect(report).toContainText(src.name);
     await expect(report).toContainText("Published: ");
-    await expect(page.getByTestId("event-evidence-summary")).toContainText("1 supporting report");
+    await expect(page.getByTestId("event-evidence-summary")).toContainText("1 report attached");
     // The event and its supporting reports are distinct things on the page.
-    await expect(page.getByTestId("event-detail").getByText("Supporting reports (1)")).toBeVisible();
+    await expect(page.getByTestId("event-reports").getByText("Reports and sources")).toBeVisible();
   });
 
   test("Telegram/public-feed permalink and the aggregator's upstream provenance are preserved", async ({ page, request }) => {
@@ -353,7 +353,8 @@ test.describe("Original source URLs survive end-to-end", () => {
     expect((await request.post(`/api/admin/incoming/${item.id}/merge`, { data: { eventId: ev.id, relationship: "corroborating" } })).ok()).toBe(true);
     await page.goto(`/event/${ev.slug}`);
     await expect(page.getByTestId("event-report")).toHaveCount(2);
-    await expect(page.getByTestId("event-evidence-summary")).toContainText("1 independent source · 2 supporting reports");
+    await expect(page.getByTestId("event-evidence-summary")).toContainText("1 independent source");
+    await expect(page.getByTestId("event-evidence-summary")).toContainText("2 reports attached");
     await expect(page.getByTestId("event-reports")).toContainText("not independent evidence");
   });
 
@@ -385,7 +386,7 @@ test.describe("Event page and actors", () => {
 
     await page.goto(`/event/${ev.slug}`);
     await expect(page.getByTestId("event-location")).toContainText("Approximate location");
-    await expect(page.getByTestId("event-reports")).toContainText("Supporting reports (1)");
+    await expect(page.getByTestId("event-report")).toHaveCount(1);
     const links = page.getByTestId("event-actors").getByTestId("actor-link");
     await expect(links).toHaveCount(1);
     await expect(links).toHaveText(known.name);

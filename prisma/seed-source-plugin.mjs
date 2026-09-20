@@ -153,6 +153,7 @@ export async function seedSourcePlugin(prisma) {
       platformHandle: d.platformHandle,
       independenceClass: entry.class ?? null,
       claimPolicy: entry.claim ?? null,
+      perspective: entry.perspective ?? null,
       verificationStatus: d.verificationStatus,
       verifiedAt: d.verifiedAt,
       verificationNotes: d.verificationNotes,
