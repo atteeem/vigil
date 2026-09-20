@@ -53,6 +53,14 @@ const STALE_AFTER_DAYS: Partial<Record<HazardCategory, number>> = {
   confirmed_wildfire: 14,
   cyclone: 3,
   flood: 7,
+  // v2: a status feed that has not been refreshed is no longer a statement about NOW.
+  airport_status: 1,
+  airspace_event: 14,
+  chokepoint_status: 14,
+  port_disruption: 7,
+  maritime_incident: 120,
+  energy_disruption: 14,
+  internet_disruption: 2,
 };
 
 /** A record the provider has not touched for long enough that presenting it as current would be wrong. */
@@ -71,4 +79,54 @@ export const DISPLAY_WINDOW_HOURS: Partial<Record<HazardCategory, number>> = {
 /** Marker radius (px) for an earthquake from its magnitude: stepped by size, not linear noise. */
 export function quakeRadius(magnitude: number): number {
   return Math.round(clamp(3 + Math.pow(Math.max(magnitude, 1) - 1, 1.6) * 1.1, 4, 34));
+}
+
+// ---------------------------------------------------------------------------------------------
+// v2 layers (transport and infrastructure). Same rule as above: prominence ranks within a domain
+// (a major international airport closure > a routine delay; a Hormuz closure > a small-port advisory;
+// a multi-GW outage > a local one) and is never derived from conflict severity or article counts.
+// ---------------------------------------------------------------------------------------------
+export const AIRPORT_STATUSES = ["normal", "disrupted", "partially_closed", "closed", "unknown"] as const;
+export type AirportStatus = (typeof AIRPORT_STATUSES)[number];
+export const AIRSPACE_EVENT_TYPES = ["restriction", "closure", "rerouting", "warning", "reopening"] as const;
+export const PORT_STATUSES = ["normal", "disrupted", "partially_closed", "closed"] as const;
+export const CHOKEPOINT_STATUSES = ["normal", "elevated_disruption", "major_disruption", "closed_restricted"] as const;
+export const MARITIME_INCIDENT_TYPES = ["attack", "piracy", "seizure", "collision", "navigation_warning", "security_advisory", "other"] as const;
+export const ENERGY_EVENT_TYPES = ["outage", "reduced_capacity", "shutdown", "damage", "restart", "supply_interruption", "emergency_measure"] as const;
+export const ENERGY_KINDS = ["electricity", "oil", "gas", "lng", "refinery", "pipeline", "generation", "terminal", "other"] as const;
+
+export function airportProminence(status: string, size: "L" | "M" | null, ground: boolean): number {
+  const base = status === "closed" ? 88 : status === "partially_closed" ? 62 : status === "disrupted" ? (ground ? 50 : 26) : 5;
+  return Math.round(base * (size === "L" ? 1 : size === "M" ? 0.8 : 0.7));
+}
+
+export function airspaceProminence(eventType: string): number {
+  return ({ closure: 85, restriction: 62, rerouting: 45, warning: 40, reopening: 20 } as Record<string, number>)[eventType] ?? 30;
+}
+
+/** The chokepoints whose disruption matters globally (the rest are regional). */
+export const MAJOR_CHOKEPOINTS = new Set(["chokepoint1", "chokepoint2", "chokepoint3", "chokepoint4", "chokepoint5", "chokepoint6", "chokepoint8", "chokepoint28"]);
+export function chokepointProminence(status: string, chokepointId: string): number {
+  const base = ({ closed_restricted: 95, major_disruption: 88, elevated_disruption: 58, normal: 10 } as Record<string, number>)[status] ?? 0;
+  return Math.round(base * (MAJOR_CHOKEPOINTS.has(chokepointId) ? 1 : 0.7));
+}
+
+export function portProminence(alertLevel: string): number {
+  return alertLevel === "Red" ? 80 : alertLevel === "Orange" ? 60 : 25;
+}
+
+export function maritimeIncidentProminence(type: string): number {
+  return ({ attack: 75, seizure: 70, piracy: 68, security_advisory: 50, collision: 40, navigation_warning: 35, other: 25 } as Record<string, number>)[type] ?? 25;
+}
+
+/** Capacity affected -> prominence. Missing capacity is NOT guessed: the record gets a modest default. */
+export function energyProminence(megawatts: number | null, eventType: string): number {
+  const bump = eventType === "shutdown" || eventType === "damage" || eventType === "supply_interruption" || eventType === "emergency_measure" ? 10 : 0;
+  if (megawatts == null || megawatts <= 0) return 30 + bump;
+  return Math.round(clamp(25 + 30 * Math.log10(Math.max(megawatts, 10) / 100) + bump));
+}
+
+export function internetProminence(score: number | null, signals: number, scope: "national" | "regional"): number {
+  const base = scope === "national" ? 40 : 28;
+  return Math.round(clamp(base + 6 * Math.log10(Math.max(score ?? 1, 1)) + 8 * (Math.max(signals, 1) - 1)));
 }

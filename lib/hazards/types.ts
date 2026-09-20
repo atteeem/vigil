@@ -15,7 +15,7 @@ export const ORIGIN_LABEL: Record<EventOrigin, string> = {
 };
 
 /** Map layers, one toggle each. */
-export const HAZARD_LAYERS = ["earthquakes", "fires", "weather", "volcanoes"] as const;
+export const HAZARD_LAYERS = ["earthquakes", "fires", "weather", "volcanoes", "aviation", "maritime", "energy", "internet"] as const;
 export type HazardLayer = (typeof HAZARD_LAYERS)[number];
 
 export const HAZARD_LAYER_LABEL: Record<HazardLayer, string> = {
@@ -23,9 +23,36 @@ export const HAZARD_LAYER_LABEL: Record<HazardLayer, string> = {
   fires: "Fires",
   weather: "Weather",
   volcanoes: "Volcanoes",
+  aviation: "Aviation",
+  maritime: "Maritime",
+  energy: "Energy",
+  internet: "Internet",
 };
 
-export const HAZARD_CATEGORIES = ["earthquake", "thermal_detection", "confirmed_wildfire", "volcano", "weather_alert", "cyclone", "flood"] as const;
+/** Layer-panel groups: natural hazards (v1), transport and infrastructure (v2). */
+export const LAYER_GROUPS: { id: "hazards" | "transport" | "infrastructure"; label: string; layers: HazardLayer[] }[] = [
+  { id: "hazards", label: "Natural hazards", layers: ["earthquakes", "fires", "weather", "volcanoes"] },
+  { id: "transport", label: "Transport", layers: ["aviation", "maritime"] },
+  { id: "infrastructure", label: "Infrastructure", layers: ["energy", "internet"] },
+];
+
+export const HAZARD_CATEGORIES = [
+  "earthquake",
+  "thermal_detection",
+  "confirmed_wildfire",
+  "volcano",
+  "weather_alert",
+  "cyclone",
+  "flood",
+  // v2: transport and infrastructure
+  "airport_status",
+  "airspace_event",
+  "port_disruption",
+  "chokepoint_status",
+  "maritime_incident",
+  "energy_disruption",
+  "internet_disruption",
+] as const;
 export type HazardCategory = (typeof HAZARD_CATEGORIES)[number];
 
 export const CATEGORY_LABEL: Record<HazardCategory, string> = {
@@ -36,10 +63,25 @@ export const CATEGORY_LABEL: Record<HazardCategory, string> = {
   weather_alert: "Weather alert",
   cyclone: "Tropical cyclone",
   flood: "Flood",
+  airport_status: "Airport status",
+  airspace_event: "Airspace",
+  port_disruption: "Port disruption",
+  chokepoint_status: "Maritime chokepoint",
+  maritime_incident: "Maritime incident",
+  energy_disruption: "Energy disruption",
+  internet_disruption: "Internet disruption",
 };
 
+/** Categories that report an operating STATUS of a thing (as opposed to a point-in-time observation). */
+export const STATUS_CATEGORIES: readonly HazardCategory[] = ["airport_status", "airspace_event", "port_disruption", "chokepoint_status", "maritime_incident", "energy_disruption", "internet_disruption"];
+
+/** Stable subscription key for a future watchlist/alert: constant across provider revisions. */
+export function watchKeyFor(category: string, entityKey: string | null | undefined): string | null {
+  return entityKey ? `${category}:${entityKey}` : null;
+}
+
 /** Named severity scales; deliberately separate from the conflict severity scale. */
-export const SEVERITY_DOMAINS = ["earthquake_magnitude", "fire_radiative_power_mw", "cap_severity", "volcano_alert_level", "gdacs_alert_level", "wildfire_area_acres"] as const;
+export const SEVERITY_DOMAINS = ["earthquake_magnitude", "fire_radiative_power_mw", "cap_severity", "volcano_alert_level", "gdacs_alert_level", "wildfire_area_acres", "airport_status", "airspace_status", "port_alert_level", "chokepoint_transit_deviation_pct", "maritime_incident_type", "electricity_capacity_mw", "gas_capacity_mw_equivalent", "internet_anomaly_score"] as const;
 export type SeverityDomain = (typeof SEVERITY_DOMAINS)[number];
 
 export type LocationPrecision = "exact" | "approximate" | "area_level" | "unknown";
@@ -50,6 +92,11 @@ export interface NormalizedGlobalEvent {
   category: HazardCategory;
   layer: HazardLayer;
   subtype?: string | null;
+  /** Domain operating status (see GlobalEvent.status). */
+  status?: string | null;
+  /** Stable identity of the affected asset/place, for future watchlists. */
+  entityKey?: string | null;
+  countryCode?: string | null;
   provider: string;
   providerEventId: string;
   title: string;
@@ -92,6 +139,8 @@ export interface ProviderContext {
   url: string;
   now: Date;
   fetchText: (url: string, init?: { headers?: Record<string, string> }) => Promise<string>;
+  /** Process environment, injectable for tests (credentials). */
+  env?: Record<string, string | undefined>;
 }
 
 export interface HazardProvider {
@@ -101,5 +150,7 @@ export interface HazardProvider {
   /** Sensible cadence: the provider's own update rhythm, never more often. */
   pollIntervalMinutes: number;
   layer: HazardLayer;
+  /** Environment variables the provider needs (an API key/token). Missing -> the provider stays idle and says so. */
+  credentials?: { env: string[]; signup: string };
   fetch(ctx: ProviderContext): Promise<ProviderResult>;
 }

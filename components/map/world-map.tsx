@@ -389,14 +389,19 @@ function addEventLayers(
 //   wildfires    red-orange flame-notched diamonds (reported incidents, not raw detections)
 //   volcanoes    rose TRIANGLES (faded when the record is stale)
 //   weather      teal alert AREAS (dashed outline, opacity by CAP severity) with a warning marker
-const HZ = { quake: "#C77DFF", thermal: "#FFB020", wildfire: "#FF5A36", volcano: "#FF6F91", weather: "#2EC4B6" };
+const HZ = { quake: "#C77DFF", thermal: "#FFB020", wildfire: "#FF5A36", volcano: "#FF6F91", weather: "#2EC4B6", aviation: "#6EA8FF", maritime: "#22D3EE", energy: "#A3E635", internet: "#F0ABFC", alert: "#FF6EC7" };
 const HAZARD_LAYER_IDS: Record<HazardLayer, string[]> = {
   earthquakes: ["hz-quake-cluster", "hz-quake-cluster-count", "hz-quake-circle", "hz-quake-label-major", "hz-quake-label-mid", "hz-quake-label-all"],
   fires: ["hz-thermal-cluster", "hz-thermal-cluster-count", "hz-thermal-point", "hz-fire-point"],
   weather: ["hz-weather-fill", "hz-weather-outline", "hz-weather-icon"],
   volcanoes: ["hz-volcano"],
+  aviation: ["hz-airspace-fill", "hz-airspace-outline", "hz-aviation-icon"],
+  maritime: ["hz-chokepoint-ring", "hz-maritime-icon"],
+  energy: ["hz-energy-cluster", "hz-energy-cluster-count", "hz-energy-icon"],
+  internet: ["hz-internet-halo", "hz-internet-icon"],
 };
-const HAZARD_CLICK_LAYERS = ["hz-quake-circle", "hz-thermal-point", "hz-fire-point", "hz-volcano", "hz-weather-icon", "hz-weather-fill"];
+const AREA_CLICK_LAYERS = ["hz-weather-fill", "hz-airspace-fill"];
+const HAZARD_CLICK_LAYERS = ["hz-quake-circle", "hz-thermal-point", "hz-fire-point", "hz-volcano", "hz-weather-icon", "hz-weather-fill", "hz-aviation-icon", "hz-airspace-fill", "hz-maritime-icon", "hz-energy-icon", "hz-energy-cluster", "hz-internet-icon"];
 const QUAKE_RADIUS: DataDrivenPropertyValueSpecification<number> = ["interpolate", ["linear"], ["coalesce", ["get", "value"], 2.5], 2.5, 4, 4, 7, 5, 11, 6, 18, 7, 28, 8, 38];
 const AREA_FILTER: ExpressionSpecification = ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]];
 
@@ -421,6 +426,24 @@ function addHazardLayers(map: MapLibreMap, initial: HazardSourceData) {
   map.addLayer({ id: "hz-fire-point", type: "symbol", source: "hz-points", filter: ["==", ["get", "kind"], "confirmed_wildfire"], layout: { visibility: "none", "icon-image": "hz-icon-wildfire", "icon-size": ["interpolate", ["linear"], ["zoom"], 2, 0.34, 10, 0.6], "icon-allow-overlap": true }, paint: { "icon-color": HZ.wildfire, "icon-halo-color": "rgba(8,10,13,0.9)", "icon-halo-width": 1.2 } }, before);
   map.addLayer({ id: "hz-volcano", type: "symbol", source: "hz-points", filter: ["==", ["get", "kind"], "volcano"], layout: { visibility: "none", "icon-image": "hz-icon-volcano", "icon-size": ["interpolate", ["linear"], ["zoom"], 2, 0.36, 10, 0.62], "icon-allow-overlap": true }, paint: { "icon-color": HZ.volcano, "icon-opacity": ["case", ["get", "stale"], 0.4, 1], "icon-halo-color": "rgba(8,10,13,0.9)", "icon-halo-width": 1.2 } }, before);
 
+  // ---- Transport and infrastructure (strategic status only: no aircraft or vessel positions) ----
+  // Aviation: plane = an airport with a reported status change; blue areas = airspace notices.
+  // Maritime: hourglass ring = chokepoint (faint when normal), square = port, hexagon = security incident.
+  // Energy: bolt = an outage/reduced-capacity record; zoomed out, one counted disc per country.
+  // Internet: broken ring = an observed country-level connectivity anomaly.
+  map.addSource("hz-ops", { type: "geojson", data: initial.ops });
+  const statusColor = (family: string): ExpressionSpecification => ["match", ["coalesce", ["get", "status"], ""], ["closed", "closure", "closed_restricted", "major_disruption", "outage"], HZ.alert, ["partially_closed", "restriction", "elevated_disruption", "reduced_capacity"], "#B08CFF", family];
+  map.addLayer({ id: "hz-airspace-fill", type: "fill", source: "hz-ops", filter: ["all", ["==", ["get", "layer"], "aviation"], AREA_FILTER], layout: { visibility: "none" }, paint: { "fill-color": HZ.aviation, "fill-opacity": 0.14 } }, before);
+  map.addLayer({ id: "hz-airspace-outline", type: "line", source: "hz-ops", filter: ["all", ["==", ["get", "layer"], "aviation"], AREA_FILTER], layout: { visibility: "none" }, paint: { "line-color": HZ.aviation, "line-width": 1.8, "line-dasharray": ["literal", [2, 2]] } }, before);
+  map.addLayer({ id: "hz-aviation-icon", type: "symbol", source: "hz-ops", filter: ["==", ["get", "layer"], "aviation"], layout: { visibility: "none", "icon-image": ["case", ["==", ["get", "kind"], "airspace_event"], "hz-icon-warning", "hz-icon-airport"], "icon-size": ["interpolate", ["linear"], ["zoom"], 1, 0.34, 8, 0.58], "icon-allow-overlap": true }, paint: { "icon-color": statusColor(HZ.aviation), "icon-halo-color": "rgba(8,10,13,0.9)", "icon-halo-width": 1.2 } }, before);
+  map.addLayer({ id: "hz-chokepoint-ring", type: "circle", source: "hz-ops", filter: ["==", ["get", "kind"], "chokepoint_status"], layout: { visibility: "none" }, paint: { "circle-radius": 15, "circle-color": HZ.maritime, "circle-opacity": ["match", ["get", "status"], "normal", 0.06, 0.18], "circle-stroke-width": ["match", ["get", "status"], "normal", 1, 2.5], "circle-stroke-color": statusColor(HZ.maritime), "circle-stroke-opacity": ["match", ["get", "status"], "normal", 0.4, 0.95] } }, before);
+  map.addLayer({ id: "hz-maritime-icon", type: "symbol", source: "hz-ops", filter: ["==", ["get", "layer"], "maritime"], layout: { visibility: "none", "icon-image": ["match", ["get", "kind"], "chokepoint_status", "hz-icon-chokepoint", "port_disruption", "hz-icon-port", "hz-icon-incident"], "icon-size": ["interpolate", ["linear"], ["zoom"], 1, 0.3, 8, 0.55], "icon-allow-overlap": true }, paint: { "icon-color": statusColor(HZ.maritime), "icon-opacity": ["case", ["==", ["get", "status"], "normal"], 0.55, ["get", "stale"], 0.4, 1], "icon-halo-color": "rgba(8,10,13,0.9)", "icon-halo-width": 1.2 } }, before);
+  map.addLayer({ id: "hz-energy-cluster", type: "circle", source: "hz-ops", filter: ["==", ["get", "kind"], "energy_cluster"], layout: { visibility: "none" }, paint: { "circle-color": HZ.energy, "circle-opacity": 0.25, "circle-stroke-width": 2, "circle-stroke-color": HZ.energy, "circle-radius": ["interpolate", ["linear"], ["coalesce", ["get", "count"], 1], 1, 10, 10, 16, 50, 24] } }, before);
+  map.addLayer({ id: "hz-energy-cluster-count", type: "symbol", source: "hz-ops", filter: ["==", ["get", "kind"], "energy_cluster"], layout: { visibility: "none", "text-field": ["to-string", ["get", "count"]], "text-font": ["Noto Sans Regular"], "text-size": 11, "text-allow-overlap": true }, paint: halo }, before);
+  map.addLayer({ id: "hz-energy-icon", type: "symbol", source: "hz-ops", filter: ["all", ["==", ["get", "layer"], "energy"], ["!=", ["get", "kind"], "energy_cluster"]], layout: { visibility: "none", "icon-image": "hz-icon-energy", "icon-size": ["interpolate", ["linear"], ["zoom"], 4, 0.36, 10, 0.6], "icon-allow-overlap": true }, paint: { "icon-color": statusColor(HZ.energy), "icon-halo-color": "rgba(8,10,13,0.9)", "icon-halo-width": 1.2 } }, before);
+  map.addLayer({ id: "hz-internet-halo", type: "circle", source: "hz-ops", filter: ["==", ["get", "layer"], "internet"], layout: { visibility: "none" }, paint: { "circle-color": HZ.internet, "circle-opacity": 0.12, "circle-stroke-width": 1.5, "circle-stroke-color": HZ.internet, "circle-stroke-opacity": 0.6, "circle-radius": ["interpolate", ["linear"], ["get", "prominence"], 40, 12, 90, 30] } }, before);
+  map.addLayer({ id: "hz-internet-icon", type: "symbol", source: "hz-ops", filter: ["==", ["get", "layer"], "internet"], layout: { visibility: "none", "icon-image": "hz-icon-internet", "icon-size": ["interpolate", ["linear"], ["zoom"], 1, 0.34, 8, 0.55], "icon-allow-overlap": true }, paint: { "icon-color": HZ.internet, "icon-halo-color": "rgba(8,10,13,0.9)", "icon-halo-width": 1.2 } }, before);
+
   // Earthquakes cluster while zoomed out (the number is how many quakes).
   map.addSource("hz-quakes", { type: "geojson", data: initial.quakes, cluster: true, clusterMaxZoom: 5, clusterRadius: 38, clusterProperties: { maxMag: ["max", ["coalesce", ["get", "value"], 0]] } });
   map.addLayer({ id: "hz-quake-cluster", type: "circle", source: "hz-quakes", filter: ["has", "point_count"], layout: { visibility: "none" }, paint: { "circle-color": HZ.quake, "circle-opacity": 0.22, "circle-stroke-width": 2, "circle-stroke-color": HZ.quake, "circle-radius": ["step", ["get", "point_count"], 13, 5, 18, 20, 26] } }, before);
@@ -438,6 +461,7 @@ function setHazardData(map: MapLibreMap, data: HazardSourceData) {
   (map.getSource("hz-thermal") as GeoJSONSource | undefined)?.setData(data.thermal);
   (map.getSource("hz-points") as GeoJSONSource | undefined)?.setData(data.points);
   (map.getSource("hz-weather") as GeoJSONSource | undefined)?.setData(data.weather);
+  (map.getSource("hz-ops") as GeoJSONSource | undefined)?.setData(data.ops);
 }
 
 function applyHazardVisibility(map: MapLibreMap, enabled: readonly HazardLayer[]) {
@@ -635,12 +659,12 @@ export function WorldMap({
         const feature = e.features?.[0];
         if (!feature) return;
         const props = feature.properties as HazardFeatureProps;
-        if (props.kind === "thermal_cluster" && feature.geometry.type === "Point") {
+        if ((props.kind === "thermal_cluster" || props.kind === "energy_cluster") && feature.geometry.type === "Point") {
           map.easeTo({ center: feature.geometry.coordinates as [number, number], zoom: Math.min(map.getZoom() + 2.5, 8) });
           return;
         }
         // Point layers beat an area beneath them.
-        if (feature.layer.id === "hz-weather-fill" && map.queryRenderedFeatures(e.point, { layers: HAZARD_CLICK_LAYERS.filter((l) => l !== "hz-weather-fill" && map.getLayer(l)) }).length > 0) return;
+        if (AREA_CLICK_LAYERS.includes(feature.layer.id) && map.queryRenderedFeatures(e.point, { layers: HAZARD_CLICK_LAYERS.filter((l) => !AREA_CLICK_LAYERS.includes(l) && map.getLayer(l)) }).length > 0) return;
         onSelectHazardRef.current(props.id);
       };
       for (const layer of HAZARD_CLICK_LAYERS) {
@@ -662,7 +686,7 @@ export function WorldMap({
         // BOTH handlers for one click; querying the marker layers first
         // and yielding to them keeps markers taking priority when stacked.
         const markerHit = map.queryRenderedFeatures(e.point, {
-          layers: ["clusters", "unclustered-point", "unclustered-point-icon", ...HAZARD_CLICK_LAYERS.filter((l) => l !== "hz-weather-fill" && map.getLayer(l))],
+          layers: ["clusters", "unclustered-point", "unclustered-point-icon", ...HAZARD_CLICK_LAYERS.filter((l) => !AREA_CLICK_LAYERS.includes(l) && map.getLayer(l))],
         });
         if (markerHit.length > 0) return;
         const feature = e.features?.[0];

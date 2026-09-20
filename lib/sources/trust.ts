@@ -39,7 +39,7 @@ const PERSPECTIVE_CLASSES = new Set(["independent_standard", "advocacy_independe
 
 /** Providers authoritative for the measurements/alerts they issue themselves (USGS for its earthquakes,
  * NWS for its warnings) — and for nothing else: never evidence about a conflict event. */
-export const MEASUREMENT_AUTHORITY_CLASSES = new Set(["scientific_official", "government_alert", "sensor_provider", "humanitarian_monitor"]);
+export const MEASUREMENT_AUTHORITY_CLASSES = new Set(["scientific_official", "government_alert", "sensor_provider", "humanitarian_monitor", "infrastructure_operator"]);
 export const MEASUREMENT_AUTHORITY_SCOPE = "Authoritative for the measurements or alerts it issues itself; not a source on unrelated events.";
 
 export const TRUST_LABEL: Record<TrustCategory, string> = {

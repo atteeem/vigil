@@ -5,7 +5,7 @@ export interface HazardFeatureProps {
   id: string;
   layer: HazardLayer;
   /** Category, or "thermal_cluster" for a server-side aggregate of many detections. */
-  kind: HazardCategory | "thermal_cluster";
+  kind: HazardCategory | "thermal_cluster" | "energy_cluster";
   title: string;
   /** Domain-specific severity text ("M6.4", "Severe", "WATCH", "38 MW"). */
   label: string | null;
@@ -17,7 +17,11 @@ export interface HazardFeatureProps {
   /** Provider-supplied confidence text, verbatim. */
   confidence: string | null;
   observedAt: string;
-  /** Thermal aggregates only. */
+  /** Domain operating status (airport/port/chokepoint/energy...). */
+  status?: string | null;
+  /** Stable key of the affected asset (ICAO, chokepoint id, country...). */
+  entityKey?: string | null;
+  /** Aggregates only (thermal cells, energy by country). */
   count?: number;
   maxFrp?: number | null;
   /** True when the detection is a satellite anomaly rather than a confirmed event. */
@@ -73,6 +77,16 @@ export interface HazardDetail {
   endedAt: string | null;
   /** active | expired | withdrawn — as of the viewed moment. */
   status: "active" | "expired" | "withdrawn" | "stale";
+  /** Domain operating status (closed, reduced_capacity, ...) as of the viewed moment. */
+  domainStatus: string | null;
+  entityKey: string | null;
+  countryCode: string | null;
+  /** Stable subscription key for future alerts/watchlists (category:entity). */
+  watchKey: string | null;
+  /** Reviewed (confirmed) relationships to conflicts / conflict events. Never inferred from location. */
+  relatedConflicts: { conflictId: string | null; eventId: string | null; slug: string | null; name: string | null; basis: string; note: string | null }[];
+  /** Party claims about this asset: statements, not facts; they never alter the status above. */
+  claims: { id: string; claimant: string; claimType: string; text: string; sourceName: string | null; sourceUrl: string | null; verification: string; observedAt: string }[];
   stale: boolean;
   sourceUrl: string | null;
   metadata: Record<string, unknown>;

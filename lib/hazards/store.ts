@@ -29,7 +29,7 @@ function bboxOf(ev: NormalizedGlobalEvent): [number, number, number, number] {
 function hashOf(ev: NormalizedGlobalEvent): string {
   return createHash("sha1")
     .update(
-      JSON.stringify([ev.title, ev.description, ev.severityValue, ev.severityLabel, ev.prominence, ev.confidenceLabel, ev.confidenceValue, ev.expiresAt?.toISOString(), ev.endedAt?.toISOString(), ev.providerUpdatedAt?.toISOString(), ev.geometry, ev.lat, ev.lng, ev.metadata]),
+      JSON.stringify([ev.status, ev.title, ev.description, ev.severityValue, ev.severityLabel, ev.prominence, ev.confidenceLabel, ev.confidenceValue, ev.expiresAt?.toISOString(), ev.endedAt?.toISOString(), ev.providerUpdatedAt?.toISOString(), ev.geometry, ev.lat, ev.lng, ev.metadata]),
     )
     .digest("hex");
 }
@@ -41,6 +41,9 @@ function rowData(ev: NormalizedGlobalEvent, sourceId: string | null) {
     category: ev.category,
     layer: ev.layer,
     subtype: ev.subtype ?? null,
+    status: ev.status ?? null,
+    entityKey: ev.entityKey ?? null,
+    countryCode: ev.countryCode ?? null,
     provider: ev.provider,
     providerEventId: ev.providerEventId,
     sourceId,
@@ -73,8 +76,9 @@ function rowData(ev: NormalizedGlobalEvent, sourceId: string | null) {
 }
 
 /** The volatile fields of a row: what the timeline needs to show it as it was at an earlier moment. */
-export function snapshotOf(row: Pick<GlobalEvent, "title" | "description" | "severityDomain" | "severityValue" | "severityLabel" | "prominence" | "confidenceLabel" | "confidenceValue" | "geometry" | "lat" | "lng" | "expiresAt" | "endedAt" | "providerUpdatedAt" | "metadata" | "sourceUrl">) {
+export function snapshotOf(row: Pick<GlobalEvent, "status" | "title" | "description" | "severityDomain" | "severityValue" | "severityLabel" | "prominence" | "confidenceLabel" | "confidenceValue" | "geometry" | "lat" | "lng" | "expiresAt" | "endedAt" | "providerUpdatedAt" | "metadata" | "sourceUrl">) {
   return {
+    status: row.status,
     title: row.title,
     description: row.description,
     severityDomain: row.severityDomain,
@@ -221,4 +225,15 @@ export async function runHazardRetention(now: Date = new Date()): Promise<{ arch
     },
   });
   return { archivedRows, removedAlerts: removed.count };
+}
+
+/** Status/lifecycle categories (transport, energy, internet) keep their history far longer than alerts:
+ * an outage's lifecycle and an airport's closure record are the point. Deleted a year after ending. */
+export const LIFECYCLE_RETENTION_DAYS = 365;
+export async function runLifecycleRetention(now: Date = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - LIFECYCLE_RETENTION_DAYS * DAY_MS);
+  const r = await prisma.globalEvent.deleteMany({
+    where: { category: { in: ["airport_status", "airspace_event", "port_disruption", "maritime_incident", "energy_disruption", "internet_disruption"] }, OR: [{ endedAt: { lt: cutoff } }, { AND: [{ endedAt: null }, { expiresAt: { lt: cutoff } }] }] },
+  });
+  return r.count;
 }

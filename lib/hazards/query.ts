@@ -1,8 +1,8 @@
 import type { GlobalEvent, GlobalEventRevision } from "@prisma/client";
 import { prisma } from "@/lib/db/client";
 import { sourceTrust } from "@/lib/sources/trust";
-import { CATEGORY_LABEL, HAZARD_LAYERS, ORIGIN_LABEL, type EventOrigin, type HazardCategory, type HazardLayer } from "./types";
-import { DISPLAY_WINDOW_HOURS, HOMEPAGE_PROMINENCE, isStaleHazard } from "./significance";
+import { CATEGORY_LABEL, HAZARD_LAYERS, ORIGIN_LABEL, watchKeyFor, type EventOrigin, type HazardCategory, type HazardLayer } from "./types";
+import { DISPLAY_WINDOW_HOURS, HOMEPAGE_PROMINENCE, energyProminence, isStaleHazard } from "./significance";
 import { HAZARD_PROVIDERS } from "./registry";
 import { THERMAL_RETENTION_DAYS } from "./store";
 import type { HazardCollection, HazardDetail, HazardFeatureProps, HazardLayerHealth } from "./public-types";
@@ -22,12 +22,13 @@ export interface HazardQuery {
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
-const LAYER_CAP: Record<HazardLayer, number> = { earthquakes: 800, fires: 1500, weather: 350, volcanoes: 300 };
+const LAYER_CAP: Record<HazardLayer, number> = { earthquakes: 800, fires: 1500, weather: 350, volcanoes: 300, aviation: 400, maritime: 300, energy: 400, internet: 250 };
 /** Above this zoom individual thermal detections are returned; below it they are aggregated to cells. */
 export const THERMAL_INDIVIDUAL_ZOOM = 7;
 
 /** Volatile fields of a row as of a moment: the row itself when live, else the latest revision at/before it. */
 interface State {
+  status: string | null;
   title: string;
   description: string | null;
   severityDomain: string | null;
@@ -55,11 +56,22 @@ function liveState(row: GlobalEvent): State {
 
 function stateAt(row: GlobalEvent, revisions: GlobalEventRevision[], at: Date): State {
   if (revisions.length === 0) return liveState(row);
-  const timeOf = (r: GlobalEventRevision) => (r.providerUpdatedAt ?? r.recordedAt).getTime();
   const sorted = [...revisions].sort((a, b) => a.revision - b.revision);
-  const chosen = [...sorted].reverse().find((r) => timeOf(r) <= at.getTime()) ?? sorted[0]!;
+  // A revision is "known" from the provider's own timestamp; a later revision that carries no newer
+  // provider time (a re-measured status, a withdrawal stamped earlier) is known from when it was recorded.
+  const knownAt: number[] = [];
+  sorted.forEach((r, i) => {
+    let t = (r.providerUpdatedAt ?? r.recordedAt).getTime();
+    if (i > 0 && t <= knownAt[i - 1]!) t = Math.max(r.recordedAt.getTime(), knownAt[i - 1]! + 1);
+    knownAt.push(t);
+  });
+  let idx = -1;
+  knownAt.forEach((t, i) => {
+    if (t <= at.getTime()) idx = i;
+  });
+  const chosen = sorted[idx === -1 ? 0 : idx]!;
   const s = JSON.parse(chosen.snapshot) as Snap;
-  return { ...s, expiresAt: s.expiresAt ? new Date(s.expiresAt) : null, endedAt: s.endedAt ? new Date(s.endedAt) : null, providerUpdatedAt: s.providerUpdatedAt ? new Date(s.providerUpdatedAt) : null, revision: chosen.revision };
+  return { ...s, status: s.status ?? null, expiresAt: s.expiresAt ? new Date(s.expiresAt) : null, endedAt: s.endedAt ? new Date(s.endedAt) : null, providerUpdatedAt: s.providerUpdatedAt ? new Date(s.providerUpdatedAt) : null, revision: chosen.revision };
 }
 
 async function revisionsFor(rows: GlobalEvent[]): Promise<Map<string, GlobalEventRevision[]>> {
@@ -92,6 +104,8 @@ const propsOf = (row: GlobalEvent, s: State, at: Date): HazardFeatureProps => ({
   stale: isStaleHazard(row.category, s.providerUpdatedAt ?? row.observedAt, at.getTime()),
   confidence: s.confidenceLabel,
   observedAt: row.observedAt.toISOString(),
+  status: s.status,
+  entityKey: row.entityKey,
   ...(row.category === "thermal_detection" ? { unconfirmed: true } : {}),
 });
 
@@ -152,13 +166,60 @@ async function thermalFeatures(at: Date, hist: boolean, bbox: HazardQuery["bbox"
   return false;
 }
 
+/** Zoom-dependent minimum prominence: only significant disruptions at world zoom, more detail as you zoom in. */
+const minProminenceFor = (zoom: number) => (zoom < 3 ? 60 : zoom < 5 ? 35 : 0);
+/** Energy events without exact coordinates sit at their country marker; zoomed out they collapse to one count per country. */
+const ENERGY_INDIVIDUAL_ZOOM = 5;
+
+async function statusLayerFeatures(layer: "aviation" | "maritime" | "energy" | "internet", at: Date, hist: boolean, bbox: HazardQuery["bbox"], zoom: number, out: GeoJSON.Feature<GeoJSON.Geometry, HazardFeatureProps>[]): Promise<boolean> {
+  const rows = await prisma.globalEvent.findMany({
+    // Energy rows are aggregated per country when zoomed out, so their threshold applies to the aggregate.
+    where: { layer, observedAt: { gte: new Date(at.getTime() - 400 * DAY), lte: at }, ...(layer === "energy" && zoom < ENERGY_INDIVIDUAL_ZOOM ? {} : { prominence: { gte: minProminenceFor(zoom) } }), ...bboxWhere(bbox) },
+    orderBy: { prominence: "desc" },
+    take: LAYER_CAP[layer] * 3,
+  });
+  const revs = hist ? await revisionsFor(rows) : new Map<string, GlobalEventRevision[]>();
+  let shown = 0;
+  let truncated = false;
+  const energyByCountry = new Map<string, { n: number; mw: number; lat: number; lng: number; max: number }>();
+  for (const r of rows) {
+    const s = hist ? stateAt(r, revs.get(r.id) ?? [], at) : liveState(r);
+    if (!isActiveAt(s, at)) continue;
+    // A status feed nobody has refreshed says nothing about NOW (long-lived maritime notices stay, flagged).
+    const stale = isStaleHazard(r.category, s.providerUpdatedAt ?? r.observedAt, at.getTime());
+    if (stale && r.category !== "maritime_incident") continue;
+    if (layer === "energy" && zoom < ENERGY_INDIVIDUAL_ZOOM) {
+      const key = r.countryCode ?? "??";
+      const c = energyByCountry.get(key) ?? { n: 0, mw: 0, lat: s.lat, lng: s.lng, max: 0 };
+      c.n += 1;
+      c.mw += s.severityValue ?? 0;
+      c.max = Math.max(c.max, s.prominence);
+      energyByCountry.set(key, c);
+      continue;
+    }
+    if (shown >= LAYER_CAP[layer]) {
+      truncated = true;
+      break;
+    }
+    shown += 1;
+    const geometry = s.geometry ? (JSON.parse(s.geometry) as GeoJSON.Geometry) : ({ type: "Point", coordinates: [s.lng, s.lat] } as GeoJSON.Geometry);
+    out.push({ type: "Feature", geometry, properties: propsOf(r, s, at) });
+  }
+  for (const [country, c] of energyByCountry) {
+    const clusterProminence = c.mw > 0 ? energyProminence(c.mw, "outage") : c.max;
+    if (clusterProminence < minProminenceFor(zoom)) continue; // world zoom: only significant aggregates
+    out.push({ type: "Feature", geometry: { type: "Point", coordinates: [c.lng, c.lat] }, properties: { id: `energy-${country}`, layer: "energy", kind: "energy_cluster", title: `${c.n} energy disruption${c.n === 1 ? "" : "s"}`, label: c.mw ? `${Math.round(c.mw).toLocaleString("en-US")} MW` : `${c.n}`, value: c.mw, prominence: clusterProminence, stale: false, confidence: null, observedAt: at.toISOString(), status: null, entityKey: country, count: c.n } });
+  }
+  return truncated;
+}
+
 export async function queryHazards(q: HazardQuery = {}, now: Date = new Date()): Promise<HazardCollection> {
   const at = q.at ?? now;
   const hist = !!q.at;
   const layers = (q.layers?.length ? q.layers : HAZARD_LAYERS).filter((l): l is HazardLayer => (HAZARD_LAYERS as readonly string[]).includes(l));
   const zoom = q.zoom ?? 2;
   const features: GeoJSON.Feature<GeoJSON.Geometry, HazardFeatureProps>[] = [];
-  const counts: Record<HazardLayer, number> = { earthquakes: 0, fires: 0, weather: 0, volcanoes: 0 };
+  const counts: Record<HazardLayer, number> = { earthquakes: 0, fires: 0, weather: 0, volcanoes: 0, aviation: 0, maritime: 0, energy: 0, internet: 0 };
   const truncated: HazardLayer[] = [];
   const add = (layer: HazardLayer, f: GeoJSON.Feature<GeoJSON.Geometry, HazardFeatureProps>) => {
     features.push(f);
@@ -221,6 +282,14 @@ export async function queryHazards(q: HazardQuery = {}, now: Date = new Date()):
     }
   }
 
+  // v2 status layers: aviation, maritime, energy, internet share one bounded, zoom-dependent path.
+  for (const layer of ["aviation", "maritime", "energy", "internet"] as const) {
+    if (!layers.includes(layer)) continue;
+    const before = features.length;
+    if (await statusLayerFeatures(layer, at, hist, q.bbox, zoom, features)) truncated.push(layer);
+    counts[layer] += features.length - before;
+  }
+
   return { type: "FeatureCollection", features, meta: { at: q.at ? q.at.toISOString() : null, generatedAt: now.toISOString(), counts, truncated, health: await layerHealth(now) } };
 }
 
@@ -244,7 +313,7 @@ export async function layerHealth(now: Date = new Date()): Promise<HazardLayerHe
 }
 
 export async function getHazardDetail(id: string, at: Date | null = null, now: Date = new Date()): Promise<HazardDetail | null> {
-  const row = await prisma.globalEvent.findUnique({ where: { id }, include: { source: true, revisions: true } });
+  const row = await prisma.globalEvent.findUnique({ where: { id }, include: { source: true, revisions: true, claims: { orderBy: { observedAt: "desc" } }, links: { where: { status: "confirmed" } } } });
   if (!row) return null;
   const when = at ?? now;
   if (row.observedAt.getTime() > when.getTime()) return null; // not yet observed at that moment
@@ -254,6 +323,9 @@ export async function getHazardDetail(id: string, at: Date | null = null, now: D
   const ended = s.endedAt && s.endedAt <= when;
   const expired = s.expiresAt && s.expiresAt <= when;
   const trust = row.source ? sourceTrust(row.source) : null;
+  const conflictIds = row.links.map((l) => l.conflictId).filter((x): x is string => !!x);
+  const conflicts = conflictIds.length ? await prisma.conflict.findMany({ where: { id: { in: conflictIds } }, select: { id: true, slug: true, name: true } }) : [];
+  const claimsAsOf = row.claims.filter((c) => c.observedAt.getTime() <= when.getTime());
   return {
     id: row.id,
     origin: row.origin,
@@ -280,6 +352,12 @@ export async function getHazardDetail(id: string, at: Date | null = null, now: D
     expiresAt: s.expiresAt?.toISOString() ?? null,
     endedAt: s.endedAt?.toISOString() ?? null,
     status: ended ? "withdrawn" : expired ? "expired" : stale ? "stale" : "active",
+    domainStatus: s.status,
+    entityKey: row.entityKey,
+    countryCode: row.countryCode,
+    watchKey: watchKeyFor(row.category, row.entityKey),
+    relatedConflicts: row.links.map((l) => ({ conflictId: l.conflictId, eventId: l.eventId, slug: conflicts.find((c) => c.id === l.conflictId)?.slug ?? null, name: conflicts.find((c) => c.id === l.conflictId)?.name ?? null, basis: l.basis, note: l.note })),
+    claims: claimsAsOf.map((c) => ({ id: c.id, claimant: c.claimant, claimType: c.claimType, text: c.text, sourceName: c.sourceName, sourceUrl: c.sourceUrl, verification: c.verification, observedAt: c.observedAt.toISOString() })),
     stale,
     sourceUrl: s.sourceUrl,
     metadata: s.metadata ? (JSON.parse(s.metadata) as Record<string, unknown>) : {},
@@ -305,45 +383,89 @@ export interface SignificantHazard {
   stale: boolean;
 }
 
-/** Only genuinely notable, current events: never routine minor observations or thermal detections. */
+const V1_SIGNIFICANT = ["earthquake", "cyclone", "flood", "volcano", "confirmed_wildfire", "weather_alert"];
+const V2_STATUS = ["airport_status", "airspace_event", "port_disruption", "chokepoint_status", "maritime_incident", "energy_disruption", "internet_disruption"];
+
+// A hazard-derived potential port impact duplicates the hazard already listed (and is not a confirmed status): map and search only.
+const V2_HOMEPAGE = V2_STATUS.filter((c) => c !== "port_disruption");
+
+const STATUS_WORDS: Record<string, string> = {
+  closed: "closed",
+  partially_closed: "partially closed",
+  disrupted: "operational disruption",
+  elevated_disruption: "elevated disruption",
+  major_disruption: "major disruption",
+  closed_restricted: "closed / restricted",
+  outage: "outage",
+  reduced_capacity: "reduced capacity",
+  restored: "restored",
+};
+
+/** Headline for lists and search: what it is, without overclaiming. */
+export function hazardListTitle(r: { category: string; title: string; severityLabel: string | null; status: string | null }): string {
+  switch (r.category) {
+    case "earthquake":
+      return `${r.severityLabel} Earthquake`;
+    case "airport_status":
+      return `${r.title} — ${STATUS_WORDS[r.status ?? ""] ?? "disrupted"}`;
+    case "chokepoint_status":
+      return `${r.title}: ${STATUS_WORDS[r.status ?? ""] ?? r.status ?? "status"}`;
+    default:
+      return r.title;
+  }
+}
+
+function listSubtitle(r: { category: string; description: string | null; metadata: string | null; provider: string; countryCode: string | null }): string {
+  if (r.category === "earthquake") return r.description ?? r.provider;
+  const m = JSON.parse(r.metadata ?? "{}") as { areaDesc?: string; country?: string };
+  return m.areaDesc ?? m.country ?? (r.countryCode ? `${CATEGORY_LABEL[r.category as HazardCategory]} · ${r.countryCode}` : (CATEGORY_LABEL[r.category as HazardCategory] ?? r.provider));
+}
+
+/** Only genuinely notable, current events: never routine minor observations, thermal detections or party claims. */
 export async function getSignificantHazards(limit = 6, now: Date = new Date()): Promise<SignificantHazard[]> {
   const rows = await prisma.globalEvent.findMany({
     where: {
-      category: { in: ["earthquake", "cyclone", "flood", "volcano", "confirmed_wildfire", "weather_alert"] },
-      prominence: { gte: HOMEPAGE_PROMINENCE },
-      endedAt: null,
-      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-      observedAt: { gte: new Date(now.getTime() - 7 * DAY) },
+      AND: [
+        { prominence: { gte: HOMEPAGE_PROMINENCE }, endedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+        // Natural hazards are recent by nature; a status (airport closed, chokepoint disrupted, blackout) stays newsworthy while it lasts.
+        { OR: [{ category: { in: V1_SIGNIFICANT }, observedAt: { gte: new Date(now.getTime() - 7 * DAY) } }, { category: { in: V2_HOMEPAGE } }] },
+      ],
     },
     orderBy: [{ prominence: "desc" }, { observedAt: "desc" }],
-    take: limit * 3,
+    take: limit * 4,
   });
   const out: SignificantHazard[] = [];
   for (const r of rows) {
     const stale = isStaleHazard(r.category, r.providerUpdatedAt ?? r.observedAt, now.getTime());
     if (stale) continue;
     if (r.category === "earthquake" && now.getTime() - r.observedAt.getTime() > 3 * DAY) continue;
-    out.push({ id: r.id, category: r.category as HazardCategory, layer: r.layer as HazardLayer, title: r.category === "earthquake" ? `${r.severityLabel} Earthquake` : r.title, subtitle: (r.category === "earthquake" ? r.description : (JSON.parse(r.metadata ?? "{}") as { areaDesc?: string; country?: string }).areaDesc ?? (JSON.parse(r.metadata ?? "{}") as { country?: string }).country) ?? r.provider, label: r.severityLabel, observedAt: r.observedAt.toISOString(), prominence: r.prominence, stale });
+    if (r.status === "normal" || r.status === "restored") continue;
+    out.push({ id: r.id, category: r.category as HazardCategory, layer: r.layer as HazardLayer, title: hazardListTitle(r), subtitle: listSubtitle(r), label: r.severityLabel, observedAt: r.observedAt.toISOString(), prominence: r.prominence, stale });
     if (out.length >= limit) break;
   }
   return out;
 }
 
-/** Search hits: major earthquakes (M5+), named volcanoes, and significant active weather. Never thermal detections. */
+/** Search hits: major earthquakes, named volcanoes, significant weather, disrupted airports, chokepoints and major current disruptions. Never thermal detections or a stream of routine observations. */
 export async function searchHazards(query: string, limit = 4, now: Date = new Date()): Promise<SignificantHazard[]> {
   const q = query.trim();
   if (q.length < 2) return [];
   const magMatch = /^m?\s*(\d(?:\.\d)?)$/i.exec(q);
+  const live = { endedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] };
   const rows = await prisma.globalEvent.findMany({
     where: {
       OR: [
         { category: "volcano", title: { contains: q } },
         { category: "earthquake", prominence: { gte: 45 }, OR: [{ description: { contains: q } }, ...(/^(earthquake|quake)s?$/i.test(q) ? [{ prominence: { gte: 45 } }] : []), ...(magMatch ? [{ severityValue: { gte: Number(magMatch[1]), lt: Number(magMatch[1]) + 0.1 } }] : [])] },
-        { category: { in: ["cyclone", "flood", "weather_alert", "confirmed_wildfire"] }, prominence: { gte: 55 }, endedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }], title: { contains: q } },
+        { category: { in: ["cyclone", "flood", "weather_alert", "confirmed_wildfire"] }, prominence: { gte: 55 }, ...live, title: { contains: q } },
+        // v2: a disrupted airport by name / ICAO / IATA, every chokepoint by name, and major current disruptions.
+        { category: "airport_status", prominence: { gte: 40 }, ...live, OR: [{ title: { contains: q } }, { entityKey: q.toUpperCase() }] },
+        { category: "chokepoint_status", title: { contains: q } },
+        { category: { in: ["port_disruption", "maritime_incident", "energy_disruption", "internet_disruption", "airspace_event"] }, prominence: { gte: 40 }, ...live, title: { contains: q } },
       ],
     },
     orderBy: [{ prominence: "desc" }, { observedAt: "desc" }],
     take: limit,
   });
-  return rows.map((r) => ({ id: r.id, category: r.category as HazardCategory, layer: r.layer as HazardLayer, title: r.category === "earthquake" ? `${r.severityLabel} Earthquake` : r.title, subtitle: r.category === "earthquake" ? (r.description ?? "USGS") : (CATEGORY_LABEL[r.category as HazardCategory] ?? r.category), label: r.severityLabel, observedAt: r.observedAt.toISOString(), prominence: r.prominence, stale: isStaleHazard(r.category, r.providerUpdatedAt ?? r.observedAt, now.getTime()) }));
+  return rows.map((r) => ({ id: r.id, category: r.category as HazardCategory, layer: r.layer as HazardLayer, title: hazardListTitle(r), subtitle: r.category === "earthquake" ? (r.description ?? "USGS") : (CATEGORY_LABEL[r.category as HazardCategory] ?? r.category), label: r.severityLabel, observedAt: r.observedAt.toISOString(), prominence: r.prominence, stale: isStaleHazard(r.category, r.providerUpdatedAt ?? r.observedAt, now.getTime()) }));
 }

@@ -1113,6 +1113,14 @@ model GlobalEvent {
   // Map layer this belongs to: earthquakes | fires | weather | volcanoes
   layer             String
   subtype           String?
+  // Domain operating status where the layer has one (airport/port/chokepoint: normal | disrupted |
+  // partially_closed | closed | elevated_disruption | major_disruption | closed_restricted | unknown;
+  // energy: outage | reduced_capacity | shutdown | ...). Revised through GlobalEventRevision.
+  status            String?
+  // Stable identity of the affected thing (ICAO code, port/chokepoint id, country, asset): the key a
+  // future watchlist / alert would subscribe to, constant across provider revisions.
+  entityKey         String?   @map("entity_key")
+  countryCode       String?   @map("country_code")
   provider          String
   providerEventId   String    @map("provider_event_id")
   sourceId          String?   @map("source_id")
@@ -1155,7 +1163,10 @@ model GlobalEvent {
   lastSeenAt        DateTime  @default(now()) @map("last_seen_at")
 
   revisions GlobalEventRevision[]
+  links     GlobalEventLink[]
+  claims    GlobalEventClaim[]
 
+  @@index([layer, entityKey])
   @@unique([provider, providerEventId])
   @@index([layer, observedAt])
   @@index([category, observedAt])
@@ -1204,4 +1215,51 @@ model HazardZone {
   fetchedAt DateTime @default(now()) @map("fetched_at")
 
   @@map("hazard_zones")
+}
+
+// Optional relationship between a structured event and a conflict / conflict event. Never created
+// from proximity: only from an explicit source relation, an admin review, or a deterministic rule,
+// and only `confirmed` links are public.
+model GlobalEventLink {
+  id            String      @id @default(cuid())
+  globalEventId String      @map("global_event_id")
+  globalEvent   GlobalEvent @relation(fields: [globalEventId], references: [id], onDelete: Cascade)
+  conflictId    String?     @map("conflict_id")
+  eventId       String?     @map("event_id")
+  // source_relation | admin_review | rule
+  basis         String
+  // proposed | confirmed | rejected
+  status        String      @default("proposed")
+  note          String?
+  sourceName    String?     @map("source_name")
+  sourceUrl     String?     @map("source_url")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  reviewedAt    DateTime?   @map("reviewed_at")
+
+  @@index([globalEventId])
+  @@index([conflictId])
+  @@map("global_event_links")
+}
+
+// A party's own statement about an infrastructure/transport state or its cause ("we closed the strait",
+// "we destroyed the plant"). Stored as a claim beside the event; it never changes the event's status,
+// which only moves on operator data, independent observation or corroboration.
+model GlobalEventClaim {
+  id            String       @id @default(cuid())
+  globalEventId String?      @map("global_event_id")
+  globalEvent   GlobalEvent? @relation(fields: [globalEventId], references: [id], onDelete: Cascade)
+  entityKey     String?      @map("entity_key")
+  claimant      String
+  // closure | attack | destruction | cause_attribution | other
+  claimType     String       @map("claim_type")
+  text          String
+  sourceName    String?      @map("source_name")
+  sourceUrl     String?      @map("source_url")
+  observedAt    DateTime     @default(now()) @map("observed_at")
+  // unverified | corroborated | disputed
+  verification  String       @default("unverified")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  @@index([globalEventId])
+  @@map("global_event_claims")
 }

@@ -11,6 +11,8 @@ export interface HazardSourceData {
   points: GeoJSON.FeatureCollection;
   /** Alert areas (polygons) and area-less alert points. */
   weather: GeoJSON.FeatureCollection;
+  /** Transport and infrastructure (aviation, maritime, energy, internet): points, airspace areas, energy aggregates. */
+  ops: GeoJSON.FeatureCollection;
 }
 
 const fc = (features: GeoJSON.Feature[]): GeoJSON.FeatureCollection => ({ type: "FeatureCollection", features });
@@ -21,6 +23,7 @@ export function hazardsToSources(features: readonly HazardFeature[]): HazardSour
   const thermal: GeoJSON.Feature[] = [];
   const points: GeoJSON.Feature[] = [];
   const weather: GeoJSON.Feature[] = [];
+  const ops: GeoJSON.Feature[] = [];
   for (const f of features) {
     switch (f.properties.layer) {
       case "earthquakes":
@@ -32,12 +35,18 @@ export function hazardsToSources(features: readonly HazardFeature[]): HazardSour
       case "volcanoes":
         points.push(f);
         break;
+      case "aviation":
+      case "maritime":
+      case "energy":
+      case "internet":
+        ops.push(f);
+        break;
       case "fires":
         (f.properties.kind === "confirmed_wildfire" ? points : thermal).push(f);
         break;
     }
   }
-  return { quakes: fc(quakes), thermal: fc(thermal), points: fc(points), weather: fc(weather) };
+  return { quakes: fc(quakes), thermal: fc(thermal), points: fc(points), weather: fc(weather), ops: fc(ops) };
 }
 
 export const EMPTY_HAZARD_SOURCES: HazardSourceData = hazardsToSources([]);

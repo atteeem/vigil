@@ -1,6 +1,6 @@
 import type { Source } from "@prisma/client";
-import { getHazardProvider } from "./registry";
-import { ingestGlobalEvents, runHazardRetention } from "./store";
+import { getHazardProvider, missingCredentials } from "./registry";
+import { ingestGlobalEvents, runHazardRetention, runLifecycleRetention } from "./store";
 import { HttpFetchError, parseRetryAfter } from "@/lib/ingestion/errors";
 import { nextPollDelayMinutes, applyRetryAfterFloor } from "@/lib/ingestion/backoff";
 import { recordAttemptStarted, recordIngestionSuccess, recordIngestionError, scheduleNextPoll } from "@/lib/db/repositories/sources";
@@ -34,12 +34,17 @@ export async function pollStructuredSource(source: Source): Promise<FetchResult>
   await recordAttemptStarted(source.id);
   try {
     const provider = getHazardProvider(source.platform);
+    // A provider that needs a key/token stays idle (and says why) until it is configured: never attempted
+    // unauthenticated, never bypassed.
+    const missing = missingCredentials(provider);
+    if (missing.length) throw new Error(`Credentials not configured: set ${missing.join(", ")} (${provider.credentials!.signup})`);
     const url = source.feedUrl ?? source.url ?? provider.defaultUrl;
     const result = await provider.fetch({ url, now: new Date(), fetchText });
     const stats = await ingestGlobalEvents(provider.key, source.id, result);
     if (Date.now() - lastRetention > RETENTION_EVERY_MS) {
       lastRetention = Date.now();
       await runHazardRetention().catch((err) => console.error("[hazards] retention failed:", err));
+      await runLifecycleRetention().catch((err) => console.error("[hazards] lifecycle retention failed:", err));
     }
     const updated = await recordIngestionSuccess(source.id);
     const fetched = result.events.length;

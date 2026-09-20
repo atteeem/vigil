@@ -22,6 +22,7 @@ export const INDEPENDENCE_CLASSES = [
   "government_alert",
   "sensor_provider",
   "humanitarian_monitor",
+  "infrastructure_operator",
 ] as const;
 export type IndependenceClass = (typeof INDEPENDENCE_CLASSES)[number];
 

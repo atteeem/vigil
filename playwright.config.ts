@@ -38,6 +38,10 @@ export default defineConfig({
       // Fixture Telegram channels for the credential-gated adapter (test server only).
       TELEGRAM_FIXTURES: "true",
       TEST_FIXTURES: "true",
+      // Fixture-only credentials so the credentialed FAA NOTAM adapter can be exercised against local
+      // fixtures; CLOUDFLARE_RADAR_TOKEN is deliberately left unset (the "not configured" path).
+      FAA_NOTAM_CLIENT_ID: "fixture-client",
+      FAA_NOTAM_CLIENT_SECRET: "fixture-secret",
       // Forces the gazetteer-only geocoding provider (no live Nominatim
       // calls) so /api/admin/geocode is deterministic too — see
       // lib/geocoding/provider.ts.
