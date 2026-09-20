@@ -57,7 +57,8 @@ export async function listConflictingClaims(conflictId: string): Promise<Conflic
     const links = new Map((await resolveActorLinks([...latest.values()].map((r) => r.claimedActor!.name))).map((l) => [l.name, l]));
     groups.push({
       conflictSlug: list[0]!.conflict.slug,
-      location: list[0]!.locationName!,
+      // Display the best-cased spelling supplied for the place (not a lower-cased duplicate).
+      location: (list.find((r) => r.locationName !== r.locationName!.toLowerCase()) ?? list[0]!).locationName!,
       claims: [...latest.values()].map((r) => {
         const roles = [r.sourceRole, ...parseCorroboration(r.corroboration).map((c) => c.sourceRole ?? null)];
         const independent = roles.filter((role) => role !== null && !isNonIndependentRole(role)).length;

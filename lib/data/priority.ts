@@ -67,7 +67,7 @@ export function rankMajorConflicts(conflicts: readonly Conflict[], events: reado
     .map((conflict) => {
       const severityScore = conflictSeverityScore(conflict);
       const recentSig = recentSignificance(events, conflict.id, now);
-      return { conflict, severityScore, recentSignificance: recentSig, priority: 0.6 * severityScore + 0.25 * recentSig + 0.15 * 100 * freshness(conflict.lastEventAt, now) };
+      return { conflict, severityScore, recentSignificance: recentSig, priority: 0.7 * severityScore + 0.2 * recentSig + 0.1 * 100 * freshness(conflict.lastEventAt, now) };
     })
     .sort((a, b) => b.priority - a.priority || (a.conflict.id < b.conflict.id ? -1 : 1))
     .slice(0, limit);

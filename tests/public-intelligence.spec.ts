@@ -231,7 +231,7 @@ test.describe("Event page: event vs reports vs claims", () => {
     await expect(fresh).toContainText("Event occurred");
     await expect(fresh).toContainText("First source published");
     await expect(fresh).toContainText("Data last updated");
-    await expect(fresh).toContainText("2026");
+    await expect(fresh).toContainText("Jan 2");
     // Not called "live" because the page loaded.
     expect(await page.getByTestId("event-detail").innerText()).not.toMatch(/\blive\b/i);
   });

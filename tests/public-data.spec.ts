@@ -327,7 +327,7 @@ test.describe("Original source URLs survive end-to-end", () => {
     await expect(report).toHaveCount(1);
     await expect(report.getByTestId("original-source-link")).toHaveAttribute("href", "https://fixture.test/expansion/local/fixtown-captured");
     await expect(report).toContainText(src.name);
-    await expect(report).toContainText("Published: ");
+    await expect(report).toContainText("Source published: ");
     await expect(page.getByTestId("event-evidence-summary")).toContainText("1 report attached");
     // The event and its supporting reports are distinct things on the page.
     await expect(page.getByTestId("event-reports").getByText("Reports and sources")).toBeVisible();
