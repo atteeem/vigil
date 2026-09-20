@@ -79,6 +79,16 @@ export interface SourceDTO {
   enabled: boolean;
   autoIngest: boolean;
   autoProcessing: boolean;
+  canonicalSourceUrl: string | null;
+  feedUrl: string | null;
+  socialProfileUrl: string | null;
+  platform: string | null;
+  platformHandle: string | null;
+  verificationStatus: string;
+  verifiedAt: string | null;
+  verificationNotes: string | null;
+  independenceClass: string | null;
+  claimPolicy: string | null;
   pollIntervalMinutes: number;
   nextPollAt: string | null;
   lastAttemptedAt: string | null;

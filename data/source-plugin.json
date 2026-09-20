@@ -1,0 +1,1028 @@
+{
+  "_comment": "Exact URLs supplied by the project owner. Nothing here is guessed from a name. Each entry becomes ONE Source row (one polled channel). verify-source-plugin.mjs checks it; the seeder enables a source only when its verification passes AND an existing adapter can ingest it. Entries with no URL are NEEDS_VERIFICATION placeholders and stay disabled.",
+  "sources": [
+    {
+      "key": "hengaw-web",
+      "name": "Hengaw (website)",
+      "website": "https://hengaw.net/",
+      "class": "advocacy_independent",
+      "role": "specialist_research",
+      "category": "NGO",
+      "country": "IR",
+      "conflicts": [
+        [
+          "kurdish-iran",
+          "dedicated"
+        ]
+      ],
+      "note": "Kurdish/Iran human-rights perspective."
+    },
+    {
+      "key": "hengaw-telegram",
+      "name": "Hengaw (Telegram)",
+      "website": "https://hengaw.net/",
+      "telegram": "https://t.me/Hengaw_Org",
+      "class": "advocacy_independent",
+      "role": "specialist_research",
+      "category": "NGO",
+      "country": "IR",
+      "conflicts": [
+        [
+          "kurdish-iran",
+          "dedicated"
+        ]
+      ],
+      "note": "Kurdish/Iran human-rights perspective."
+    },
+    {
+      "key": "acled-iran",
+      "name": "ACLED Iran Crisis Live",
+      "website": "https://acleddata.com/iran-crisis-live",
+      "class": "independent_high",
+      "role": "specialist_research",
+      "category": "Specialist",
+      "conflicts": [
+        [
+          "kurdish-iran",
+          "general"
+        ],
+        [
+          "persian-gulf-iran",
+          "general"
+        ]
+      ],
+      "note": "Independent / strong verification. A live dashboard page, not a feed."
+    },
+    {
+      "key": "aljazeera",
+      "name": "Al Jazeera English",
+      "website": "https://www.aljazeera.com/",
+      "class": "independent_standard",
+      "role": "originating",
+      "category": "News",
+      "conflicts": [
+        [
+          "kurdish-iran",
+          "general"
+        ],
+        [
+          "persian-gulf-iran",
+          "general"
+        ],
+        [
+          "israel-lebanon",
+          "general"
+        ]
+      ],
+      "note": "Independent / perspective. Usually already present via the base feed list."
+    },
+    {
+      "key": "irna-telegram",
+      "name": "IRNA English (Telegram)",
+      "telegram": "https://t.me/Irna_en",
+      "class": "state_media",
+      "claim": "party_claim",
+      "role": "official",
+      "category": "State media",
+      "country": "IR",
+      "conflicts": [
+        [
+          "persian-gulf-iran",
+          "general"
+        ],
+        [
+          "kurdish-iran",
+          "general"
+        ]
+      ],
+      "note": "Iranian state perspective; party_claim when carrying Iranian government/military claims."
+    },
+    {
+      "key": "tasnim-telegram",
+      "name": "Tasnim (Telegram)",
+      "telegram": "https://t.me/Tasnim_Agency",
+      "class": "aligned_media",
+      "claim": "party_claim",
+      "role": "official",
+      "category": "Aligned media",
+      "country": "IR",
+      "conflicts": [
+        [
+          "persian-gulf-iran",
+          "general"
+        ],
+        [
+          "kurdish-iran",
+          "general"
+        ]
+      ],
+      "note": "State-security-establishment aligned; party_claim for Iranian security/military claims."
+    },
+    {
+      "key": "khrn-web",
+      "name": "KHRN (website)",
+      "website": "https://kurdistanhumanrights.org/",
+      "class": "advocacy_independent",
+      "role": "specialist_research",
+      "category": "NGO",
+      "conflicts": [
+        [
+          "kurdish-iran",
+          "dedicated"
+        ]
+      ],
+      "note": "Kurdistan Human Rights Network."
+    },
+    {
+      "key": "el-universo-rss",
+      "name": "El Universo",
+      "website": "https://www.eluniverso.com/",
+      "feed": "https://www.eluniverso.com/rss/",
+      "class": "independent_standard",
+      "role": "local_media",
+      "category": "News",
+      "country": "EC",
+      "language": "es",
+      "conflicts": [
+        [
+          "ecuador",
+          "dedicated"
+        ]
+      ],
+      "note": "RSS index URL as supplied."
+    },
+    {
+      "key": "primicias-web",
+      "name": "Primicias",
+      "website": "https://www.primicias.ec/",
+      "class": "independent_high",
+      "role": "local_media",
+      "category": "News",
+      "country": "EC",
+      "language": "es",
+      "conflicts": [
+        [
+          "ecuador",
+          "dedicated"
+        ]
+      ]
+    },
+    {
+      "key": "primicias-telegram",
+      "name": "Primicias (Telegram)",
+      "website": "https://www.primicias.ec/",
+      "telegram": "https://t.me/primiciasec",
+      "class": "independent_high",
+      "role": "local_media",
+      "category": "News",
+      "country": "EC",
+      "language": "es",
+      "conflicts": [
+        [
+          "ecuador",
+          "dedicated"
+        ]
+      ]
+    },
+    {
+      "key": "teleamazonas-web",
+      "name": "Teleamazonas",
+      "website": "https://www.teleamazonas.com/",
+      "class": "independent_standard",
+      "role": "local_media",
+      "category": "News",
+      "country": "EC",
+      "language": "es",
+      "conflicts": [
+        [
+          "ecuador",
+          "dedicated"
+        ]
+      ]
+    },
+    {
+      "key": "teleamazonas-telegram",
+      "name": "Teleamazonas (Telegram)",
+      "website": "https://www.teleamazonas.com/",
+      "telegram": "https://t.me/teleamazonascanal",
+      "class": "independent_standard",
+      "role": "local_media",
+      "category": "News",
+      "country": "EC",
+      "language": "es",
+      "conflicts": [
+        [
+          "ecuador",
+          "dedicated"
+        ]
+      ]
+    },
+    {
+      "key": "policia-ecuador-x",
+      "name": "Policía Ecuador (X)",
+      "x": "https://x.com/PoliciaEcuador",
+      "class": "official_government",
+      "claim": "party_claim",
+      "role": "official",
+      "category": "Law enforcement",
+      "country": "EC",
+      "language": "es",
+      "conflicts": [
+        [
+          "ecuador",
+          "dedicated"
+        ]
+      ],
+      "note": "Law-enforcement account; party_claim for police/security claims."
+    },
+    {
+      "key": "icg-cameroon",
+      "name": "International Crisis Group — Cameroon",
+      "website": "https://www.crisisgroup.org/africa/central-africa/cameroon",
+      "class": "independent_standard",
+      "role": "specialist_research",
+      "category": "Specialist",
+      "conflicts": [
+        [
+          "cameroon",
+          "dedicated"
+        ]
+      ],
+      "note": "Specialist/reference page, not a feed."
+    },
+    {
+      "key": "cameroon-tribune",
+      "name": "Cameroon Tribune",
+      "website": "https://www.cameroon-tribune.cm/category2.html/1/en.html/politics",
+      "class": "state_media",
+      "claim": "party_claim",
+      "role": "official",
+      "category": "State media",
+      "country": "CM",
+      "conflicts": [
+        [
+          "cameroon",
+          "general"
+        ]
+      ],
+      "note": "Classification decision: Cameroon Tribune is the government-owned public daily, so it is state_media / party_claim for government claims; it must not be treated as independent."
+    },
+    {
+      "key": "mimi-mefo-web",
+      "name": "Mimi Mefo Info",
+      "website": "https://mimimefoinfos.com/",
+      "class": "independent_standard",
+      "role": "local_media",
+      "category": "News",
+      "country": "CM",
+      "conflicts": [
+        [
+          "cameroon",
+          "dedicated"
+        ]
+      ]
+    },
+    {
+      "key": "journal-du-cameroun-web",
+      "name": "Journal du Cameroun",
+      "website": "https://www.journalducameroun.com/",
+      "class": "independent_standard",
+      "role": "local_media",
+      "category": "News",
+      "country": "CM",
+      "language": "fr",
+      "conflicts": [
+        [
+          "cameroon",
+          "dedicated"
+        ]
+      ]
+    },
+    {
+      "key": "journal-du-cameroun-telegram",
+      "name": "Journal du Cameroun (Telegram)",
+      "website": "https://www.journalducameroun.com/",
+      "telegram": "https://t.me/jdcFR",
+      "class": "independent_standard",
+      "role": "local_media",
+      "category": "News",
+      "country": "CM",
+      "language": "fr",
+      "conflicts": [
+        [
+          "cameroon",
+          "dedicated"
+        ]
+      ],
+      "note": "Previously identified channel; must be re-verified as the official active channel."
+    },
+    {
+      "key": "eastmojo-web",
+      "name": "EastMojo",
+      "website": "https://www.eastmojo.com/",
+      "class": "independent_standard",
+      "role": "local_media",
+      "category": "News",
+      "country": "IN",
+      "conflicts": [
+        [
+          "northeast-india",
+          "dedicated"
+        ]
+      ]
+    },
+    {
+      "key": "ukhrul-times-web",
+      "name": "Ukhrul Times",
+      "website": "https://ukhrultimes.com/",
+      "class": "independent_standard",
+      "role": "local_media",
+      "category": "News",
+      "country": "IN",
+      "conflicts": [
+        [
+          "northeast-india",
+          "dedicated"
+        ]
+      ]
+    },
+    {
+      "key": "cocomi-web",
+      "name": "COCOMI (Manipur)",
+      "website": "https://cocomimanipur.com/",
+      "class": "representative_advocacy",
+      "claim": "party_claim",
+      "role": "eyewitness_community",
+      "category": "Representative body",
+      "country": "IN",
+      "conflicts": [
+        [
+          "northeast-india",
+          "general"
+        ]
+      ],
+      "note": "Meitei perspective; party/aligned claim where speaking for the organisation."
+    },
+    {
+      "key": "libya-observer-web",
+      "name": "Libya Observer",
+      "website": "https://libyaobserver.ly/",
+      "class": "independent_standard",
+      "role": "local_media",
+      "category": "News",
+      "country": "LY",
+      "conflicts": [
+        [
+          "libya",
+          "dedicated"
+        ]
+      ],
+      "note": "Tripoli / western Libya perspective."
+    },
+    {
+      "key": "libya-herald-web",
+      "name": "Libya Herald",
+      "website": "https://libyaherald.com/",
+      "class": "independent_standard",
+      "role": "local_media",
+      "category": "News",
+      "country": "LY",
+      "conflicts": [
+        [
+          "libya",
+          "dedicated"
+        ]
+      ]
+    },
+    {
+      "key": "cfr-libya",
+      "name": "CFR Global Conflict Tracker — Libya",
+      "website": "https://www.cfr.org/global-conflict-tracker/conflict/civil-war-libya",
+      "class": "specialist_reference",
+      "role": "specialist_research",
+      "category": "Specialist",
+      "conflicts": [
+        [
+          "libya",
+          "general"
+        ]
+      ],
+      "note": "Reference tracker page, not a feed."
+    },
+    {
+      "key": "ap-libya",
+      "name": "AP — Libya",
+      "website": "https://apnews.com/hub/libya",
+      "class": "international_media",
+      "role": "originating",
+      "category": "Wire",
+      "conflicts": [
+        [
+          "libya",
+          "general"
+        ]
+      ]
+    },
+    {
+      "key": "icg-libya",
+      "name": "International Crisis Group — Libya",
+      "website": "https://www.crisisgroup.org/middle-east-north-africa/north-africa/libya",
+      "class": "specialist_reference",
+      "role": "specialist_research",
+      "category": "Specialist",
+      "conflicts": [
+        [
+          "libya",
+          "dedicated"
+        ]
+      ]
+    },
+    {
+      "key": "naya-telegram",
+      "name": "NAYA for Iraq (Telegram)",
+      "telegram": "https://t.me/naya_foriraq",
+      "class": "aligned_media",
+      "claim": "discovery_only",
+      "role": "aggregator",
+      "category": "Aligned media",
+      "country": "IQ",
+      "conflicts": [
+        [
+          "libya",
+          "general"
+        ],
+        [
+          "persian-gulf-iran",
+          "general"
+        ]
+      ],
+      "note": "Resistance-axis perspective; party_claim / discovery only."
+    },
+    {
+      "key": "sonna-telegram",
+      "name": "SONNA (Telegram)",
+      "telegram": "https://t.me/SONNALive",
+      "class": "state_media",
+      "claim": "party_claim",
+      "role": "official",
+      "category": "State media",
+      "country": "SO",
+      "conflicts": [
+        [
+          "somalia",
+          "dedicated"
+        ]
+      ],
+      "note": "Somali federal government perspective; party_claim for government/military claims."
+    },
+    {
+      "key": "garowe-web",
+      "name": "Garowe Online",
+      "website": "https://www.garoweonline.com/",
+      "class": "independent_standard",
+      "role": "local_media",
+      "category": "News",
+      "country": "SO",
+      "conflicts": [
+        [
+          "somalia",
+          "dedicated"
+        ]
+      ],
+      "note": "Puntland / regional perspective."
+    },
+    {
+      "key": "garowe-telegram",
+      "name": "Garowe Online (Telegram)",
+      "website": "https://www.garoweonline.com/",
+      "telegram": "https://t.me/GaroweOnline",
+      "class": "independent_standard",
+      "role": "local_media",
+      "category": "News",
+      "country": "SO",
+      "conflicts": [
+        [
+          "somalia",
+          "dedicated"
+        ]
+      ]
+    },
+    {
+      "key": "kalangou-web",
+      "name": "Studio Kalangou",
+      "website": "https://www.studiokalangou.org/",
+      "class": "independent_high",
+      "role": "local_media",
+      "category": "News",
+      "country": "NE",
+      "conflicts": [
+        [
+          "niger",
+          "dedicated"
+        ],
+        [
+          "sahel",
+          "general"
+        ]
+      ]
+    },
+    {
+      "key": "actuniger-web",
+      "name": "ActuNiger",
+      "website": "https://actuniger.com/",
+      "class": "independent_standard",
+      "role": "local_media",
+      "category": "News",
+      "country": "NE",
+      "language": "fr",
+      "conflicts": [
+        [
+          "niger",
+          "dedicated"
+        ]
+      ],
+      "note": "Independence pending metadata verification."
+    },
+    {
+      "key": "air-info-agadez-web",
+      "name": "Air Info Agadez",
+      "website": "https://airinfoagadez.com/",
+      "class": "independent_standard",
+      "role": "local_media",
+      "category": "News",
+      "country": "NE",
+      "language": "fr",
+      "conflicts": [
+        [
+          "niger",
+          "dedicated"
+        ]
+      ]
+    },
+    {
+      "key": "idf-telegram",
+      "name": "IDF (Telegram)",
+      "telegram": "https://t.me/idfofficial",
+      "class": "official_military",
+      "claim": "party_claim",
+      "role": "official",
+      "category": "Official military",
+      "country": "IL",
+      "conflicts": [
+        [
+          "israel-lebanon",
+          "general"
+        ]
+      ],
+      "note": "Party claim."
+    },
+    {
+      "key": "unifil-telegram",
+      "name": "UNIFIL (Telegram)",
+      "telegram": "https://t.me/UNIFIL_Lebanon",
+      "class": "independent_high",
+      "role": "official",
+      "category": "Institutional monitor",
+      "country": "LB",
+      "conflicts": [
+        [
+          "israel-lebanon",
+          "dedicated"
+        ]
+      ],
+      "note": "Institutional monitor; strong verification for directly observed incidents only."
+    },
+    {
+      "key": "lebanese-army-web",
+      "name": "Lebanese Army (website)",
+      "website": "https://www.lebarmy.gov.lb/",
+      "class": "official_military",
+      "claim": "party_claim",
+      "role": "official",
+      "category": "Official military",
+      "country": "LB",
+      "conflicts": [
+        [
+          "israel-lebanon",
+          "general"
+        ]
+      ],
+      "note": "Party claim."
+    },
+    {
+      "key": "mayadeen-telegram",
+      "name": "Al Mayadeen (Telegram)",
+      "telegram": "https://t.me/mayadeenchannel",
+      "class": "aligned_media",
+      "claim": "party_claim",
+      "role": "local_media",
+      "category": "Aligned media",
+      "country": "LB",
+      "conflicts": [
+        [
+          "israel-lebanon",
+          "general"
+        ]
+      ],
+      "note": "Resistance-axis perspective."
+    },
+    {
+      "key": "lorient-today-web",
+      "name": "L'Orient Today",
+      "website": "https://today.lorientlejour.com/",
+      "class": "independent_standard",
+      "role": "local_media",
+      "category": "News",
+      "country": "LB",
+      "conflicts": [
+        [
+          "israel-lebanon",
+          "dedicated"
+        ]
+      ]
+    },
+    {
+      "key": "sabereen-telegram",
+      "name": "Sabereen News (Telegram)",
+      "telegram": "https://t.me/SabrenNewss",
+      "class": "aligned_media",
+      "claim": "discovery_only",
+      "role": "aggregator",
+      "category": "Aligned media",
+      "conflicts": [
+        [
+          "israel-lebanon",
+          "general"
+        ],
+        [
+          "persian-gulf-iran",
+          "general"
+        ]
+      ],
+      "note": "Resistance-axis perspective; party_claim / discovery only."
+    },
+    {
+      "key": "centcom-web",
+      "name": "CENTCOM (website)",
+      "website": "https://www.centcom.mil/",
+      "class": "official_military",
+      "claim": "party_claim",
+      "role": "official",
+      "category": "Official military",
+      "country": "US",
+      "conflicts": [
+        [
+          "persian-gulf-iran",
+          "general"
+        ]
+      ],
+      "note": "Party claim."
+    },
+    {
+      "key": "al-arabiya-web",
+      "name": "Al Arabiya English",
+      "website": "https://english.alarabiya.net/",
+      "class": "independent_standard",
+      "role": "originating",
+      "category": "News",
+      "conflicts": [
+        [
+          "persian-gulf-iran",
+          "general"
+        ]
+      ],
+      "note": "Gulf/Saudi regional perspective."
+    },
+    {
+      "key": "faytuks-x",
+      "name": "Faytuks Network (X)",
+      "x": "https://x.com/FaytuksNetwork",
+      "class": "osint_aggregator",
+      "claim": "discovery_only",
+      "role": "aggregator",
+      "category": "OSINT",
+      "conflicts": [
+        [
+          "persian-gulf-iran",
+          "general"
+        ]
+      ],
+      "note": "Discovery only unless original reporting exists."
+    },
+    {
+      "key": "afp-x",
+      "name": "Armed Forces of the Philippines (X)",
+      "x": "https://x.com/TeamAFP",
+      "class": "official_military",
+      "claim": "party_claim",
+      "role": "official",
+      "category": "Official military",
+      "country": "PH",
+      "conflicts": [
+        [
+          "philippines-insurgencies",
+          "dedicated"
+        ]
+      ],
+      "note": "Party claim."
+    },
+    {
+      "key": "bulatlat-web",
+      "name": "Bulatlat",
+      "website": "https://www.bulatlat.com/",
+      "class": "advocacy_independent",
+      "role": "local_media",
+      "category": "News",
+      "country": "PH",
+      "conflicts": [
+        [
+          "philippines-insurgencies",
+          "dedicated"
+        ]
+      ]
+    },
+    {
+      "key": "bulatlat-telegram",
+      "name": "Bulatlat (Telegram)",
+      "website": "https://www.bulatlat.com/",
+      "telegram": "https://t.me/bulatlat",
+      "class": "advocacy_independent",
+      "role": "local_media",
+      "category": "News",
+      "country": "PH",
+      "conflicts": [
+        [
+          "philippines-insurgencies",
+          "dedicated"
+        ]
+      ]
+    },
+    {
+      "key": "mindanews-web",
+      "name": "MindaNews",
+      "website": "https://mindanews.com/",
+      "class": "independent_high",
+      "role": "local_media",
+      "category": "News",
+      "country": "PH",
+      "conflicts": [
+        [
+          "philippines-insurgencies",
+          "dedicated"
+        ]
+      ]
+    },
+    {
+      "key": "rappler-web",
+      "name": "Rappler",
+      "website": "https://www.rappler.com/",
+      "class": "independent_standard",
+      "role": "local_media",
+      "category": "News",
+      "country": "PH",
+      "conflicts": [
+        [
+          "philippines-insurgencies",
+          "dedicated"
+        ]
+      ]
+    }
+  ],
+  "needsVerification": [
+    {
+      "name": "PDKI Media",
+      "conflicts": [
+        [
+          "kurdish-iran",
+          "dedicated"
+        ]
+      ],
+      "reason": "No exact URL supplied — verify the official PDKI account before adding any URL or enabling."
+    },
+    {
+      "name": "KHRN (social accounts)",
+      "website": "https://kurdistanhumanrights.org/",
+      "conflicts": [
+        [
+          "kurdish-iran",
+          "dedicated"
+        ]
+      ],
+      "reason": "Verify the exact active X/Telegram account before enabling."
+    },
+    {
+      "name": "Mimi Mefo Info (social accounts)",
+      "website": "https://mimimefoinfos.com/",
+      "conflicts": [
+        [
+          "cameroon",
+          "dedicated"
+        ]
+      ],
+      "reason": "Verify the exact current official X/Telegram URLs before enabling social adapters."
+    },
+    {
+      "name": "Kuki Inpi",
+      "conflicts": [
+        [
+          "northeast-india",
+          "general"
+        ]
+      ],
+      "reason": "Find and verify the current official public account before enabling."
+    },
+    {
+      "name": "Libya Al Ahrar",
+      "conflicts": [
+        [
+          "libya",
+          "general"
+        ]
+      ],
+      "reason": "Verify the exact current official URL before enabling."
+    },
+    {
+      "name": "Libya Al Hadath",
+      "conflicts": [
+        [
+          "libya",
+          "general"
+        ]
+      ],
+      "reason": "Verify the exact current official URL before enabling."
+    },
+    {
+      "name": "Libya Review",
+      "conflicts": [
+        [
+          "libya",
+          "general"
+        ]
+      ],
+      "reason": "Verify the exact current official URL before enabling."
+    },
+    {
+      "name": "Ean Libya",
+      "conflicts": [
+        [
+          "libya",
+          "general"
+        ]
+      ],
+      "reason": "Verify the exact current official URL before enabling."
+    },
+    {
+      "name": "Sahel Monitor",
+      "conflicts": [
+        [
+          "sahel",
+          "general"
+        ],
+        [
+          "niger",
+          "general"
+        ]
+      ],
+      "reason": "Verify the exact official X/Telegram URL before enabling."
+    },
+    {
+      "name": "Lebanese Army (X account)",
+      "website": "https://www.lebarmy.gov.lb/",
+      "conflicts": [
+        [
+          "israel-lebanon",
+          "general"
+        ]
+      ],
+      "reason": "Verify the exact official X URL before enabling."
+    },
+    {
+      "name": "CENTCOM (official social accounts)",
+      "website": "https://www.centcom.mil/",
+      "conflicts": [
+        [
+          "persian-gulf-iran",
+          "general"
+        ]
+      ],
+      "reason": "Verify the exact official X/social URLs from CENTCOM's official social-media directory before enabling."
+    },
+    {
+      "name": "Faytuks Network (Telegram)",
+      "conflicts": [
+        [
+          "persian-gulf-iran",
+          "general"
+        ]
+      ],
+      "reason": "Verify the official Telegram URL before enabling."
+    }
+  ],
+  "references": [
+    {
+      "name": "Al Jazeera — Iranian Kurdish parties in Iraq",
+      "url": "https://www.aljazeera.com/news/2026/8/1/iranian-kurdish-parties-in-iraq-face-a-delicate-balance-amid-iran-attacks",
+      "conflict": "kurdish-iran",
+      "kind": "article",
+      "note": "Example article (independent_standard)."
+    },
+    {
+      "name": "El Universo — feed advertised on the supplied RSS index page",
+      "url": "https://www.eluniverso.com/arc/outboundfeeds/rss/?outputType=xml",
+      "conflict": "ecuador",
+      "kind": "feed_candidate",
+      "note": "Listed on https://www.eluniverso.com/rss/ (the supplied URL, which is an HTML index, not a feed). Not auto-selected: confirm this is the intended feed, then set it as the El Universo source's feed and enable."
+    },
+    {
+      "name": "El País — Noboa declares armed conflict again",
+      "url": "https://elpais.com/america/2026-06-19/noboa-vuelve-a-declarar-el-conflicto-armado-en-ecuador-y-amplia-la-proteccion-legal-a-los-militares.html",
+      "conflict": "ecuador",
+      "kind": "article",
+      "note": "Reference article."
+    },
+    {
+      "name": "Teleamazonas — three internal armed conflicts in three years",
+      "url": "https://www.teleamazonas.com/actualidad/noticias/seguridad/tres-conflictos-armados-internos-tres-anos-ecuador-120516/",
+      "conflict": "ecuador",
+      "kind": "article",
+      "note": "Reference article."
+    },
+    {
+      "name": "Human Rights Watch — Ecuador chapter (World Report 2026)",
+      "url": "https://www.hrw.org/world-report/2026/country-chapters/ecuador",
+      "conflict": "ecuador",
+      "kind": "specialist_reference",
+      "note": "Reference/specialist source, not a continuous feed."
+    },
+    {
+      "name": "Prothom Alo — article supplied for Northeast India",
+      "url": "https://www.prothomalo.com/world/india/am8c9cagak",
+      "conflict": "northeast-india",
+      "kind": "article",
+      "note": "Individual article reference; no feed verified."
+    },
+    {
+      "name": "Desh Rupantor — article supplied for Northeast India",
+      "url": "https://www.deshrupantor.com/720832/%E0%A6%AD%E0%A6%BE%E0%A6%B0%E0%A6%A4-%E0%A6%AA%E0%A6%BE%E0%A6%95%E0%A6%BF%E0%A6%B8%E0%A7%8D%E0%A6%A4%E0%A6%BE%E0%A6%A8-%E0%A6%A8%E0%A7%8C%E0%A6%AC%E0%A6%BE%E0%A6%B9%E0%A6%BF%E0%A6%A8%E0%A7%80%E0%A6%B0-%E0%A6%9C%E0%A6%BE%E0%A6%B9%E0%A6%BE%E0%A6%9C%E0%A7%87-%E0%A6%B8%E0%A6%82%E0%A6%98%E0%A6%B0%E0%A7%8D%E0%A6%B7",
+      "conflict": "northeast-india",
+      "kind": "article",
+      "note": "Individual article reference; no feed verified."
+    },
+    {
+      "name": "Tracking Terrorism — al-Shabaab base claim",
+      "url": "https://trackingterrorism.org/chatter/claim-al-shabaab-militants-targeted-a-somali-base-and-barracks/",
+      "conflict": "somalia",
+      "kind": "claim_monitoring",
+      "note": "Claim-monitoring source: verify methodology before assigning an independence level."
+    },
+    {
+      "name": "Sudan Tribune — article 317383 (relevant to Somalia)",
+      "url": "https://sudantribune.com/article/317383",
+      "conflict": "somalia",
+      "kind": "article",
+      "note": "Reference article."
+    },
+    {
+      "name": "Sky News Arabia — article supplied for Somalia",
+      "url": "https://www.skynewsarabia.com/middle-east/1887351-%D8%A7%D9%84%D9%87%D9%86%D8%AF-%D8%AA%D9%83%D8%B4%D9%81-%D9%85%D8%B9%D9%84%D9%88%D9%85%D8%A7%D8%AA-%D9%85%D9%88%D8%A7%D8%B7%D9%86%D9%8A%D9%87%D8%A7-%D8%B3%D9%81%D9%8A%D9%86%D8%AA%D9%8A%D9%86-%D8%A7%D8%AE%D8%AA%D8%B7%D9%81%D8%AA%D8%A7-%D8%A8%D8%AE%D9%84%D9%8A%D8%AC-%D8%B9%D8%AF%D9%86",
+      "conflict": "somalia",
+      "kind": "article",
+      "note": "Individual article reference, not a dedicated feed."
+    },
+    {
+      "name": "US AFRICOM — X post",
+      "url": "https://x.com/USAfricaCommand/status/2064628378431271295",
+      "conflict": "niger",
+      "kind": "social_post",
+      "note": "Official military claim (party_claim)."
+    },
+    {
+      "name": "Arab News — gangs kill 15 in northwestern Nigeria",
+      "url": "https://www.arabnews.com/world/gangs-kill-15-in-northwestern-nigeria-residents-3002150",
+      "conflict": "nigeria-insurgencies",
+      "kind": "article",
+      "note": "Nigeria coverage, deliberately NOT attached to Niger."
+    },
+    {
+      "name": "NBN — X post",
+      "url": "https://x.com/nbntweets/status/2101178386299208139",
+      "conflict": "israel-lebanon",
+      "kind": "social_post",
+      "note": "Individual social claim until account provenance is verified."
+    },
+    {
+      "name": "X post supplied for Israel/Lebanon (kon_mowaten)",
+      "url": "https://x.com/kon_mowaten/status/2101405746655117810",
+      "conflict": "israel-lebanon",
+      "kind": "social_post",
+      "note": "Individual social claim until account provenance is verified."
+    },
+    {
+      "name": "Faytuks Network — X post",
+      "url": "https://x.com/FaytuksNetwork/status/2101198147666018534",
+      "conflict": "persian-gulf-iran",
+      "kind": "social_post",
+      "note": "Discovery-only social post."
+    }
+  ]
+}

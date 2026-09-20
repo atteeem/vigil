@@ -48,6 +48,29 @@ model Source {
   // lib/types/db.ts SOURCE_ROLES. Nullable — existing sources predate this
   // field.
   sourceRole  String?  @map("source_role")
+  // ---- Source identity (kept apart on purpose — one `url` cannot mean all of these) ----
+  // canonicalSourceUrl: the publisher/organisation's own site. feedUrl: the RSS/API feed
+  // Vigil actually polls. socialProfileUrl: the exact public account URL (t.me / x.com).
+  // platform: website | rss | telegram | x | ... ; platformHandle: the handle without "@".
+  // Each ingested article/post keeps its OWN URL in RawIngestionItem.originalUrl (the
+  // "originalItemUrl") — it is never replaced by any of these.
+  canonicalSourceUrl String? @map("canonical_source_url")
+  feedUrl     String?  @map("feed_url")
+  socialProfileUrl String? @map("social_profile_url")
+  platform    String?
+  platformHandle String? @map("platform_handle")
+  // verified | needs_verification | inaccessible | inactive | rejected. A source is only
+  // enabled by automation when verified AND ingestible by an existing adapter.
+  verificationStatus String @default("needs_verification") @map("verification_status")
+  verifiedAt  DateTime? @map("verified_at")
+  verificationNotes String? @map("verification_notes")
+  // How independent the source is of the parties (independent_high | independent_standard |
+  // advocacy_independent | state_media | aligned_media | official_government |
+  // official_military | representative_advocacy | international_media | osint_aggregator |
+  // specialist_reference) and whether its claims are a party's own (party_claim) or
+  // leads only (discovery_only) — neither counts as an independent confirmation.
+  independenceClass String? @map("independence_class")
+  claimPolicy String?  @map("claim_policy")
   permissionStatus String @default("unauthorized") @map("permission_status")
   enabled     Boolean  @default(true)
   autoIngest  Boolean  @default(false) @map("auto_ingest")

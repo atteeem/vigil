@@ -24,6 +24,18 @@ export interface SourceInput {
   autoIngest?: boolean;
   autoProcessing?: boolean;
   pollIntervalMinutes?: number;
+  // Identity + verification (see prisma/schema.prisma). `url` stays the polled feed for
+  // existing adapters; these separate what the source IS from what it publishes.
+  canonicalSourceUrl?: string | null;
+  feedUrl?: string | null;
+  socialProfileUrl?: string | null;
+  platform?: string | null;
+  platformHandle?: string | null;
+  verificationStatus?: string;
+  verifiedAt?: Date | null;
+  verificationNotes?: string | null;
+  independenceClass?: string | null;
+  claimPolicy?: string | null;
 }
 
 export function listSources(): Promise<Source[]> {
@@ -35,7 +47,22 @@ export function getSource(id: string): Promise<Source | null> {
 }
 
 export function createSource(input: SourceInput): Promise<Source> {
-  return prisma.source.create({ data: input });
+  return prisma.source.create({ data: withIdentity(input) });
+}
+
+/** Fills identity fields that follow directly from what was supplied (never guessed):
+ * an rss source's `url` is its feed, a telegram source's handle gives its platform/handle. */
+function withIdentity<T extends Partial<SourceInput>>(input: T): T {
+  const out = { ...input };
+  if (out.type === "rss" && out.url && !out.feedUrl) out.feedUrl = out.url;
+  if (out.type === "telegram" && out.telegramHandle) {
+    const handle = out.telegramHandle.replace(/^@/, "");
+    out.platform ??= "telegram";
+    out.platformHandle ??= handle;
+    out.socialProfileUrl ??= `https://t.me/${handle}`;
+  }
+  if (out.type && !out.platform) out.platform = out.type;
+  return out;
 }
 
 export function updateSource(id: string, input: Partial<SourceInput>): Promise<Source> {

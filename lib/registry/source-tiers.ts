@@ -46,6 +46,20 @@ export function isGroundedTier(tier: SourceTier): boolean {
   return tier === "local_media" || tier === "specialist";
 }
 
+/** The role a source's REPORTS carry as evidence. A discovery-only source is a lead
+ * (treated as an aggregator); a party-claim source (state/official/aligned media
+ * speaking for a side) is a claim by that party, not an independent confirmation. */
+export function evidenceRoleOf(source: { sourceRole?: string | null; claimPolicy?: string | null }): string | null {
+  if (source.claimPolicy === "discovery_only") return "aggregator";
+  if (source.claimPolicy === "party_claim") return "party_claim";
+  return source.sourceRole ?? null;
+}
+
+/** Roles whose reports never count as independent confirmation. */
+export function isNonIndependentRole(role: string | null | undefined): boolean {
+  return role === "aggregator" || role === "relay" || role === "party_claim";
+}
+
 export function isAggregatorRole(sourceRole: string | null | undefined): boolean {
   return sourceRole === "aggregator" || sourceRole === "relay";
 }

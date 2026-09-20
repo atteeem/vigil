@@ -30,7 +30,7 @@ import { detectTerritorialChangeMentions, baseConfidenceFor } from "@/lib/territ
 import { resolveLocationPrecision } from "@/lib/territory/location-precision";
 import { proposeTerritorialChange } from "@/lib/db/repositories/territorial-changes";
 import { findConflictByCountryCode } from "@/lib/db/repositories/conflicts";
-import { isAggregatorRole } from "@/lib/registry/source-tiers";
+import { isAggregatorRole, evidenceRoleOf, isNonIndependentRole } from "@/lib/registry/source-tiers";
 import { upstreamMetadata } from "@/lib/ingestion/upstream";
 
 export interface FetchResult {
@@ -194,9 +194,9 @@ async function computeAndStoreTerritorialChangeCandidates(item: RawIngestionItem
         description: m.description,
         changeType: m.changeType,
         // An aggregator/relay report is a discovery lead, not evidence: cap its confidence.
-        confidence: isAggregatorRole(source.sourceRole) ? Math.min(0.3, baseConfidenceFor(m, location.precision !== "unknown")) : baseConfidenceFor(m, location.precision !== "unknown"),
-        evidence: `rule:${m.ruleId} | ${m.sentence}${isAggregatorRole(source.sourceRole) ? " | AGGREGATOR SOURCE — corroborate before approving" : ""}`,
-        sourceRole: source.sourceRole,
+        confidence: isNonIndependentRole(evidenceRoleOf(source)) ? Math.min(0.3, baseConfidenceFor(m, location.precision !== "unknown")) : baseConfidenceFor(m, location.precision !== "unknown"),
+        evidence: `rule:${m.ruleId} | ${m.sentence}${isNonIndependentRole(evidenceRoleOf(source)) ? " | NON-INDEPENDENT SOURCE (aggregator / party claim) — corroborate before approving" : ""}`,
+        sourceRole: evidenceRoleOf(source),
         rawIngestionItemId: item.id,
         claimedActorId: claimed?.id,
         claimedActorName: claimed?.name ?? null,

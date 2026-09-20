@@ -254,6 +254,26 @@ const FEEDS: Record<string, string> = {
 </item>
 </channel>
 </rss>`,
+  "plugin-nolink-feed": `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+<title>Vigil Test Fixture — Source Identity</title>
+<link>https://fixture.test/plugin-site/</link>
+<item>
+<title>Story with its own article link</title>
+<link>https://fixture.test/plugin-site/articles/story-one</link>
+<guid>fixture-plugin-story-one</guid>
+<pubDate>Thu, 01 Jan 2026 09:00:00 GMT</pubDate>
+<description>A report with a proper article URL.</description>
+</item>
+<item>
+<title>Story the publisher gave no link for</title>
+<guid>fixture-plugin-story-two</guid>
+<pubDate>Thu, 01 Jan 2026 10:00:00 GMT</pubDate>
+<description>A report whose item has no link element at all.</description>
+</item>
+</channel>
+</rss>`,
 };
 
 export function getRssFixture(name: string): string | null {

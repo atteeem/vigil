@@ -19,7 +19,7 @@ import {
   type SplitPreview,
 } from "@/lib/db/repositories/territorial-control";
 import { validateTerritorialGeometry } from "@/lib/territory/geometry";
-import { isAggregatorRole } from "@/lib/registry/source-tiers";
+import { isNonIndependentRole } from "@/lib/registry/source-tiers";
 import { isValidTerritorialGeometry, parseTerritorialGeometry } from "@/lib/data/territorial-control";
 import { claimKeyFor, normalizeLocationKey } from "@/lib/territory/change-detection";
 import { isChangeType, proposedStatusFor, type TerritorialChangeType } from "@/lib/territory/change-types";
@@ -309,15 +309,15 @@ export async function proposeTerritorialChange(input: ProposeInput): Promise<Pro
 
 // ---- review actions ---------------------------------------------------------
 
-/** A territorial claim backed ONLY by aggregator/relay reports (e.g. a Liveuamap
- * post and its reposts) can never modify Territorial Control: an aggregator is a
+/** A territorial claim backed ONLY by aggregator/relay/party-claim reports (e.g. a Liveuamap
+ * post and its reposts, or a state outlet repeating its own side) can never modify Territorial Control: an aggregator is a
  * discovery aid, not an independent confirmation. Needs at least one report from
  * a non-aggregator source. Reports with no recorded role (manual, seeded) are
  * treated as independent. */
 export function assertIndependentEvidence(row: { sourceRole: string | null; corroboration: string | null }): void {
   const roles = [row.sourceRole, ...parseCorroboration(row.corroboration).map((c) => c.sourceRole ?? null)];
   const known = roles.filter((r) => r !== null);
-  if (known.length > 0 && roles.every((r) => r !== null && isAggregatorRole(r))) {
+  if (known.length > 0 && roles.every((r) => r !== null && isNonIndependentRole(r))) {
     throw new Error("Aggregator-only evidence cannot modify Territorial Control — corroborate it with an independent (non-aggregator) source first");
   }
 }

@@ -1,4 +1,4 @@
-import { isAggregatorRole } from "@/lib/registry/source-tiers";
+import { evidenceRoleOf, isNonIndependentRole } from "@/lib/registry/source-tiers";
 
 // Independent-source counting for an event. An aggregator or relay (Liveuamap's
 // Telegram channel, a repost) republishes what someone else reported, so it is
@@ -9,7 +9,7 @@ import { isAggregatorRole } from "@/lib/registry/source-tiers";
 
 interface LinkLike {
   isOriginatingSource: boolean;
-  rawIngestionItem: { originalUrl?: string | null; source: { sourceRole: string | null } };
+  rawIngestionItem: { originalUrl?: string | null; source: { sourceRole: string | null; claimPolicy?: string | null } };
 }
 
 /** Comparable form of an article URL: scheme-less, lower-case host, no fragment,
@@ -34,7 +34,7 @@ export function independentSourceCount(links: readonly LinkLike[]): number {
   const seen = new Set<string>();
   let independent = 0;
   for (const l of originating) {
-    if (isAggregatorRole(l.rawIngestionItem.source.sourceRole)) continue;
+    if (isNonIndependentRole(evidenceRoleOf(l.rawIngestionItem.source))) continue;
     const key = normalizeSourceUrl(l.rawIngestionItem.originalUrl);
     if (key) {
       if (seen.has(key)) continue;

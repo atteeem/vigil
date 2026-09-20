@@ -5,6 +5,7 @@
 // no ts-node/tsx dependency needed for a one-off local setup script.
 import { PrismaClient } from "@prisma/client";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { seedSourcePlugin } from "./seed-source-plugin.mjs";
 
 // No dotenv dependency needed: DATABASE_URL defaults to the same value
 // .env holds, so `node prisma/seed.mjs` just works without extra setup.
@@ -1040,6 +1041,22 @@ async function seedSourceExpansion() {
   console.log(`Seeded source expansion: ${expansion.sources.length} sources (${created} new).`);
 }
 
+/** Identity fields that follow directly from what a row already says (no guessing): an rss
+ * source's url is its feed; a telegram source's handle gives its platform/handle/profile URL. */
+async function backfillSourceIdentity() {
+  const rows = await prisma.source.findMany({ where: { platform: null } });
+  for (const r of rows) {
+    const data = { platform: r.type };
+    if (r.type === "rss" && r.url && !r.feedUrl) data.feedUrl = r.url;
+    if (r.telegramHandle) {
+      const handle = r.telegramHandle.replace(/^@/, "");
+      data.platformHandle = handle;
+      if (r.type === "telegram") data.socialProfileUrl = `https://t.me/${handle}`;
+    }
+    await prisma.source.update({ where: { id: r.id }, data });
+  }
+}
+
 async function main() {
   for (const source of sources) {
     const existing = await prisma.source.findFirst({ where: { name: source.name } });
@@ -1064,6 +1081,8 @@ async function main() {
   await seedMyanmarReference();
   await seedRegistry();
   await seedSourceExpansion();
+  await backfillSourceIdentity();
+  await seedSourcePlugin(prisma);
 }
 
 main()

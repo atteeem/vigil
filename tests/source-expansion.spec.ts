@@ -429,7 +429,7 @@ test.describe("Liveuamap Telegram (aggregator/discovery)", () => {
     const cand = candidates[0]!;
     expect(cand).toMatchObject({ locationName: "Fixtown", claimedActorName: "Fixland", sourceRole: "aggregator" });
     expect(cand.confidence).toBeLessThanOrEqual(0.3); // an aggregator lead is capped low
-    expect(cand.evidence).toContain("AGGREGATOR SOURCE");
+    expect(cand.evidence).toContain("NON-INDEPENDENT SOURCE");
 
     const refused = await request.post(`/api/admin/territorial-change-candidates/${cand.id}/review`, { data: { action: "approve" } });
     expect(refused.status()).toBe(409);

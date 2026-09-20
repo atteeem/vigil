@@ -1,0 +1,205 @@
+{
+ "verifiedAt": "2026-09-20T08:27:06.379Z",
+ "total": 11,
+ "passed": 11,
+ "results": [
+  {
+   "name": "Al Jazeera English",
+   "feedUrl": "https://www.aljazeera.com/xml/rss/all.xml",
+   "ok": true,
+   "checks": {
+    "fetched": true,
+    "itemUrlIsArticle": true,
+    "publishedAtValid": true,
+    "everyItemHasOwnUrl": true,
+    "noDuplicatesOnRefetch": true
+   },
+   "items": 63,
+   "sample": {
+    "url": "https://www.aljazeera.com/video/newsfeed/2026/9/20/20-09-clip-townsend-gets-rolled-over-in-thailand-th?traffic_source=rss",
+    "title": "Former England and Tottenham star Andros Townsend run over by pitch roller",
+    "publishedAt": "2026-09-20T07:55:58.000Z"
+   }
+  },
+  {
+   "name": "Rappler",
+   "feedUrl": "https://www.rappler.com/feed/",
+   "ok": true,
+   "checks": {
+    "fetched": true,
+    "itemUrlIsArticle": true,
+    "publishedAtValid": true,
+    "everyItemHasOwnUrl": true,
+    "noDuplicatesOnRefetch": true
+   },
+   "items": 19,
+   "sample": {
+    "url": "https://www.rappler.com/philippines/white-house-donald-trump-bans-news-outlets/",
+    "title": "White House turns away CNN, MS NOW, Politico reporters after Trump’s ban",
+    "publishedAt": "2026-09-20T04:39:31.000Z"
+   }
+  },
+  {
+   "name": "Mimi Mefo Info",
+   "feedUrl": "https://mimimefoinfos.com/feed/",
+   "ok": true,
+   "checks": {
+    "fetched": true,
+    "itemUrlIsArticle": true,
+    "publishedAtValid": true,
+    "everyItemHasOwnUrl": true,
+    "noDuplicatesOnRefetch": true
+   },
+   "items": 10,
+   "sample": {
+    "url": "https://mimimefoinfos.com/finances-publiques-le-minfi-affirme-que-le-cameroun-nest-pas-alle-a-londres-pour-sendetter-davantage/",
+    "title": "Finances publiques : le MINFI affirme que le Cameroun n’est pas allé à Londres p",
+    "publishedAt": "2026-09-15T14:59:16.000Z"
+   }
+  },
+  {
+   "name": "Teleamazonas",
+   "feedUrl": "https://www.teleamazonas.com/rss/home.xml",
+   "ok": true,
+   "checks": {
+    "fetched": true,
+    "itemUrlIsArticle": true,
+    "publishedAtValid": true,
+    "everyItemHasOwnUrl": true,
+    "noDuplicatesOnRefetch": true
+   },
+   "items": 21,
+   "sample": {
+    "url": "https://www.teleamazonas.com/tendencias/entretenimiento/shakira-convierte-madrid-ciudad-12-conciertos-128339/",
+    "title": "Shakira convierte Madrid en su ciudad con 12 conciertos",
+    "publishedAt": "2026-09-19T16:56:11.000Z"
+   }
+  },
+  {
+   "name": "Journal du Cameroun",
+   "feedUrl": "https://fr.journalducameroun.com/feed/",
+   "ok": true,
+   "checks": {
+    "fetched": true,
+    "itemUrlIsArticle": true,
+    "publishedAtValid": true,
+    "everyItemHasOwnUrl": true,
+    "noDuplicatesOnRefetch": true
+   },
+   "items": 10,
+   "sample": {
+    "url": "https://fr.journalducameroun.com/gestion-des-communes-pourquoi-le-consupe-convoque-9-maires-en-urgence/",
+    "title": "Gestion des communes : pourquoi le Consupe convoque 9 maires en urgence",
+    "publishedAt": "2026-09-17T17:00:51.000Z"
+   }
+  },
+  {
+   "name": "EastMojo",
+   "feedUrl": "https://eastmojo.com/feed/",
+   "ok": true,
+   "checks": {
+    "fetched": true,
+    "itemUrlIsArticle": true,
+    "publishedAtValid": true,
+    "everyItemHasOwnUrl": true,
+    "noDuplicatesOnRefetch": true
+   },
+   "items": 10,
+   "sample": {
+    "url": "https://eastmojo.com/manipur/2026/09/18/kuki-zo-council-sets-oct-10-deadline-for-centre-manipur-govt-on-key-demands/",
+    "title": "Kuki-Zo Council sets Oct 10 deadline for Centre, Manipur govt on key demands",
+    "publishedAt": "2026-09-18T13:34:49.000Z"
+   }
+  },
+  {
+   "name": "Ukhrul Times",
+   "feedUrl": "https://ukhrultimes.com/feed/",
+   "ok": true,
+   "checks": {
+    "fetched": true,
+    "itemUrlIsArticle": true,
+    "publishedAtValid": true,
+    "everyItemHasOwnUrl": true,
+    "noDuplicatesOnRefetch": true
+   },
+   "items": 10,
+   "sample": {
+    "url": "https://ukhrultimes.com/amsta-12-manipuri-sepaktakraw-players-asian-games/",
+    "title": "AMSTA Extends Wishes to 12 Manipuri Sepaktakraw Players Ahead of Asian Games 202",
+    "publishedAt": "2026-09-18T15:18:01.000Z"
+   }
+  },
+  {
+   "name": "Libya Herald",
+   "feedUrl": "https://libyaherald.com/rss.xml",
+   "ok": true,
+   "checks": {
+    "fetched": true,
+    "itemUrlIsArticle": true,
+    "publishedAtValid": true,
+    "everyItemHasOwnUrl": true,
+    "noDuplicatesOnRefetch": true
+   },
+   "items": 50,
+   "sample": {
+    "url": "https://libyaherald.com/2026/09/hor-speaker-saleh-calls-for-session-next-monday-in-benghazi/",
+    "title": "HoR Speaker Saleh calls for session next Monday in Benghazi",
+    "publishedAt": "2026-09-11T18:32:00.000Z"
+   }
+  },
+  {
+   "name": "Air Info Agadez",
+   "feedUrl": "https://airinfoagadez.com/feed/",
+   "ok": true,
+   "checks": {
+    "fetched": true,
+    "itemUrlIsArticle": true,
+    "publishedAtValid": true,
+    "everyItemHasOwnUrl": true,
+    "noDuplicatesOnRefetch": true
+   },
+   "items": 10,
+   "sample": {
+    "url": "https://airinfoagadez.com/2026/09/13/niger-eva-gretzmacher-et-claudia-abbt-liberees-apres-plusieurs-mois-de-captivite/",
+    "title": "Niger : Eva Gretzmacher et Claudia Abbt libérées après plusieurs mois de captivi",
+    "publishedAt": "2026-09-13T17:20:40.000Z"
+   }
+  },
+  {
+   "name": "Lebanese Army (website)",
+   "feedUrl": "https://www.lebarmy.gov.lb/ar/rss.xml",
+   "ok": true,
+   "checks": {
+    "fetched": true,
+    "itemUrlIsArticle": true,
+    "publishedAtValid": true,
+    "everyItemHasOwnUrl": true,
+    "noDuplicatesOnRefetch": true
+   },
+   "items": 10,
+   "sample": {
+    "url": "https://www.lebarmy.gov.lb/ar/content/%D8%AA%D9%88%D9%82%D9%8A%D9%81%D8%A7%D8%AA-%D9%88%D8%B6%D8%A8%D8%B7-%D8%A3%D8%B3%D9%84%D8%AD%D8%A9-%D8%AD%D8%B1%D8%A8%D9%8A%D8%A9-%D9%81%D9%8A-%D9%85%D9%86%D8%A7%D8%B7%D9%82-%D8%B9%D8%AF%D8%A9-1",
+    "title": "توقيفات وضبط أسلحة حربية في مناطق عدة",
+    "publishedAt": "2026-09-15T16:12:15.000Z"
+   }
+  },
+  {
+   "name": "Bulatlat",
+   "feedUrl": "https://www.bulatlat.com/feed/",
+   "ok": true,
+   "checks": {
+    "fetched": true,
+    "itemUrlIsArticle": true,
+    "publishedAtValid": true,
+    "everyItemHasOwnUrl": true,
+    "noDuplicatesOnRefetch": true
+   },
+   "items": 10,
+   "sample": {
+    "url": "https://www.bulatlat.com/2026/09/15/govt-urged-to-respect-right-to-protest-vs-pax-silica/",
+    "title": "Gov’t urged to respect right to protest vs. Pax Silica",
+    "publishedAt": "2026-09-15T01:38:42.000Z"
+   }
+  }
+ ]
+}
