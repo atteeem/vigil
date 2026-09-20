@@ -44,6 +44,8 @@ export function EventDetailPanel({
   event,
   conflict,
   actors,
+  commanders,
+  equipment,
   territorialChanges,
   conflictingClaims,
   linkToFullPage = true,
@@ -53,6 +55,8 @@ export function EventDetailPanel({
   conflict?: { slug: string; shortName: string } | null;
   /** Actor names with links where they exist as stored actors. Falls back to plain names. */
   actors?: ActorLink[];
+  commanders?: ActorLink[];
+  equipment?: ActorLink[];
   territorialChanges?: EventPanelTerritorialChange[];
   /** Places where two sides both claim control (see lib/public/claims.ts). */
   conflictingClaims?: ConflictingClaims[];
@@ -150,6 +154,45 @@ export function EventDetailPanel({
           {event.casualtiesKilled != null && <span>{factPrefix}Killed: {event.casualtiesKilled}</span>}
           {event.casualtiesInjured != null && <span>{factPrefix}Injured: {event.casualtiesInjured}</span>}
           {event.infrastructureDamage && event.infrastructureDamage.length > 0 && <span>Damage: {event.infrastructureDamage.join(", ")}</span>}
+        </div>
+      )}
+
+      {((commanders?.length ?? 0) > 0 || (equipment?.length ?? 0) > 0) && (
+        <div className="mt-2 space-y-1 text-xs text-ink-dim" data-testid="event-entities">
+          {commanders && commanders.length > 0 && (
+            <p data-testid="event-commanders">
+              Commanders named in reports:{" "}
+              {commanders.map((c, i) => (
+                <span key={c.name}>
+                  {i > 0 && ", "}
+                  {c.href ? (
+                    <Link href={c.href} className="text-accent hover:underline" data-testid="commander-link">
+                      {c.name}
+                    </Link>
+                  ) : (
+                    c.name
+                  )}
+                </span>
+              ))}
+            </p>
+          )}
+          {equipment && equipment.length > 0 && (
+            <p data-testid="event-equipment">
+              Equipment named in reports:{" "}
+              {equipment.map((c, i) => (
+                <span key={c.name}>
+                  {i > 0 && ", "}
+                  {c.href ? (
+                    <Link href={c.href} className="text-accent hover:underline" data-testid="equipment-link">
+                      {c.name}
+                    </Link>
+                  ) : (
+                    c.name
+                  )}
+                </span>
+              ))}
+            </p>
+          )}
         </div>
       )}
 

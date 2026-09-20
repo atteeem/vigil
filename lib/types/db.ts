@@ -464,6 +464,9 @@ export interface MilitaryUnitDTO {
   parentUnitId: string | null;
   parentUnitName?: string | null;
   status: string | null;
+  entityType?: string | null;
+  country?: string | null;
+  nativeName?: string | null;
   primaryConflictId: string | null;
   sourceName: string | null;
   sourceUrl: string | null;

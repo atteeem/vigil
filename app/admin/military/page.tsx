@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, Shield, Wrench, UserRound, MapPin, Flag } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { IntelligenceAudit } from "@/components/admin/intelligence-audit";
 import { cn } from "@/lib/utils";
 import type {
   MilitaryUnitDTO,
@@ -23,7 +24,7 @@ import type {
 // manually authored here) rather than a full CRUD form set, matching the
 // "simple" scope of a Phase 1 reference layer.
 
-type Tab = "units" | "equipment" | "commanders" | "areas" | "candidates";
+type Tab = "audit" | "units" | "equipment" | "commanders" | "areas" | "candidates";
 
 const PRECISION_LABEL: Record<string, string> = {
   exact: "Exact",
@@ -326,6 +327,7 @@ export default function AdminMilitaryPage() {
   });
 
   const tabs: { id: Tab; label: string; icon: typeof Shield; count: number }[] = [
+    { id: "audit", label: "Intelligence audit", icon: Shield, count: 0 },
     { id: "units", label: "Units", icon: Shield, count: units.length },
     { id: "equipment", label: "Equipment", icon: Wrench, count: equipment.length },
     { id: "commanders", label: "Commanders", icon: UserRound, count: commanders.length },
@@ -364,12 +366,13 @@ export default function AdminMilitaryPage() {
             )}
           >
             <Icon className="h-3.5 w-3.5" />
-            {label} <span className="text-xs opacity-70">{count}</span>
+            {label} {id !== "audit" && <span className="text-xs opacity-70">{count}</span>}
           </button>
         ))}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-[1fr_360px]">
+      {tab === "audit" && <IntelligenceAudit />}
+      <div className={cn("grid gap-4 sm:grid-cols-[1fr_360px]", tab === "audit" && "hidden")}>
         <Card className="overflow-x-auto">
           {tab === "units" && (
             <table className="w-full text-left text-sm" data-testid="military-units-table">

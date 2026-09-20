@@ -13,16 +13,20 @@
 export interface UnitMention {
   name: string;
   unitType: string | null;
+  /** The exact text that matched. */
+  matched: string;
 }
 
 export interface CommanderMention {
   name: string;
   rank: string | null;
+  matched: string;
 }
 
 export interface EquipmentMention {
   name: string;
   category: string | null;
+  matched: string;
 }
 
 const UNIT_TYPE_KEYWORDS = [
@@ -54,7 +58,7 @@ export function extractUnitMentions(text: string): UnitMention[] {
     const name = `${ordinal}${ordinalSuffix(ordinal)} ${rest}`;
     if (seen.has(name)) continue;
     const typeWord = UNIT_TYPE_KEYWORDS.find((k) => rest.endsWith(k)) ?? null;
-    seen.set(name, { name, unitType: typeWord });
+    seen.set(name, { name, unitType: typeWord, matched: match[0] });
   }
   return [...seen.values()];
 }
@@ -102,7 +106,7 @@ export function extractCommanderMentions(text: string): CommanderMention[] {
     const rank = match[1] ?? null;
     const name = match[2]?.trim();
     if (!name) continue;
-    if (!seen.has(name)) seen.set(name, { name, rank });
+    if (!seen.has(name)) seen.set(name, { name, rank, matched: match[0] });
   }
   return [...seen.values()];
 }
@@ -142,7 +146,7 @@ const EQUIPMENT_CATALOG: [name: string, category: string][] = [
 export function extractEquipmentMentions(text: string): EquipmentMention[] {
   const found: EquipmentMention[] = [];
   for (const [name, category] of EQUIPMENT_CATALOG) {
-    if (text.includes(name)) found.push({ name, category });
+    if (text.includes(name)) found.push({ name, category, matched: name });
   }
   return found;
 }

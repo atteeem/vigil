@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { linkEventSource } from "@/lib/db/repositories/event-sources";
 import { setProcessingStatus } from "@/lib/db/repositories/raw-ingestion-items";
 import { proposeEventUpdatesFromReport } from "@/lib/db/repositories/event-updates";
-import { propagateUnitLinksToEvent } from "@/lib/db/repositories/military";
+import { propagateEntityLinksToEvent } from "@/lib/military/link-entities";
 import type { EventSourceRelationship } from "@/lib/types/db";
 import { isAggregatorRole } from "@/lib/registry/source-tiers";
 
@@ -44,7 +44,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // Myanmar Specialist Source Integration (spec §4 "actor -> events") —
   // same propagation as publish: a merged report's already-linked units
   // carry over to the event it's attached to.
-  await propagateUnitLinksToEvent(id, body.eventId);
+  await propagateEntityLinksToEvent(id, body.eventId);
 
   return NextResponse.json({ ...item, proposalsCreated: proposals.length });
 }

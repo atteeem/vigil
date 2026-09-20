@@ -53,7 +53,7 @@ export async function getPublicConflictDetail(slug: string, now: Date = new Date
     getCoverageRow(conflict.id, now),
     getPublicTerritorySummary(conflict.id, now),
     listPublicTerritorialChanges({ conflictId: conflict.id, limit: 5 }),
-    prisma.militaryUnit.findMany({ where: { primaryConflictId: conflict.id }, select: { name: true, unitType: true, branch: true }, orderBy: { name: "asc" }, take: 30 }),
+    prisma.militaryUnit.findMany({ where: { OR: [{ primaryConflictId: conflict.id }, { conflictLinks: { some: { conflictId: conflict.id } } }] }, select: { name: true, unitType: true, branch: true, entityType: true, conflictLinks: { where: { conflictId: conflict.id }, select: { role: true } } }, orderBy: { name: "asc" }, take: 40 }),
     prisma.conflictActor.findMany({ where: { conflictId: conflict.id }, select: { name: true }, orderBy: { name: "asc" }, take: 30 }),
     prisma.event.count({ where: { conflictId: conflict.id, published: true, occurredAt: { gte: since(1) } } }),
     prisma.event.count({ where: { conflictId: conflict.id, published: true, occurredAt: { gte: since(7) } } }),
@@ -63,7 +63,7 @@ export async function getPublicConflictDetail(slug: string, now: Date = new Date
   ]);
   const sourceRows = coverage ? await prisma.source.findMany({ where: { id: { in: coverage.sources.map((s) => s.id) } }, select: { id: true, independenceClass: true, claimPolicy: true, sourceRole: true, perspective: true } }) : [];
   const trustById = new Map(sourceRows.map((s) => [s.id, sourceTrust(s)]));
-  const roleByName = new Map<string, string>([...unitRows.map((u) => [u.name, u.unitType ?? u.branch ?? "Armed actor"] as [string, string]), ...territoryActors.map((a) => [a.name, "Territorial-control actor"] as [string, string])]);
+  const roleByName = new Map<string, string>([...unitRows.map((u) => [u.name, [u.conflictLinks[0]?.role ? u.conflictLinks[0].role.charAt(0).toUpperCase() + u.conflictLinks[0].role.slice(1) : null, u.unitType ?? u.branch ?? (u.entityType ? u.entityType.replace(/_/g, " ") : "Armed actor")].filter(Boolean).join(" · ")] as [string, string]), ...territoryActors.map((a) => [a.name, "Territorial-control actor"] as [string, string])]);
 
   const months = new Map<string, number>();
   for (const e of yearRows) {

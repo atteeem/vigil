@@ -1116,3 +1116,21 @@ Builds on `4493249` (one DB-backed public layer, mock data isolated to `lib/dev-
 - [x] Tests: `tests/public-intelligence.spec.ts`; `public-data.spec.ts` wording updated.
 
 Deferred: equipment has no public page (not in search); perspective text exists only for sources seeded from `data/source-plugin.json`; territory geometry itself is still viewed on /world; claims are derived from source classification and reviewed territorial candidates (no NLP claim extraction from report text).
+
+## Military & Actor Intelligence Knowledge Layer
+
+Strategic public-intelligence level only: no coordinates, live positions, movement routes or readiness analysis anywhere in the layer.
+
+- [x] Canonical model: `MilitaryUnit` is the one actor/unit entity (no parallel table). Added descriptive `entityType` (state_military, armed_group, militia, political_military_group, security_force, military_unit, coalition, peacekeeping_force, other; never a legal designation), `country`, `nativeName`; `EntityAlias` (canonical/native/abbreviation/transliteration/historical/source-specific, optional country/source scope), `UnitParentHistory`, `ActorRelationship` (explicit + sourced only, never inferred from a shared event), `EventEquipmentLink` / `EventCommanderLink` ("observed in this event", distinct from "known operator"), `EntityMatchReview`; provenance (observedAt/confidence/lastConfirmedAt/validFrom/validTo) on appointments, unit-equipment and participant rows. Migration `20260920093812_military_knowledge_layer`.
+- [x] Alias resolution (`lib/military/aliases.ts`): exact match after diacritic/case/punctuation folding, never fuzzy; ambiguous -> review queue, no link. `prisma/entity-text.mjs` mirrors the normaliser for the seed (parity tested).
+- [x] Extraction (`lib/military/link-entities.ts`, `extract-entities.ts`): canonical 0.95 / alias 0.85 / registry 0.95 / pattern 0.6 (stub); link rows keep matched text, method, confidence; links propagate to the event on merge/publish.
+- [x] History: parent changes close the previous `UnitParentHistory` row (cycle-safe); commander appointments close the previous one; nothing overwritten.
+- [x] Public pages: `/actor/[ref]` (units redirect to `/unit/[id]`), `/unit/[id]`, `/commander/[id]`, `/equipment/[id]` from one data function (`lib/public/entities.ts`) with provenance, trust label, freshness ("Last observed 2 hours ago" / "last confirmed 4 months ago" / "last sourced <date>", stale > 180 days) — "last observed" is a last sourced appearance, not a deployment.
+- [x] Search resolves aliases to the canonical entity (units, commanders, equipment); conflict/event/territory pages link entities.
+- [x] MilitaryLand Phase 2: backfill over the Phase 1 seed (`prisma/seed-military-knowledge.mjs`, one transaction, idempotent): aliases, types, parent history, sourced participant links, observation dates. No new fetching, no protected imagery.
+- [x] Admin: /admin/military "Intelligence audit" tab (filters: type, country, source, name/alias, flags stale / missing provenance / unresolved aliases / untyped), review queue (link/dismiss), `military-units/[id]/relationships` inspect + correct (set parent, alias, sourced relationship, commander, conflict link, type).
+- [x] Tests: `tests/military-knowledge.spec.ts` (26); `public-intelligence` commander search now expects `/commander/[id]`. Normaliser fix found by tests: leading whitespace before "The".
+
+Unrelated failures observed (not fixed): `source-plugin.spec.ts` "no feed URL is shared" fails when `territorial-changes.spec.ts` fixtures (duplicate fixture feed URLs) ran earlier against the same test DB; `public-data.spec.ts` mobile-only homepage/world visibility tests failed intermittently in multi-spec runs.
+
+Deferred: no graph view (sections only, by design); no relationship editing beyond the single-entity actions; ActorRelationship only enters via admin/seed sources; test DB prep now takes ~3 min on this machine (source seeds), near the 240 s web-server timeout.

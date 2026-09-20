@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
-import { propagateUnitLinksToEvent } from "@/lib/db/repositories/military";
+import { propagateEntityLinksToEvent } from "@/lib/military/link-entities";
 import type { EventType, Severity } from "@/lib/types";
 import type { DbVerificationStatus } from "@/lib/types/db";
 import { LOCATION_PRECISIONS } from "@/lib/types/db";
@@ -87,7 +87,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // Myanmar Specialist Source Integration (spec §4 "actor -> events") —
   // any unit the entity extractor already linked to this article carries
   // over to the newly published Event.
-  await propagateUnitLinksToEvent(rawItem.id, event.id);
+  await propagateEntityLinksToEvent(rawItem.id, event.id);
 
   return NextResponse.json(event, { status: 201 });
 }

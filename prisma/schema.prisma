@@ -31,70 +31,70 @@ datasource db {
 }
 
 model Source {
-  id          String   @id @default(cuid())
-  name        String
-  type        String // e.g. "rss" | "telegram" | "manual" — see lib/types/db.ts SourceType
-  url         String?
-  telegramHandle String? @map("telegram_handle")
-  country     String?
-  region      String?
-  language    String?
-  sourceCategory String? @map("source_category")
-  reliabilityTier String? @map("reliability_tier")
+  id                      String    @id @default(cuid())
+  name                    String
+  type                    String // e.g. "rss" | "telegram" | "manual" — see lib/types/db.ts SourceType
+  url                     String?
+  telegramHandle          String?   @map("telegram_handle")
+  country                 String?
+  region                  String?
+  language                String?
+  sourceCategory          String?   @map("source_category")
+  reliabilityTier         String?   @map("reliability_tier")
   // Trust-model classification (spec "Source Trust Model") — a coarser,
   // controlled-vocabulary sibling of the free-text sourceCategory/
   // reliabilityTier fields above: "originating" | "relay" | "official" |
   // "local_media" | "eyewitness_community" | "aggregator". See
   // lib/types/db.ts SOURCE_ROLES. Nullable — existing sources predate this
   // field.
-  sourceRole  String?  @map("source_role")
+  sourceRole              String?   @map("source_role")
   // ---- Source identity (kept apart on purpose — one `url` cannot mean all of these) ----
   // canonicalSourceUrl: the publisher/organisation's own site. feedUrl: the RSS/API feed
   // Vigil actually polls. socialProfileUrl: the exact public account URL (t.me / x.com).
   // platform: website | rss | telegram | x | ... ; platformHandle: the handle without "@".
   // Each ingested article/post keeps its OWN URL in RawIngestionItem.originalUrl (the
   // "originalItemUrl") — it is never replaced by any of these.
-  canonicalSourceUrl String? @map("canonical_source_url")
-  feedUrl     String?  @map("feed_url")
-  socialProfileUrl String? @map("social_profile_url")
-  platform    String?
-  platformHandle String? @map("platform_handle")
+  canonicalSourceUrl      String?   @map("canonical_source_url")
+  feedUrl                 String?   @map("feed_url")
+  socialProfileUrl        String?   @map("social_profile_url")
+  platform                String?
+  platformHandle          String?   @map("platform_handle")
   // verified | needs_verification | inaccessible | inactive | rejected. A source is only
   // enabled by automation when verified AND ingestible by an existing adapter.
-  verificationStatus String @default("needs_verification") @map("verification_status")
-  verifiedAt  DateTime? @map("verified_at")
-  verificationNotes String? @map("verification_notes")
+  verificationStatus      String    @default("needs_verification") @map("verification_status")
+  verifiedAt              DateTime? @map("verified_at")
+  verificationNotes       String?   @map("verification_notes")
   // How independent the source is of the parties (independent_high | independent_standard |
   // advocacy_independent | state_media | aligned_media | official_government |
   // official_military | representative_advocacy | international_media | osint_aggregator |
   // specialist_reference) and whether its claims are a party's own (party_claim) or
   // leads only (discovery_only) — neither counts as an independent confirmation.
-  independenceClass String? @map("independence_class")
-  claimPolicy String?  @map("claim_policy")
+  independenceClass       String?   @map("independence_class")
+  claimPolicy             String?   @map("claim_policy")
   // Short public descriptor of who/what the source is ("Israeli military", "Kurdish human-rights
   // reporting"); shown on public source cards next to the trust label.
-  perspective String?
-  permissionStatus String @default("unauthorized") @map("permission_status")
-  enabled     Boolean  @default(true)
-  autoIngest  Boolean  @default(false) @map("auto_ingest")
+  perspective             String?
+  permissionStatus        String    @default("unauthorized") @map("permission_status")
+  enabled                 Boolean   @default(true)
+  autoIngest              Boolean   @default(false) @map("auto_ingest")
   // Gates the automated draft-extraction stage (lib/ingestion/draft.ts) —
   // "for sources where automated processing is allowed" per spec. Distinct
   // from autoIngest (fetching); a source can fetch without draft
   // suggestions being generated, or vice versa.
-  autoProcessing Boolean @default(true) @map("auto_processing")
+  autoProcessing          Boolean   @default(true) @map("auto_processing")
   // Scheduler fields (spec "Source Scheduler") — see lib/ingestion/scheduler.ts.
-  pollIntervalMinutes Int @default(5) @map("poll_interval_minutes")
-  nextPollAt  DateTime? @map("next_poll_at")
-  lastAttemptedAt DateTime? @map("last_attempted_at")
+  pollIntervalMinutes     Int       @default(5) @map("poll_interval_minutes")
+  nextPollAt              DateTime? @map("next_poll_at")
+  lastAttemptedAt         DateTime? @map("last_attempted_at")
   // Consecutive failed polls, reset to 0 on success — drives the
   // scheduler's exponential backoff (capped), not shown directly in the UI.
-  consecutiveFailures Int @default(0) @map("consecutive_failures")
+  consecutiveFailures     Int       @default(0) @map("consecutive_failures")
   lastSuccessfulIngestion DateTime? @map("last_successful_ingestion")
-  lastError   String?  @map("last_error")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  lastError               String?   @map("last_error")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
 
-  rawItems    RawIngestionItem[]
+  rawItems      RawIngestionItem[]
   ingestionLogs IngestionLog[]
   conflictLinks SourceConflictLink[]
 
@@ -123,19 +123,19 @@ model IngestionLog {
 }
 
 model RawIngestionItem {
-  id              String   @id @default(cuid())
-  sourceId        String   @map("source_id")
-  source          Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  externalId      String   @map("external_id")
-  originalUrl     String?  @map("original_url")
-  originalTitle   String?  @map("original_title")
-  originalText    String?  @map("original_text")
-  language        String?
-  publishedAt     DateTime? @map("published_at")
-  receivedAt      DateTime @default(now()) @map("received_at")
-  mediaUrls       String?  @map("media_urls") // JSON-encoded string[]
-  processingStatus String  @default("pending") @map("processing_status")
-  rawMetadata     String?  @map("raw_metadata") // JSON-encoded
+  id               String    @id @default(cuid())
+  sourceId         String    @map("source_id")
+  source           Source    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  externalId       String    @map("external_id")
+  originalUrl      String?   @map("original_url")
+  originalTitle    String?   @map("original_title")
+  originalText     String?   @map("original_text")
+  language         String?
+  publishedAt      DateTime? @map("published_at")
+  receivedAt       DateTime  @default(now()) @map("received_at")
+  mediaUrls        String?   @map("media_urls") // JSON-encoded string[]
+  processingStatus String    @default("pending") @map("processing_status")
+  rawMetadata      String?   @map("raw_metadata") // JSON-encoded
 
   // Automated-suggestion SNAPSHOT (spec "Processing": "all new eligible
   // incoming items should automatically run through the existing
@@ -150,23 +150,24 @@ model RawIngestionItem {
   // ARCHITECTURE.md) — it's recomputed at list-read time instead, since a
   // duplicate can newly appear from an event published after this item
   // arrived, and a stale "no duplicate" snapshot would be actively unsafe.
-  suggestedEventType String? @map("suggested_event_type")
-  suggestedConflictId String? @map("suggested_conflict_id")
-  suggestedRegion String? @map("suggested_region")
-  suggestedCountryCode String? @map("suggested_country_code")
-  suggestedLocationName String? @map("suggested_location_name")
-  suggestedLat    Float?   @map("suggested_lat")
-  suggestedLng    Float?   @map("suggested_lng")
-  suggestedSeverity String? @map("suggested_severity")
-  suggestedImportance Int?  @map("suggested_importance")
-  locationSource  String?  @map("location_source") // "resolved" | "ambiguous" | "none"
-  processedAt     DateTime? @map("processed_at")
+  suggestedEventType    String?   @map("suggested_event_type")
+  suggestedConflictId   String?   @map("suggested_conflict_id")
+  suggestedRegion       String?   @map("suggested_region")
+  suggestedCountryCode  String?   @map("suggested_country_code")
+  suggestedLocationName String?   @map("suggested_location_name")
+  suggestedLat          Float?    @map("suggested_lat")
+  suggestedLng          Float?    @map("suggested_lng")
+  suggestedSeverity     String?   @map("suggested_severity")
+  suggestedImportance   Int?      @map("suggested_importance")
+  locationSource        String?   @map("location_source") // "resolved" | "ambiguous" | "none"
+  processedAt           DateTime? @map("processed_at")
 
-  eventLinks      EventSource[]
-  extractedFacts  ExtractedFact[]
-  updateProposals EventUpdateProposal[]
-  historyEntries  EventHistory[]
+  eventLinks             EventSource[]
+  extractedFacts         ExtractedFact[]
+  updateProposals        EventUpdateProposal[]
+  historyEntries         EventHistory[]
   militaryUnitLinks      ArticleMilitaryUnitLink[]
+  matchReviews           EntityMatchReview[]
   militaryEquipmentLinks ArticleMilitaryEquipmentLink[]
   militaryCommanderLinks ArticleMilitaryCommanderLink[]
 
@@ -189,91 +190,91 @@ model RawIngestionItem {
 // are numeric vs. text is a convention the extractor and its consumers
 // share (lib/ingestion/extract-facts.ts's EXTRACTED_FACT_FIELDS).
 model ExtractedFact {
-  id                 String   @id @default(cuid())
-  rawIngestionItemId String   @map("raw_ingestion_item_id")
+  id                 String           @id @default(cuid())
+  rawIngestionItemId String           @map("raw_ingestion_item_id")
   rawIngestionItem   RawIngestionItem @relation(fields: [rawIngestionItemId], references: [id], onDelete: Cascade)
-  field              String   // one of EXTRACTED_FACT_FIELDS — e.g. "eventType", "actor", "casualtiesKilled"
+  field              String // one of EXTRACTED_FACT_FIELDS — e.g. "eventType", "actor", "casualtiesKilled"
   value              String
   confidence         Float
-  source             String   // provenance: what evidence/reasoning produced this claim
-  observedAt         DateTime @map("observed_at") // the report's own timestamp, not extraction time
-  status             String   @default("extracted") // "extracted" | "accepted" | "rejected" | "edited"
+  source             String // provenance: what evidence/reasoning produced this claim
+  observedAt         DateTime         @map("observed_at") // the report's own timestamp, not extraction time
+  status             String           @default("extracted") // "extracted" | "accepted" | "rejected" | "edited"
   // Set only when an admin edits a fact's value — preserves the original
   // extracted value/provenance rather than overwriting it, per spec
   // "preserve original wording/source evidence... for provenance".
-  originalValue      String?  @map("original_value")
-  extractedAt        DateTime @default(now()) @map("extracted_at")
+  originalValue      String?          @map("original_value")
+  extractedAt        DateTime         @default(now()) @map("extracted_at")
 
   @@index([rawIngestionItemId, field])
   @@map("extracted_facts")
 }
 
 model Conflict {
-  id          String   @id @default(cuid())
-  slug        String   @unique
-  name        String
-  shortName   String?  @map("short_name")
-  region      String
+  id                 String    @id @default(cuid())
+  slug               String    @unique
+  name               String
+  shortName          String?   @map("short_name")
+  region             String
   // "active" | "dormant" | "resolved" | "archived" — enable/disable/archive
   // (spec §1) is implemented as status transitions rather than a separate
   // flag, so there's one place that governs whether a conflict is
   // selectable in the review/publish conflict picker (active + dormant
   // only — see app/api/admin/conflicts/route.ts).
-  status      String   @default("active")
-  severity    String
-  intensity   Int
-  intensityChange24h Int @default(0) @map("intensity_change_24h")
-  startedAt   DateTime? @map("started_at")
-  lat         Float?
-  lng         Float?
-  primaryEffects String? @map("primary_effects") // JSON-encoded string[]
+  status             String    @default("active")
+  severity           String
+  intensity          Int
+  intensityChange24h Int       @default(0) @map("intensity_change_24h")
+  startedAt          DateTime? @map("started_at")
+  lat                Float?
+  lng                Float?
+  primaryEffects     String?   @map("primary_effects") // JSON-encoded string[]
   // LEGACY "associated countries" (pre-registry): kept for the draft-extraction
   // conflict suggestion (findConflictByCountryCode) and existing admin data.
   // It does NOT say where fighting happens — scoring reads fightingCountries.
-  countries   String?  // JSON-encoded string[] of ISO country codes
-  summary     String?  // doubles as "description" per spec §1's field list
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  countries          String? // JSON-encoded string[] of ISO country codes
+  summary            String? // doubles as "description" per spec §1's field list
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   // ---- Global Conflict Registry ------------------------------------------
   // status widens to active | reduced | dormant | ended (legacy resolved /
   // archived are read as "ended").
-  endedAt     DateTime? @map("ended_at")
+  endedAt                  DateTime?       @map("ended_at")
   // Active full-scale war (state armies engaged at scale) — a registry fact,
   // separate from severity/intensity.
-  fullScaleWar Boolean  @default(false) @map("full_scale_war")
+  fullScaleWar             Boolean         @default(false) @map("full_scale_war")
   // GEOGRAPHY, kept apart on purpose (JSON string[] of ISO codes):
   //   fighting     = countries where fighting actually occurs. The ONLY set the
   //                  scoring hard rules (own-country 100, bordering >= 75) use.
   //   participants = belligerent / party states (not necessarily a fighting venue)
   //   supporters   = external supporters / interveners (never trigger a floor)
-  fightingCountries     String? @map("fighting_countries")
-  participantCountries  String? @map("participant_countries")
-  supporterCountries    String? @map("supporter_countries")
+  fightingCountries        String?         @map("fighting_countries")
+  participantCountries     String?         @map("participant_countries")
+  supporterCountries       String?         @map("supporter_countries")
   // Finer geographic regions ("Eastern Ukraine", "Lake Chad basin", ...).
-  regions     String?
+  regions                  String?
   // "curated" (registry audit) | "legacy_countries" (backfilled from the old
   // `countries` list, geography not yet reviewed) | "admin" (set by an admin).
-  geographyBasis String @default("admin") @map("geography_basis")
+  geographyBasis           String          @default("admin") @map("geography_basis")
   // How sure we are this is an "active armed conflict": established |
   // uncertain | disputed. Tension/dispute records stay visible without being
   // forced into "active armed conflict".
-  classificationConfidence String @default("established") @map("classification_confidence")
-  classificationNote String? @map("classification_note")
-  familyId    String?  @map("family_id")
-  family      ConflictFamily? @relation(fields: [familyId], references: [id], onDelete: SetNull)
-  curatedAt   DateTime? @map("curated_at")
+  classificationConfidence String          @default("established") @map("classification_confidence")
+  classificationNote       String?         @map("classification_note")
+  familyId                 String?         @map("family_id")
+  family                   ConflictFamily? @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  curatedAt                DateTime?       @map("curated_at")
 
-  events      Event[]
-  actors      ConflictActor[]
-  territories ConflictTerritory[]
-  militaryUnits MilitaryUnit[]
-  areasOfOperation AreaOfOperation[]
+  events                      Event[]
+  actors                      ConflictActor[]
+  territories                 ConflictTerritory[]
+  militaryUnits               MilitaryUnit[]
+  areasOfOperation            AreaOfOperation[]
   territorialChangeCandidates TerritorialChangeCandidate[]
-  participants ConflictParticipant[]
-  metadataSources ConflictMetadataSource[]
-  sourceLinks SourceConflictLink[]
-  sourceCandidates SourceCandidate[]
+  participants                ConflictParticipant[]
+  metadataSources             ConflictMetadataSource[]
+  sourceLinks                 SourceConflictLink[]
+  sourceCandidates            SourceCandidate[]
 
   @@index([familyId])
   @@map("conflicts")
@@ -289,7 +290,7 @@ model ConflictFamily {
   description String?
   createdAt   DateTime @default(now()) @map("created_at")
 
-  conflicts   Conflict[]
+  conflicts Conflict[]
 
   @@map("conflict_families")
 }
@@ -297,15 +298,21 @@ model ConflictFamily {
 // Actor <-> conflict link, reusing the canonical MilitaryUnit row (one row per
 // armed actor, deduplicated through lib/actors/registry.ts aliases).
 model ConflictParticipant {
-  id         String   @id @default(cuid())
-  conflictId String   @map("conflict_id")
-  conflict   Conflict @relation(fields: [conflictId], references: [id], onDelete: Cascade)
-  unitId     String   @map("unit_id")
+  id         String       @id @default(cuid())
+  conflictId String       @map("conflict_id")
+  conflict   Conflict     @relation(fields: [conflictId], references: [id], onDelete: Cascade)
+  unitId     String       @map("unit_id")
   unit       MilitaryUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
   // "belligerent" | "participant" | "supporter"
-  role       String   @default("belligerent")
+  role       String       @default("belligerent")
   note       String?
-  createdAt  DateTime @default(now()) @map("created_at")
+  sourceName String?      @map("source_name")
+  sourceUrl  String?      @map("source_url")
+  observedAt DateTime?    @map("observed_at")
+  confidence Float?
+  validFrom  DateTime?    @map("valid_from")
+  validTo    DateTime?    @map("valid_to")
+  createdAt  DateTime     @default(now()) @map("created_at")
 
   @@unique([conflictId, unitId])
   @@index([unitId])
@@ -314,17 +321,17 @@ model ConflictParticipant {
 
 // Where an important piece of conflict metadata came from.
 model ConflictMetadataSource {
-  id         String   @id @default(cuid())
-  conflictId String   @map("conflict_id")
-  conflict   Conflict @relation(fields: [conflictId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  conflictId  String    @map("conflict_id")
+  conflict    Conflict  @relation(fields: [conflictId], references: [id], onDelete: Cascade)
   // "status" | "fightingCountries" | "participantCountries" | "supporterCountries"
   // | "startedAt" | "classification" | "fullScaleWar" | "severity" ...
-  field      String
-  sourceName String   @map("source_name")
-  sourceUrl  String?  @map("source_url")
-  note       String?
+  field       String
+  sourceName  String    @map("source_name")
+  sourceUrl   String?   @map("source_url")
+  note        String?
   retrievedAt DateTime? @map("retrieved_at")
-  createdAt  DateTime @default(now()) @map("created_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   @@unique([conflictId, field, sourceName])
   @@map("conflict_metadata_sources")
@@ -352,19 +359,19 @@ model SourceConflictLink {
 // Backlog of sources worth integrating for under-covered conflicts. Storing a
 // row never fetches or scrapes anything.
 model SourceCandidate {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   name       String
   url        String?
-  conflictId String?  @map("conflict_id")
+  conflictId String?   @map("conflict_id")
   conflict   Conflict? @relation(fields: [conflictId], references: [id], onDelete: SetNull)
   // "news" | "local_media" | "ngo" | "official" | "monitor" | "social" | "other"
-  sourceType String   @default("news") @map("source_type")
+  sourceType String    @default("news") @map("source_type")
   language   String?
   // "candidate" | "approved" | "integrated" | "rejected"
-  status     String   @default("candidate")
+  status     String    @default("candidate")
   notes      String?
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
 
   @@index([conflictId, status])
   @@map("source_candidates")
@@ -406,40 +413,40 @@ model ConflictActor {
 // closes the old one's validTo rather than overwriting it — "must remain
 // historically reconstructable" per spec.
 model ConflictTerritory {
-  id         String   @id @default(cuid())
-  conflictId String   @map("conflict_id")
-  conflict   Conflict @relation(fields: [conflictId], references: [id], onDelete: Cascade)
+  id          String         @id @default(cuid())
+  conflictId  String         @map("conflict_id")
+  conflict    Conflict       @relation(fields: [conflictId], references: [id], onDelete: Cascade)
   // Nullable: "uncertain" or "contested-with-no-clear-controller" areas
   // may have no single controlling actor.
-  actorId    String?  @map("actor_id")
-  actor      ConflictActor? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId     String?        @map("actor_id")
+  actor       ConflictActor? @relation(fields: [actorId], references: [id], onDelete: SetNull)
   // "controlled" | "contested" | "uncertain" | "recently_changed" — see
   // lib/types/territorial-control.ts TERRITORIAL_STATUSES.
-  status     String
+  status      String
   // 0-1, confidence in this control assessment — never legal sovereignty,
   // only a claim about de facto/reported control (spec §2/§9).
-  confidence Float
+  confidence  Float
   // GeoJSON Polygon or MultiPolygon, JSON-encoded string (SQLite has no
   // JSON/geometry column type — same convention as every other
   // JSON-in-String field in this schema).
-  geometry   String
-  sourceName String?  @map("source_name")
-  sourceUrl  String?  @map("source_url")
-  validFrom  DateTime @map("valid_from")
+  geometry    String
+  sourceName  String?        @map("source_name")
+  sourceUrl   String?        @map("source_url")
+  validFrom   DateTime       @map("valid_from")
   // null = still the current/active version.
-  validTo    DateTime? @map("valid_to")
+  validTo     DateTime?      @map("valid_to")
   // Draft rows (published: false) are never returned by the public
   // reconstruction query and may be freely edited/deleted; once
   // published, a row is immutable — see the model's own comment above.
-  published  Boolean  @default(false)
+  published   Boolean        @default(false)
   // Split lineage. On a DRAFT (published: false) it names the currently
   // active version this draft is a partial change of: publishing it carves
   // the drawn area out of that version (see splitTerritory) instead of
   // replacing the whole polygon. On a PUBLISHED row it records which version
   // the row was split from, so history shows both halves of a split.
-  splitFromId String? @map("split_from_id")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  splitFromId String?        @map("split_from_id")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
 
   @@index([conflictId, validFrom])
   @@index([published, validFrom, validTo])
@@ -448,31 +455,31 @@ model ConflictTerritory {
 }
 
 model Event {
-  id          String   @id @default(cuid())
-  slug        String   @unique
-  title       String
-  summary     String
-  eventType   String   @map("event_type")
-  locationName String? @map("location_name")
-  latitude    Float
-  longitude   Float
-  countryCode String?  @map("country_code")
-  region      String?
-  conflictId  String?  @map("conflict_id")
-  conflict    Conflict? @relation(fields: [conflictId], references: [id])
-  occurredAt  DateTime @map("occurred_at")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  severity    String
-  importance  Int      @default(50)
-  verificationStatus String @default("unverified") @map("verification_status")
-  published   Boolean  @default(false)
+  id                 String    @id @default(cuid())
+  slug               String    @unique
+  title              String
+  summary            String
+  eventType          String    @map("event_type")
+  locationName       String?   @map("location_name")
+  latitude           Float
+  longitude          Float
+  countryCode        String?   @map("country_code")
+  region             String?
+  conflictId         String?   @map("conflict_id")
+  conflict           Conflict? @relation(fields: [conflictId], references: [id])
+  occurredAt         DateTime  @map("occurred_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  severity           String
+  importance         Int       @default(50)
+  verificationStatus String    @default("unverified") @map("verification_status")
+  published          Boolean   @default(false)
   // Set once, the first time this event is published, and never cleared by
   // an Unpublish — distinguishes "Draft" (never published: publishedAt is
   // null) from "Unpublished" (was live, now hidden: publishedAt is set but
   // published is false) even though both share published: false. See
   // lib/data/event-status.ts.
-  publishedAt DateTime? @map("published_at")
+  publishedAt        DateTime? @map("published_at")
 
   // Live Event Updates (spec "Live Event Updates"): populated only through
   // an accepted EventUpdateProposal (see below), never by direct manual
@@ -485,10 +492,10 @@ model Event {
   // one, at which point IT becomes this column's value (still replaceable
   // later by accepting a different proposal — the prior value is never
   // lost, since every accepted change is also recorded in EventHistory).
-  actors               String?  @map("actors")
-  casualtiesKilled     Int?     @map("casualties_killed")
-  casualtiesInjured    Int?     @map("casualties_injured")
-  infrastructureDamage String?  @map("infrastructure_damage")
+  actors               String? @map("actors")
+  casualtiesKilled     Int?    @map("casualties_killed")
+  casualtiesInjured    Int?    @map("casualties_injured")
+  infrastructureDamage String? @map("infrastructure_damage")
 
   // Myanmar Specialist Source Integration (spec §6 "Preserve location
   // precision metadata... do not treat every coordinate as exact") —
@@ -502,10 +509,12 @@ model Event {
   // inventing a second vocabulary.
   locationPrecision String? @map("location_precision")
 
-  sources         EventSource[]
-  updateProposals EventUpdateProposal[]
-  history         EventHistory[]
+  sources           EventSource[]
+  updateProposals   EventUpdateProposal[]
+  history           EventHistory[]
   militaryUnitLinks MilitaryUnitEvent[]
+  equipmentLinks    EventEquipmentLink[]
+  commanderLinks    EventCommanderLink[]
 
   @@map("events")
 }
@@ -525,10 +534,10 @@ model Event {
 // one actually does. field values reuse ExtractedFactField's vocabulary
 // (lib/types/db.ts) so the two systems share one field-name convention.
 model EventUpdateProposal {
-  id                 String   @id @default(cuid())
-  eventId            String   @map("event_id")
-  event              Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  rawIngestionItemId String   @map("raw_ingestion_item_id")
+  id                 String           @id @default(cuid())
+  eventId            String           @map("event_id")
+  event              Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  rawIngestionItemId String           @map("raw_ingestion_item_id")
   rawIngestionItem   RawIngestionItem @relation(fields: [rawIngestionItemId], references: [id], onDelete: Cascade)
   field              String
   // The event's own value at proposal-creation time — null when the event
@@ -538,15 +547,15 @@ model EventUpdateProposal {
   // accepted first (spec "make it obvious what will change before
   // approval" — obvious relative to what the admin is looking at, not a
   // live-recomputed value that could shift under them mid-review).
-  currentValue       String?  @map("current_value")
-  proposedValue      String   @map("proposed_value")
+  currentValue       String?          @map("current_value")
+  proposedValue      String           @map("proposed_value")
   confidence         Float
-  source             String   // provenance, carried over from the originating ExtractedFact
-  observedAt         DateTime @map("observed_at")
-  changeType         String   @map("change_type") // "new" | "updated" — relative to currentValue at creation time
-  status             String   @default("pending") // "pending" | "accepted" | "rejected"
-  createdAt          DateTime @default(now()) @map("created_at")
-  resolvedAt         DateTime? @map("resolved_at")
+  source             String // provenance, carried over from the originating ExtractedFact
+  observedAt         DateTime         @map("observed_at")
+  changeType         String           @map("change_type") // "new" | "updated" — relative to currentValue at creation time
+  status             String           @default("pending") // "pending" | "accepted" | "rejected"
+  createdAt          DateTime         @default(now()) @map("created_at")
+  resolvedAt         DateTime?        @map("resolved_at")
 
   @@index([eventId, status])
   @@map("event_update_proposals")
@@ -561,18 +570,18 @@ model EventUpdateProposal {
 // explicit design goal for the next milestone) — no separate snapshot
 // table needed.
 model EventHistory {
-  id                 String   @id @default(cuid())
-  eventId            String   @map("event_id")
-  event              Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  id                 String            @id @default(cuid())
+  eventId            String            @map("event_id")
+  event              Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
   field              String
-  oldValue           String?  @map("old_value")
-  newValue           String   @map("new_value")
+  oldValue           String?           @map("old_value")
+  newValue           String            @map("new_value")
   // Nullable only so a future non-report-driven change path (none exists
   // yet) isn't blocked by this schema — every row this milestone creates
   // sets it, since every accepted proposal traces back to one report.
-  rawIngestionItemId String?  @map("raw_ingestion_item_id")
+  rawIngestionItemId String?           @map("raw_ingestion_item_id")
   rawIngestionItem   RawIngestionItem? @relation(fields: [rawIngestionItemId], references: [id], onDelete: SetNull)
-  source             String   // provenance, carried over from the accepted proposal
+  source             String // provenance, carried over from the accepted proposal
   // Event Version History (spec "confidence/provenance where available"):
   // carried over from the accepted EventUpdateProposal's own confidence.
   // Nullable for the same forward-compatibility reason as
@@ -589,21 +598,21 @@ model EventHistory {
   // lib/data/corroboration.ts) and never touch this table at all — so
   // automatic:true is reserved for a genuinely automatic path if one is
   // ever added, not simulated here.
-  automatic          Boolean  @default(false)
-  createdAt          DateTime @default(now()) @map("created_at")
+  automatic          Boolean           @default(false)
+  createdAt          DateTime          @default(now()) @map("created_at")
 
   @@index([eventId, createdAt])
   @@map("event_history")
 }
 
 model EventSource {
-  id                 String   @id @default(cuid())
-  eventId            String   @map("event_id")
-  event              Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  rawIngestionItemId String   @map("raw_ingestion_item_id")
-  rawIngestionItem   RawIngestionItem @relation(fields: [rawIngestionItemId], references: [id], onDelete: Cascade)
-  relationship       String   @default("originating") // "originating" | "relay" | "corroborating"
-  isOriginatingSource Boolean @default(true) @map("is_originating_source")
+  id                  String           @id @default(cuid())
+  eventId             String           @map("event_id")
+  event               Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  rawIngestionItemId  String           @map("raw_ingestion_item_id")
+  rawIngestionItem    RawIngestionItem @relation(fields: [rawIngestionItemId], references: [id], onDelete: Cascade)
+  relationship        String           @default("originating") // "originating" | "relay" | "corroborating"
+  isOriginatingSource Boolean          @default(true) @map("is_originating_source")
   // Event Version History (spec "known/attached sources at that point in
   // time"): when THIS link was created, distinct from the underlying
   // report's own publishedAt/receivedAt (a report can be ingested well
@@ -612,7 +621,7 @@ model EventSource {
   // attachment time, not the report's own timestamp. linkEventSource's
   // upsert only sets this on create, never touches it on a relationship
   // update, so it's a true one-time attachment timestamp.
-  createdAt          DateTime @default(now()) @map("created_at")
+  createdAt           DateTime         @default(now()) @map("created_at")
 
   @@unique([eventId, rawIngestionItemId])
   @@map("event_sources")
@@ -632,32 +641,40 @@ model EventSource {
 // these are attributed reference data, always traceable back to where a
 // fact came from, never presented as Vigil's own verified conclusion.
 model MilitaryUnit {
-  id                String   @id @default(cuid())
-  name              String   @unique
+  id                String         @id @default(cuid())
+  name              String         @unique
   branch            String?
-  unitType          String?  @map("unit_type")
+  unitType          String?        @map("unit_type")
   // Self-relation (spec "unit -> parent formation"). Nullable: a top-level
   // command (e.g. "Ground Forces of Ukraine") has no parent of its own.
-  parentUnitId      String?  @map("parent_unit_id")
+  parentUnitId      String?        @map("parent_unit_id")
   parentUnit        MilitaryUnit?  @relation("UnitParent", fields: [parentUnitId], references: [id], onDelete: SetNull)
   childUnits        MilitaryUnit[] @relation("UnitParent")
   // "active" | "disbanded" | "reformed" | "forming" — free text (SQLite has
   // no enum type, same convention as every other status field in this
   // schema), sourced from MilitaryLand's own unit-page status.
   status            String?
+  // Descriptive classification (lib/military/entity-types.ts): state_military | armed_group | militia |
+  // political_military_group | security_force | military_unit | coalition | peacekeeping_force | other.
+  // It DESCRIBES the organisation; it is never a legal designation and never inferred from behaviour.
+  entityType        String?        @map("entity_type")
+  // ISO country the organisation belongs to / is based in, where known.
+  country           String?
+  // Name in the entity's own language/script, where sourced.
+  nativeName        String?        @map("native_name")
   // Spec "unit -> related Vigil events/conflicts" — kept as a single
   // primary-conflict pointer (nearly all MilitaryLand content maps to one
   // conflict) rather than a many-to-many join; a unit's specific event
   // mentions are still derivable transitively via
   // ArticleMilitaryUnitLink -> RawIngestionItem -> EventSource -> Event
   // without a second direct relation to maintain.
-  primaryConflictId String?  @map("primary_conflict_id")
-  primaryConflict   Conflict? @relation(fields: [primaryConflictId], references: [id], onDelete: SetNull)
-  sourceName        String?  @map("source_name")
-  sourceUrl         String?  @map("source_url")
-  lastUpdatedAt     DateTime @default(now()) @map("last_updated_at")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  primaryConflictId String?        @map("primary_conflict_id")
+  primaryConflict   Conflict?      @relation(fields: [primaryConflictId], references: [id], onDelete: SetNull)
+  sourceName        String?        @map("source_name")
+  sourceUrl         String?        @map("source_url")
+  lastUpdatedAt     DateTime       @default(now()) @map("last_updated_at")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
 
   commandersCurrent Commander[]
   appointments      CommanderAppointment[]
@@ -668,7 +685,13 @@ model MilitaryUnit {
   conflictLinks     ConflictParticipant[]
   claimedInChanges  TerritorialChangeCandidate[] @relation("ClaimedActor")
   previousInChanges TerritorialChangeCandidate[] @relation("PreviousActor")
+  parentHistory     UnitParentHistory[]          @relation("HistoryUnit")
+  asParentHistory   UnitParentHistory[]          @relation("HistoryParent")
+  relationshipsFrom ActorRelationship[]          @relation("RelFrom")
+  relationshipsTo   ActorRelationship[]          @relation("RelTo")
 
+  @@index([entityType])
+  @@index([country])
   @@map("military_units")
 }
 
@@ -683,30 +706,32 @@ model MilitaryEquipment {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  unitLinks       MilitaryUnitEquipment[]
-  articleLinks    ArticleMilitaryEquipmentLink[]
+  unitLinks    MilitaryUnitEquipment[]
+  articleLinks ArticleMilitaryEquipmentLink[]
+  eventLinks   EventEquipmentLink[]
 
   @@map("military_equipment")
 }
 
 model Commander {
-  id            String   @id @default(cuid())
-  name          String   @unique
+  id            String        @id @default(cuid())
+  name          String        @unique
   rank          String?
   // Denormalized "latest known" pointer (spec "commander -> linked/current
   // unit") for fast lookups without scanning CommanderAppointment; the
   // appointment table below is the actual sourced history, including this
   // same current assignment as its own (endDate: null) row.
-  currentUnitId String?  @map("current_unit_id")
+  currentUnitId String?       @map("current_unit_id")
   currentUnit   MilitaryUnit? @relation(fields: [currentUnitId], references: [id], onDelete: SetNull)
-  sourceName    String?  @map("source_name")
-  sourceUrl     String?  @map("source_url")
-  lastUpdatedAt DateTime @default(now()) @map("last_updated_at")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  sourceName    String?       @map("source_name")
+  sourceUrl     String?       @map("source_url")
+  lastUpdatedAt DateTime      @default(now()) @map("last_updated_at")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
 
-  appointments  CommanderAppointment[]
-  articleLinks  ArticleMilitaryCommanderLink[]
+  appointments CommanderAppointment[]
+  articleLinks ArticleMilitaryCommanderLink[]
+  eventLinks   EventCommanderLink[]
 
   @@map("commanders")
 }
@@ -717,17 +742,21 @@ model Commander {
 // one — same immutable-ledger convention as EventHistory — so a
 // commander's full sourced career stays reconstructable.
 model CommanderAppointment {
-  id          String    @id @default(cuid())
-  commanderId String    @map("commander_id")
-  commander   Commander @relation(fields: [commanderId], references: [id], onDelete: Cascade)
-  unitId      String    @map("unit_id")
-  unit        MilitaryUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  role        String? // free text, e.g. "commander" | "deputy commander" — as sourced, not a controlled vocabulary
-  startDate   DateTime? @map("start_date")
-  endDate     DateTime? @map("end_date")
-  sourceName  String?   @map("source_name")
-  sourceUrl   String?   @map("source_url")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  id              String       @id @default(cuid())
+  commanderId     String       @map("commander_id")
+  commander       Commander    @relation(fields: [commanderId], references: [id], onDelete: Cascade)
+  unitId          String       @map("unit_id")
+  unit            MilitaryUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  role            String? // free text, e.g. "commander" | "deputy commander" — as sourced, not a controlled vocabulary
+  startDate       DateTime?    @map("start_date")
+  endDate         DateTime?    @map("end_date")
+  sourceName      String?      @map("source_name")
+  sourceUrl       String?      @map("source_url")
+  // Relationship provenance: when the source said it, how sure, and when it was last re-confirmed.
+  observedAt      DateTime?    @map("observed_at")
+  confidence      Float?
+  lastConfirmedAt DateTime?    @map("last_confirmed_at")
+  createdAt       DateTime     @default(now()) @map("created_at")
 
   @@index([commanderId])
   @@index([unitId])
@@ -737,14 +766,20 @@ model CommanderAppointment {
 // unit -> equipment (spec). Many-to-many: one piece of equipment is
 // typically fielded by many units, and a unit fields many equipment types.
 model MilitaryUnitEquipment {
-  id          String   @id @default(cuid())
-  unitId      String   @map("unit_id")
-  unit        MilitaryUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  equipmentId String   @map("equipment_id")
+  id          String            @id @default(cuid())
+  unitId      String            @map("unit_id")
+  unit        MilitaryUnit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  equipmentId String            @map("equipment_id")
   equipment   MilitaryEquipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
-  sourceName  String?  @map("source_name")
-  sourceUrl   String?  @map("source_url")
-  createdAt   DateTime @default(now()) @map("created_at")
+  sourceName  String?           @map("source_name")
+  sourceUrl   String?           @map("source_url")
+  // "Known operator" — a sourced statement that this unit fields this equipment TYPE. It is not
+  // an inventory count and not a sighting in any specific event (see EventEquipmentLink).
+  observedAt  DateTime?         @map("observed_at")
+  confidence  Float?
+  validFrom   DateTime?         @map("valid_from")
+  validTo     DateTime?         @map("valid_to")
+  createdAt   DateTime          @default(now()) @map("created_at")
 
   @@unique([unitId, equipmentId])
   @@map("military_unit_equipment")
@@ -758,36 +793,46 @@ model MilitaryUnitEquipment {
 // MilitaryLand article is never a specially-shaped row; any source's
 // article can carry these links.
 model ArticleMilitaryUnitLink {
-  id                 String   @id @default(cuid())
-  rawIngestionItemId String   @map("raw_ingestion_item_id")
+  id                 String           @id @default(cuid())
+  rawIngestionItemId String           @map("raw_ingestion_item_id")
   rawIngestionItem   RawIngestionItem @relation(fields: [rawIngestionItemId], references: [id], onDelete: Cascade)
-  unitId             String   @map("unit_id")
-  unit               MilitaryUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  createdAt          DateTime @default(now()) @map("created_at")
+  unitId             String           @map("unit_id")
+  unit               MilitaryUnit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  // Extraction provenance: the text that matched, how it was resolved, how sure.
+  matchedText        String?          @map("matched_text")
+  method             String?
+  confidence         Float?
+  createdAt          DateTime         @default(now()) @map("created_at")
 
   @@unique([rawIngestionItemId, unitId])
   @@map("article_military_unit_links")
 }
 
 model ArticleMilitaryEquipmentLink {
-  id                 String   @id @default(cuid())
-  rawIngestionItemId String   @map("raw_ingestion_item_id")
-  rawIngestionItem   RawIngestionItem @relation(fields: [rawIngestionItemId], references: [id], onDelete: Cascade)
-  equipmentId        String   @map("equipment_id")
+  id                 String            @id @default(cuid())
+  rawIngestionItemId String            @map("raw_ingestion_item_id")
+  rawIngestionItem   RawIngestionItem  @relation(fields: [rawIngestionItemId], references: [id], onDelete: Cascade)
+  equipmentId        String            @map("equipment_id")
   equipment          MilitaryEquipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
-  createdAt          DateTime @default(now()) @map("created_at")
+  matchedText        String?           @map("matched_text")
+  method             String?
+  confidence         Float?
+  createdAt          DateTime          @default(now()) @map("created_at")
 
   @@unique([rawIngestionItemId, equipmentId])
   @@map("article_military_equipment_links")
 }
 
 model ArticleMilitaryCommanderLink {
-  id                 String   @id @default(cuid())
-  rawIngestionItemId String   @map("raw_ingestion_item_id")
+  id                 String           @id @default(cuid())
+  rawIngestionItemId String           @map("raw_ingestion_item_id")
   rawIngestionItem   RawIngestionItem @relation(fields: [rawIngestionItemId], references: [id], onDelete: Cascade)
-  commanderId        String   @map("commander_id")
-  commander          Commander @relation(fields: [commanderId], references: [id], onDelete: Cascade)
-  createdAt          DateTime @default(now()) @map("created_at")
+  commanderId        String           @map("commander_id")
+  commander          Commander        @relation(fields: [commanderId], references: [id], onDelete: Cascade)
+  matchedText        String?          @map("matched_text")
+  method             String?
+  confidence         Float?
+  createdAt          DateTime         @default(now()) @map("created_at")
 
   @@unique([rawIngestionItemId, commanderId])
   @@map("article_military_commander_links")
@@ -800,14 +845,14 @@ model ArticleMilitaryCommanderLink {
 // needs a direct join, since transitive traversal can't answer "which
 // events involve this unit" as a single indexed query.
 model MilitaryUnitEvent {
-  id        String   @id @default(cuid())
-  unitId    String   @map("unit_id")
-  unit      MilitaryUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  eventId   String   @map("event_id")
-  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  sourceName String? @map("source_name")
-  sourceUrl String?  @map("source_url")
-  createdAt DateTime @default(now()) @map("created_at")
+  id         String       @id @default(cuid())
+  unitId     String       @map("unit_id")
+  unit       MilitaryUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  eventId    String       @map("event_id")
+  event      Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  sourceName String?      @map("source_name")
+  sourceUrl  String?      @map("source_url")
+  createdAt  DateTime     @default(now()) @map("created_at")
 
   @@unique([unitId, eventId])
   @@map("military_unit_events")
@@ -826,11 +871,11 @@ model MilitaryUnitEvent {
 // reach "over time" as discrete observations, not continuously
 // superseded state.
 model AreaOfOperation {
-  id          String   @id @default(cuid())
-  unitId      String   @map("unit_id")
+  id          String       @id @default(cuid())
+  unitId      String       @map("unit_id")
   unit        MilitaryUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  conflictId  String?  @map("conflict_id")
-  conflict    Conflict? @relation(fields: [conflictId], references: [id], onDelete: SetNull)
+  conflictId  String?      @map("conflict_id")
+  conflict    Conflict?    @relation(fields: [conflictId], references: [id], onDelete: SetNull)
   name        String?
   description String?
   // GeoJSON Polygon/MultiPolygon OR a Point (a described area with no
@@ -838,12 +883,12 @@ model AreaOfOperation {
   // JSON-encoded string, same SQLite convention as ConflictTerritory.geometry.
   geometry    String
   // "exact" | "approximate" | "area_level" | "unknown" — see Event.locationPrecision's own comment.
-  precision   String   @default("unknown")
-  asOfDate    DateTime? @map("as_of_date")
-  sourceName  String?  @map("source_name")
-  sourceUrl   String?  @map("source_url")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  precision   String       @default("unknown")
+  asOfDate    DateTime?    @map("as_of_date")
+  sourceName  String?      @map("source_name")
+  sourceUrl   String?      @map("source_url")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
 
   @@index([unitId])
   @@index([conflictId])
@@ -861,56 +906,189 @@ model AreaOfOperation {
 // preparation for the future Territorial Change Intelligence milestone —
 // not that milestone itself.
 model TerritorialChangeCandidate {
-  id               String   @id @default(cuid())
-  conflictId       String   @map("conflict_id")
-  conflict         Conflict @relation(fields: [conflictId], references: [id], onDelete: Cascade)
-  description      String
-  claimedActorId   String?  @map("claimed_actor_id")
-  claimedActor     MilitaryUnit? @relation("ClaimedActor", fields: [claimedActorId], references: [id], onDelete: SetNull)
-  previousActorId  String?  @map("previous_actor_id")
-  previousActor    MilitaryUnit? @relation("PreviousActor", fields: [previousActorId], references: [id], onDelete: SetNull)
-  locationName     String?  @map("location_name")
-  lat              Float?
-  lng              Float?
-  precision        String   @default("unknown")
-  sourceName       String?  @map("source_name")
-  sourceUrl        String?  @map("source_url")
-  observedAt       DateTime? @map("observed_at")
+  id              String        @id @default(cuid())
+  conflictId      String        @map("conflict_id")
+  conflict        Conflict      @relation(fields: [conflictId], references: [id], onDelete: Cascade)
+  description     String
+  claimedActorId  String?       @map("claimed_actor_id")
+  claimedActor    MilitaryUnit? @relation("ClaimedActor", fields: [claimedActorId], references: [id], onDelete: SetNull)
+  previousActorId String?       @map("previous_actor_id")
+  previousActor   MilitaryUnit? @relation("PreviousActor", fields: [previousActorId], references: [id], onDelete: SetNull)
+  locationName    String?       @map("location_name")
+  lat             Float?
+  lng             Float?
+  precision       String        @default("unknown")
+  sourceName      String?       @map("source_name")
+  sourceUrl       String?       @map("source_url")
+  observedAt      DateTime?     @map("observed_at")
   // "pending" | "reviewed" | "dismissed" — an admin review-state, never a
   // trigger for automatic polygon mutation (see the model's own comment).
-  status           String   @default("pending")
-  reviewNote       String?  @map("review_note")
-  reviewedAt       DateTime? @map("reviewed_at")
-  createdAt        DateTime @default(now()) @map("created_at")
+  status          String        @default("pending")
+  reviewNote      String?       @map("review_note")
+  reviewedAt      DateTime?     @map("reviewed_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
 
   // Territorial Change Intelligence — see lib/territory/change-types.ts for
   // the vocabularies. Statuses widen to
   // pending|uncertain|approved|rejected|merged (legacy reviewed|dismissed
   // stay valid). `confidence` is the CLAIM's confidence, never conflict
   // severity, and never derived from report count alone.
-  changeType       String   @default("captured") @map("change_type")
-  confidence       Float    @default(0.4)
+  changeType         String  @default("captured") @map("change_type")
+  confidence         Float   @default(0.4)
   // Extracted reason: matched rule id + the full sentence.
-  evidence         String?
+  evidence           String?
   // Normalized (conflict|location|changeType|claimed actor) key — the
   // identity of the underlying claim, used to suppress duplicate proposals.
-  claimKey         String?  @map("claim_key")
+  claimKey           String? @map("claim_key")
   rawIngestionItemId String? @map("raw_ingestion_item_id")
   // JSON array of additional {sourceName, sourceUrl, observedAt} reports
   // that restate the same claim (corroboration / merged candidates).
-  corroboration    String?
-  mergedIntoId     String?  @map("merged_into_id")
+  corroboration      String?
+  mergedIntoId       String? @map("merged_into_id")
   // Set once an approval superseded/created a ConflictTerritory row.
   appliedTerritoryId String? @map("applied_territory_id")
   // Approved as a verified territorial-change record, but no geometry was
   // available to apply: surfaced separately until an admin adds geometry.
-  geometryPending  Boolean  @default(false) @map("geometry_pending")
+  geometryPending    Boolean @default(false) @map("geometry_pending")
   // Role of the source that first reported the claim (aggregator, relay, ...).
   // A claim backed ONLY by aggregator/relay evidence can never modify
   // Territorial Control — see assertIndependentEvidence.
-  sourceRole       String?  @map("source_role")
+  sourceRole         String? @map("source_role")
 
   @@index([conflictId, status])
   @@index([claimKey])
   @@map("territorial_change_candidates")
+}
+
+// ---- Military & Actor Intelligence Knowledge Layer ---------------------------------
+// One canonical entity per organisation/person/equipment type. Aliases are ROWS on the
+// canonical entity (never a second entity). Relationships carry provenance and, where
+// they can change, validFrom/validTo history — nothing is overwritten.
+
+// Alternate names for a MilitaryUnit (actor/unit), Commander or MilitaryEquipment. The
+// central registry (data/actor-registry.json) still supplies the built-in actor aliases; this
+// table holds the ones admins/seeds add. An alias that would point at two different entities
+// is refused — ambiguity is surfaced for review, never silently merged.
+model EntityAlias {
+  id           String   @id @default(cuid())
+  // "unit" | "commander" | "equipment"
+  entityKind   String   @map("entity_kind")
+  entityId     String   @map("entity_id")
+  alias        String
+  // Lower-cased/punctuation-normalised form used for exact matching.
+  normalized   String
+  // "native_name" | "abbreviation" | "transliteration" | "historical" | "source_specific" | "alternate"
+  aliasType    String   @default("alternate") @map("alias_type")
+  // For source_specific aliases: the source that uses this name.
+  sourceScope  String?  @map("source_scope")
+  // Optional country scope (an alias that only applies in one country's context).
+  countryScope String?  @map("country_scope")
+  sourceName   String?  @map("source_name")
+  sourceUrl    String?  @map("source_url")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([entityKind, entityId, normalized])
+  @@index([entityKind, normalized])
+  @@map("entity_aliases")
+}
+
+// A unit's parent formation over time. MilitaryUnit.parentUnitId is only the CURRENT
+// pointer; every change closes the previous row (validTo) and opens a new one.
+model UnitParentHistory {
+  id           String        @id @default(cuid())
+  unitId       String        @map("unit_id")
+  unit         MilitaryUnit  @relation("HistoryUnit", fields: [unitId], references: [id], onDelete: Cascade)
+  parentUnitId String?       @map("parent_unit_id")
+  parent       MilitaryUnit? @relation("HistoryParent", fields: [parentUnitId], references: [id], onDelete: SetNull)
+  validFrom    DateTime?     @map("valid_from")
+  validTo      DateTime?     @map("valid_to")
+  sourceName   String?       @map("source_name")
+  sourceUrl    String?       @map("source_url")
+  observedAt   DateTime?     @map("observed_at")
+  confidence   Float?
+  note         String?
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  @@index([unitId])
+  @@map("unit_parent_history")
+}
+
+// Explicitly structured relationships between two actors (allied / cooperating / opposing /
+// coalition member). Never inferred from co-occurrence in an event.
+model ActorRelationship {
+  id           String       @id @default(cuid())
+  fromId       String       @map("from_id")
+  from         MilitaryUnit @relation("RelFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  toId         String       @map("to_id")
+  to           MilitaryUnit @relation("RelTo", fields: [toId], references: [id], onDelete: Cascade)
+  // "allied" | "cooperating" | "opposing" | "coalition_member"
+  relationType String       @map("relation_type")
+  conflictId   String?      @map("conflict_id")
+  sourceName   String?      @map("source_name")
+  sourceUrl    String?      @map("source_url")
+  observedAt   DateTime?    @map("observed_at")
+  confidence   Float?
+  validFrom    DateTime?    @map("valid_from")
+  validTo      DateTime?    @map("valid_to")
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  @@unique([fromId, toId, relationType, conflictId])
+  @@index([toId])
+  @@map("actor_relationships")
+}
+
+// Equipment OBSERVED in a specific event (per a sourced report) — deliberately distinct from
+// MilitaryUnitEquipment ("known operator").
+model EventEquipmentLink {
+  id          String            @id @default(cuid())
+  eventId     String            @map("event_id")
+  event       Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  equipmentId String            @map("equipment_id")
+  equipment   MilitaryEquipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  matchedText String?           @map("matched_text")
+  confidence  Float?
+  sourceName  String?           @map("source_name")
+  sourceUrl   String?           @map("source_url")
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  @@unique([eventId, equipmentId])
+  @@map("event_equipment_links")
+}
+
+model EventCommanderLink {
+  id          String    @id @default(cuid())
+  eventId     String    @map("event_id")
+  event       Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  commanderId String    @map("commander_id")
+  commander   Commander @relation(fields: [commanderId], references: [id], onDelete: Cascade)
+  matchedText String?   @map("matched_text")
+  confidence  Float?
+  sourceName  String?   @map("source_name")
+  sourceUrl   String?   @map("source_url")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@unique([eventId, commanderId])
+  @@map("event_commander_links")
+}
+
+// A mention in a report that resolved to MORE THAN ONE entity (or an alias needing a human
+// look): held here instead of guessing. Approving picks the entity and creates the link.
+model EntityMatchReview {
+  id                 String           @id @default(cuid())
+  rawIngestionItemId String           @map("raw_ingestion_item_id")
+  rawIngestionItem   RawIngestionItem @relation(fields: [rawIngestionItemId], references: [id], onDelete: Cascade)
+  entityKind         String           @map("entity_kind")
+  matchedText        String           @map("matched_text")
+  // JSON array of candidate entity ids.
+  candidateIds       String           @map("candidate_ids")
+  reason             String
+  // "pending" | "resolved" | "dismissed"
+  status             String           @default("pending")
+  resolvedEntityId   String?          @map("resolved_entity_id")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  resolvedAt         DateTime?        @map("resolved_at")
+
+  @@unique([rawIngestionItemId, entityKind, matchedText])
+  @@index([status])
+  @@map("entity_match_reviews")
 }

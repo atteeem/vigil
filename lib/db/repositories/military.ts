@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/db/client";
-import { resolveActorName } from "@/lib/actors/registry";
+import { ACTOR_REGISTRY, resolveActorName } from "@/lib/actors/registry";
+import { ensureCanonicalAlias, resolveEntity } from "@/lib/military/aliases";
+import { entityTypeFromDesignation, entityTypeFromRegistryKind, isEntityType } from "@/lib/military/entity-types";
+import { appointCommander, setUnitParent } from "@/lib/military/knowledge";
 import type {
   MilitaryUnitDTO,
   MilitaryEquipmentDTO,
@@ -26,6 +29,9 @@ function toUnitDTO(row: {
   parentUnitId: string | null;
   parentUnit?: { name: string } | null;
   status: string | null;
+  entityType?: string | null;
+  country?: string | null;
+  nativeName?: string | null;
   primaryConflictId: string | null;
   sourceName: string | null;
   sourceUrl: string | null;
@@ -41,6 +47,9 @@ function toUnitDTO(row: {
     parentUnitId: row.parentUnitId,
     parentUnitName: row.parentUnit?.name ?? null,
     status: row.status,
+    entityType: row.entityType ?? null,
+    country: row.country ?? null,
+    nativeName: row.nativeName ?? null,
     primaryConflictId: row.primaryConflictId,
     sourceName: row.sourceName,
     sourceUrl: row.sourceUrl,
@@ -73,6 +82,9 @@ export interface MilitaryUnitInput extends ProvenanceInput {
   parentUnitId?: string | null;
   status?: string | null;
   primaryConflictId?: string | null;
+  entityType?: string | null;
+  country?: string | null;
+  nativeName?: string | null;
 }
 
 /**
@@ -91,21 +103,31 @@ export async function findOrCreateMilitaryUnit(input: MilitaryUnitInput): Promis
   // resolve to ONE canonical row (lib/actors/registry.ts); a legacy row already
   // stored under the variant name is reused rather than duplicated.
   const canonicalName = resolveActorName(input.name);
+  // A name that is a known alias (native name, abbreviation, historical name...) of exactly ONE
+  // existing entity reuses it. Ambiguous or unknown names never merge anything.
+  const byAlias = await resolveEntity("unit", input.name, { country: input.country });
+  const aliasHit = byAlias.status === "resolved" ? await prisma.militaryUnit.findUnique({ where: { id: byAlias.id }, include: { parentUnit: { select: { name: true } } } }) : null;
   const existing =
+    aliasHit ??
     (await prisma.militaryUnit.findFirst({ where: { name: { equals: canonicalName } }, include: { parentUnit: { select: { name: true } } } })) ??
     (canonicalName !== input.name
       ? await prisma.militaryUnit.findFirst({ where: { name: { equals: input.name } }, include: { parentUnit: { select: { name: true } } } })
       : null);
   input = { ...input, name: existing?.name ?? canonicalName };
   if (existing) {
-    if (!input.sourceUrl) return toUnitDTO(existing);
+    if (!input.sourceUrl) {
+      await ensureCanonicalAlias("unit", existing.id, existing.name);
+      return toUnitDTO(existing);
+    }
     const updated = await prisma.militaryUnit.update({
       where: { id: existing.id },
       data: {
         branch: input.branch ?? existing.branch,
         unitType: input.unitType ?? existing.unitType,
-        parentUnitId: input.parentUnitId ?? existing.parentUnitId,
         status: input.status ?? existing.status,
+        entityType: input.entityType && isEntityType(input.entityType) ? input.entityType : existing.entityType,
+        country: input.country ?? existing.country,
+        nativeName: input.nativeName ?? existing.nativeName,
         primaryConflictId: input.primaryConflictId ?? existing.primaryConflictId,
         sourceName: input.sourceName ?? existing.sourceName,
         sourceUrl: input.sourceUrl,
@@ -113,7 +135,9 @@ export async function findOrCreateMilitaryUnit(input: MilitaryUnitInput): Promis
       },
       include: { parentUnit: { select: { name: true } } },
     });
-    return toUnitDTO(updated);
+    if (input.parentUnitId && input.parentUnitId !== existing.parentUnitId) await setUnitParent(existing.id, input.parentUnitId, { sourceName: input.sourceName, sourceUrl: input.sourceUrl });
+    await ensureCanonicalAlias("unit", existing.id, existing.name);
+    return toUnitDTO({ ...updated, parentUnitId: input.parentUnitId ?? updated.parentUnitId });
   }
   const created = await prisma.militaryUnit.create({
     data: {
@@ -122,19 +146,27 @@ export async function findOrCreateMilitaryUnit(input: MilitaryUnitInput): Promis
       unitType: input.unitType ?? null,
       parentUnitId: input.parentUnitId ?? null,
       status: input.status ?? null,
+      // Structural type only where the name form makes it unambiguous; otherwise left unknown.
+      entityType: input.entityType && isEntityType(input.entityType) ? input.entityType : (entityTypeFromDesignation(input.name) ?? (ACTOR_REGISTRY.find((a) => a.canonical === input.name) ? entityTypeFromRegistryKind(ACTOR_REGISTRY.find((a) => a.canonical === input.name)!.kind) : null)),
+      country: input.country ?? ACTOR_REGISTRY.find((a) => a.canonical === input.name)?.country ?? null,
+      nativeName: input.nativeName ?? null,
       primaryConflictId: input.primaryConflictId ?? null,
       sourceName: input.sourceName ?? null,
       sourceUrl: input.sourceUrl ?? null,
     },
     include: { parentUnit: { select: { name: true } } },
   });
+  await ensureCanonicalAlias("unit", created.id, created.name);
+  if (created.parentUnitId) await prisma.unitParentHistory.create({ data: { unitId: created.id, parentUnitId: created.parentUnitId, sourceName: input.sourceName ?? null, sourceUrl: input.sourceUrl ?? null, observedAt: new Date() } });
   return toUnitDTO(created);
 }
 
 export async function updateMilitaryUnit(id: string, input: Partial<MilitaryUnitInput>): Promise<MilitaryUnitDTO> {
+  const { parentUnitId, ...rest } = input;
+  if (parentUnitId !== undefined) await setUnitParent(id, parentUnitId ?? null, { sourceName: input.sourceName, sourceUrl: input.sourceUrl });
   const row = await prisma.militaryUnit.update({
     where: { id },
-    data: { ...input, lastUpdatedAt: new Date() },
+    data: { ...rest, lastUpdatedAt: new Date() },
     include: { parentUnit: { select: { name: true } } },
   });
   return toUnitDTO(row);
@@ -180,7 +212,8 @@ export interface MilitaryEquipmentInput extends ProvenanceInput {
 }
 
 export async function findOrCreateMilitaryEquipment(input: MilitaryEquipmentInput): Promise<MilitaryEquipmentDTO> {
-  const existing = await prisma.militaryEquipment.findFirst({ where: { name: { equals: input.name } } });
+  const byAlias = await resolveEntity("equipment", input.name);
+  const existing = (byAlias.status === "resolved" ? await prisma.militaryEquipment.findUnique({ where: { id: byAlias.id } }) : null) ?? (await prisma.militaryEquipment.findFirst({ where: { name: { equals: input.name } } }));
   if (existing) {
     if (!input.sourceUrl) return toEquipmentDTO(existing);
     const updated = await prisma.militaryEquipment.update({
@@ -204,6 +237,7 @@ export async function findOrCreateMilitaryEquipment(input: MilitaryEquipmentInpu
       sourceUrl: input.sourceUrl ?? null,
     },
   });
+  await ensureCanonicalAlias("equipment", created.id, created.name);
   return toEquipmentDTO(created);
 }
 
@@ -225,12 +259,14 @@ export async function deleteMilitaryEquipment(id: string): Promise<void> {
 export async function linkUnitEquipment(
   unitId: string,
   equipmentId: string,
-  provenance: ProvenanceInput,
+  provenance: ProvenanceInput & { confidence?: number | null; observedAt?: Date | null },
 ): Promise<MilitaryUnitEquipmentLinkDTO> {
+  const observedAt = provenance.observedAt ?? new Date();
   const row = await prisma.militaryUnitEquipment.upsert({
     where: { unitId_equipmentId: { unitId, equipmentId } },
-    update: {},
-    create: { unitId, equipmentId, sourceName: provenance.sourceName ?? null, sourceUrl: provenance.sourceUrl ?? null },
+    // Re-sourcing refreshes "last sourced" (and fills missing provenance); it never blanks what is known.
+    update: { observedAt, sourceName: provenance.sourceName ?? undefined, sourceUrl: provenance.sourceUrl ?? undefined, confidence: provenance.confidence ?? undefined },
+    create: { unitId, equipmentId, sourceName: provenance.sourceName ?? null, sourceUrl: provenance.sourceUrl ?? null, observedAt, confidence: provenance.confidence ?? null },
   });
   return {
     id: row.id,
@@ -307,28 +343,14 @@ export interface CommanderInput extends ProvenanceInput {
  * is a denormalized "latest" pointer.
  */
 export async function findOrCreateCommander(input: CommanderInput): Promise<CommanderDTO> {
-  const existing = await prisma.commander.findFirst({
-    where: { name: { equals: input.name } },
-    include: { currentUnit: { select: { name: true } } },
-  });
+  const byAlias = await resolveEntity("commander", input.name);
+  const existing =
+    (byAlias.status === "resolved" ? await prisma.commander.findUnique({ where: { id: byAlias.id }, include: { currentUnit: { select: { name: true } } } }) : null) ??
+    (await prisma.commander.findFirst({ where: { name: { equals: input.name } }, include: { currentUnit: { select: { name: true } } } }));
   if (existing) {
     const unitChanged = input.currentUnitId && input.currentUnitId !== existing.currentUnitId;
-    if (unitChanged) {
-      await prisma.commanderAppointment.updateMany({
-        where: { commanderId: existing.id, endDate: null },
-        data: { endDate: new Date() },
-      });
-      await prisma.commanderAppointment.create({
-        data: {
-          commanderId: existing.id,
-          unitId: input.currentUnitId!,
-          role: "commander",
-          startDate: new Date(),
-          sourceName: input.sourceName ?? null,
-          sourceUrl: input.sourceUrl ?? null,
-        },
-      });
-    }
+    // Appointment history is kept: the previous appointment is closed, a new one opened (knowledge.ts).
+    if (unitChanged) await appointCommander(existing.id, input.currentUnitId!, { sourceName: input.sourceName, sourceUrl: input.sourceUrl });
     if (!input.sourceUrl && !unitChanged) return toCommanderDTO(existing);
     const updated = await prisma.commander.update({
       where: { id: existing.id },
@@ -353,25 +375,18 @@ export async function findOrCreateCommander(input: CommanderInput): Promise<Comm
     },
     include: { currentUnit: { select: { name: true } } },
   });
-  if (input.currentUnitId) {
-    await prisma.commanderAppointment.create({
-      data: {
-        commanderId: created.id,
-        unitId: input.currentUnitId,
-        role: "commander",
-        startDate: new Date(),
-        sourceName: input.sourceName ?? null,
-        sourceUrl: input.sourceUrl ?? null,
-      },
-    });
-  }
+  await ensureCanonicalAlias("commander", created.id, created.name);
+  if (input.currentUnitId) await appointCommander(created.id, input.currentUnitId, { sourceName: input.sourceName, sourceUrl: input.sourceUrl });
   return toCommanderDTO(created);
 }
 
 export async function updateCommander(id: string, input: Partial<CommanderInput>): Promise<CommanderDTO> {
+  const { currentUnitId, ...rest } = input;
+  // A change of unit is an appointment (history kept), not an overwrite.
+  if (currentUnitId) await appointCommander(id, currentUnitId, { sourceName: input.sourceName, sourceUrl: input.sourceUrl });
   const row = await prisma.commander.update({
     where: { id },
-    data: { ...input, lastUpdatedAt: new Date() },
+    data: { ...rest, ...(currentUnitId === null ? { currentUnitId: null } : {}), lastUpdatedAt: new Date() },
     include: { currentUnit: { select: { name: true } } },
   });
   return toCommanderDTO(row);
@@ -404,27 +419,33 @@ export async function listCommanderAppointments(commanderId: string): Promise<Co
 /** article/report -> referenced unit/equipment/commander (spec) —
  * idempotent upserts, one per entity kind, mirroring the unique
  * constraints in prisma/schema.prisma. */
-export async function linkArticleToUnit(rawIngestionItemId: string, unitId: string): Promise<void> {
+export interface LinkMeta {
+  matchedText?: string | null;
+  method?: string | null;
+  confidence?: number | null;
+}
+
+export async function linkArticleToUnit(rawIngestionItemId: string, unitId: string, meta: LinkMeta = {}): Promise<void> {
   await prisma.articleMilitaryUnitLink.upsert({
     where: { rawIngestionItemId_unitId: { rawIngestionItemId, unitId } },
     update: {},
-    create: { rawIngestionItemId, unitId },
+    create: { rawIngestionItemId, unitId, matchedText: meta.matchedText ?? null, method: meta.method ?? null, confidence: meta.confidence ?? null },
   });
 }
 
-export async function linkArticleToEquipment(rawIngestionItemId: string, equipmentId: string): Promise<void> {
+export async function linkArticleToEquipment(rawIngestionItemId: string, equipmentId: string, meta: LinkMeta = {}): Promise<void> {
   await prisma.articleMilitaryEquipmentLink.upsert({
     where: { rawIngestionItemId_equipmentId: { rawIngestionItemId, equipmentId } },
     update: {},
-    create: { rawIngestionItemId, equipmentId },
+    create: { rawIngestionItemId, equipmentId, matchedText: meta.matchedText ?? null, method: meta.method ?? null, confidence: meta.confidence ?? null },
   });
 }
 
-export async function linkArticleToCommander(rawIngestionItemId: string, commanderId: string): Promise<void> {
+export async function linkArticleToCommander(rawIngestionItemId: string, commanderId: string, meta: LinkMeta = {}): Promise<void> {
   await prisma.articleMilitaryCommanderLink.upsert({
     where: { rawIngestionItemId_commanderId: { rawIngestionItemId, commanderId } },
     update: {},
-    create: { rawIngestionItemId, commanderId },
+    create: { rawIngestionItemId, commanderId, matchedText: meta.matchedText ?? null, method: meta.method ?? null, confidence: meta.confidence ?? null },
   });
 }
 

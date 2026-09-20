@@ -17,7 +17,7 @@ import {
 } from "@/lib/db/repositories/sources";
 import { recordIngestionAttempt } from "@/lib/db/repositories/ingestion-logs";
 import { HttpFetchError } from "@/lib/ingestion/errors";
-import { extractUnitMentions, extractCommanderMentions, extractEquipmentMentions } from "@/lib/military/extract-entities";
+import { linkEntitiesFromReport } from "@/lib/military/link-entities";
 import {
   findOrCreateMilitaryUnit,
   findOrCreateMilitaryEquipment,
@@ -137,24 +137,11 @@ async function computeAndStoreFacts(item: RawIngestionItemDTO): Promise<void> {
  * gated to any particular source — any article's text can mention a known
  * unit/commander/equipment, not just MilitaryLand's — same
  * never-block-ingestion error handling as the other extraction steps. */
-async function computeAndStoreMilitaryEntities(item: RawIngestionItemDTO): Promise<void> {
+async function computeAndStoreMilitaryEntities(item: RawIngestionItemDTO, source: Source): Promise<void> {
   try {
-    const text = [item.originalTitle, item.originalText].filter(Boolean).join("\n");
-    if (!text) return;
-    const provenance = { sourceName: item.originalTitle ?? undefined, sourceUrl: item.originalUrl ?? undefined };
-
-    for (const mention of extractUnitMentions(text)) {
-      const unit = await findOrCreateMilitaryUnit({ name: mention.name, unitType: mention.unitType, ...provenance });
-      await linkArticleToUnit(item.id, unit.id);
-    }
-    for (const mention of extractEquipmentMentions(text)) {
-      const equipment = await findOrCreateMilitaryEquipment({ name: mention.name, category: mention.category, ...provenance });
-      await linkArticleToEquipment(item.id, equipment.id);
-    }
-    for (const mention of extractCommanderMentions(text)) {
-      const commander = await findOrCreateCommander({ name: mention.name, rank: mention.rank, ...provenance });
-      await linkArticleToCommander(item.id, commander.id);
-    }
+    // Resolution goes through the alias tables (lib/military/link-entities.ts); each link keeps the
+    // matched text, method and confidence, and an ambiguous mention is queued for review, not linked.
+    await linkEntitiesFromReport(item, { country: source.country, sourceName: source.name });
   } catch (err) {
     console.error(`[ingestion] military entity extraction failed for item ${item.id}:`, err);
   }
@@ -252,7 +239,7 @@ export async function pollSource(source: Source): Promise<FetchResult> {
       for (const item of createdItems) {
         await computeAndStoreSnapshot(item, source);
         await computeAndStoreFacts(item);
-        await computeAndStoreMilitaryEntities(item);
+        await computeAndStoreMilitaryEntities(item, source);
         await computeAndStoreTerritorialChangeCandidates(item, source);
       }
     }

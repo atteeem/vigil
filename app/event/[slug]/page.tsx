@@ -19,7 +19,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ sl
   const { slug } = await params;
   const detail = await getPublicEventDetail(slug);
   if (!detail) notFound();
-  const { event, conflict, actors, related, territorialChanges, conflictingClaims } = detail;
+  const { event, conflict, actors, commanders, equipment, related, territorialChanges, conflictingClaims } = detail;
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-28 pt-24 sm:px-6 sm:pt-32">
@@ -28,6 +28,8 @@ export default async function EventDetailPage({ params }: { params: Promise<{ sl
           event={event}
           conflict={conflict ? { slug: conflict.slug, shortName: conflict.shortName } : null}
           actors={actors}
+          commanders={commanders}
+          equipment={equipment}
           territorialChanges={territorialChanges}
           conflictingClaims={conflictingClaims}
           linkToFullPage={false}

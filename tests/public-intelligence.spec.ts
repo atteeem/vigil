@@ -321,11 +321,11 @@ test.describe("Homepage and For You use the ranked real data", () => {
     const { prisma } = await import("@/lib/db/client");
     const tag = unique().replace(/-/g, "");
     const unit = await prisma.militaryUnit.create({ data: { name: `PI Unit ${tag}` } });
-    await prisma.commander.create({ data: { name: `PI Commander ${tag}`, rank: "Colonel", currentUnitId: unit.id } });
+    const commander = await prisma.commander.create({ data: { name: `PI Commander ${tag}`, rank: "Colonel", currentUnitId: unit.id } });
     const hits = (await request.get(`/api/public/search?q=${encodeURIComponent(`Commander ${tag}`)}`).then((r) => r.json())) as { type: string; title: string; href: string; subtitle: string }[];
     const hit = hits.find((h) => h.type === "commander")!;
     expect(hit.title).toBe(`Colonel PI Commander ${tag}`);
-    expect(hit.href).toBe(`/actor/${unit.id}`);
+    expect(hit.href).toBe(`/commander/${commander.id}`); // commanders have their own page
     expect(hit.subtitle).toContain(`PI Unit ${tag}`);
   });
 

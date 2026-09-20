@@ -5,6 +5,7 @@ import { WITH_SOURCES } from "@/lib/db/repositories/events";
 import { getPublicConflictBySlug } from "./conflicts";
 import { resolveActorLinks, type ActorLink } from "./actors";
 import { listConflictingClaims, type ConflictingClaims } from "./claims";
+import { entityHref } from "./entities";
 import { parseJsonArray } from "@/lib/ingestion/event-update-proposals";
 
 // Bounded, published-only event reads for every public surface. Never returns
@@ -58,6 +59,10 @@ export interface PublicEventDetail {
   event: ConflictEvent;
   conflict: Conflict | null;
   actors: ActorLink[];
+  /** Commanders named in the event's sourced reports. */
+  commanders: ActorLink[];
+  /** Equipment named in the event's sourced reports (observed in THIS event — not "known operator"). */
+  equipment: ActorLink[];
   related: ConflictEvent[];
   /** Places tied to this event where two sides both claim control. */
   conflictingClaims: ConflictingClaims[];
@@ -79,7 +84,7 @@ export interface PublicEventDetail {
 export async function getPublicEventDetail(slug: string): Promise<PublicEventDetail | null> {
   const row = await prisma.event.findFirst({
     where: { slug, published: true },
-    include: { ...WITH_SOURCES, history: { orderBy: { createdAt: "desc" }, take: 5 }, conflict: { select: { slug: true } }, militaryUnitLinks: { include: { unit: { select: { name: true } } } } },
+    include: { ...WITH_SOURCES, history: { orderBy: { createdAt: "desc" }, take: 5 }, conflict: { select: { slug: true } }, militaryUnitLinks: { include: { unit: { select: { name: true } } } }, commanderLinks: { include: { commander: { select: { id: true, name: true } } } }, equipmentLinks: { include: { equipment: { select: { id: true, name: true } } } } },
   });
   if (!row) return null;
   const event = dbEventToConflictEvent(row);
@@ -100,6 +105,8 @@ export async function getPublicEventDetail(slug: string): Promise<PublicEventDet
     event,
     conflict,
     actors: await resolveActorLinks(names),
+    commanders: row.commanderLinks.map((l) => ({ name: l.commander.name, href: entityHref("commander", l.commander.id) })),
+    equipment: row.equipmentLinks.map((l) => ({ name: l.equipment.name, href: entityHref("equipment", l.equipment.id) })),
     related: relatedRows.map((e) => dbEventToConflictEvent(e)),
     conflictingClaims,
     territorialChanges: changes.map((c) => ({
