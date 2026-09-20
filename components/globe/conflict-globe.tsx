@@ -10,7 +10,6 @@ import { getLandFeatures } from "@/lib/globe/land-geo";
 import { reportCountOf } from "@/lib/map/report-counts";
 import { useHeatField } from "@/hooks/use-heat-field";
 import { HeatLegend } from "@/components/heat/heat-legend";
-import { MOCK_NOW } from "@/lib/data/constants";
 import { clusterEvents, clusterRadiusForAltitude, formatClusterCount, type EventCluster } from "@/lib/globe/event-clusters";
 import { ENERGY_ARCS, TRADE_ARCS, type GlobeArc } from "@/lib/globe/arcs";
 import type { MapLayer, GlobeViewMode, GlobeLayerVisibility, ContentSensitivity } from "@/hooks/use-app-store";
@@ -160,7 +159,11 @@ export function ConflictGlobe({
   // (hooks/use-heat-field), rasterized equirectangularly and wrapped on a
   // sphere just above the land fill (0.006) and below the borders (0.0065):
   // one texture on one sphere, so there are no cells or seams to see.
-  const heatField = useHeatField({ enabled: globeLayers.heat !== false, conflicts, events, nowIso: MOCK_NOW, live: true });
+  // Only conflicts with a real location can be pinned; ended conflicts are not shown.
+  const heatConflicts = useMemo(() => conflicts.filter((c) => c.locationKnown !== false && c.status !== "ended" && c.status !== "resolved"), [conflicts]);
+  // Reference time = the real clock at the moment this data arrived (never a fixed date).
+  const heatNowIso = useMemo(() => new Date().toISOString(), [events]); // eslint-disable-line react-hooks/exhaustive-deps
+  const heatField = useHeatField({ enabled: globeLayers.heat !== false, conflicts: heatConflicts, events, nowIso: heatNowIso, live: true });
   useEffect(() => {
     if (!ready || !globeRef.current || !heatField) return;
     let cancelled = false;
@@ -310,8 +313,8 @@ export function ConflictGlobe({
   const isSatellite = viewMode === "satellite";
 
   const conflictHotspots = useMemo(
-    () => (globeLayers.conflicts ? conflicts : []),
-    [conflicts, globeLayers.conflicts],
+    () => (globeLayers.conflicts ? heatConflicts : []),
+    [heatConflicts, globeLayers.conflicts],
   );
   const eventPoints = useMemo(() => {
     if (!globeLayers.events) return [];

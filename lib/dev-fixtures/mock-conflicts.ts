@@ -1,4 +1,5 @@
 import type { Conflict } from "@/lib/types";
+import { MOCK_NOW } from "./constants";
 import { severityFromScore } from "@/lib/utils/severity";
 import { registryEntryByMockSlug } from "@/lib/registry/conflict-registry";
 
@@ -12,7 +13,10 @@ import { registryEntryByMockSlug } from "@/lib/registry/conflict-registry";
  * contradict its intensity number — see TASKS.md decision log ("severity
  * vs intensity consistency").
  */
-type ConflictInput = Omit<Conflict, "severity" | "fightingCountryCodes" | "participantCountryCodes" | "supporterCountryCodes">;
+type ConflictInput = Omit<
+  Conflict,
+  "severity" | "fightingCountryCodes" | "participantCountryCodes" | "supporterCountryCodes" | "locationKnown" | "lastEventAt" | "updatedAt" | "fullScaleWar" | "classificationConfidence" | "familySlug" | "startedAt"
+> & { startedAt: string; lastUpdateMinutesAgo: number };
 
 const MOCK_CONFLICTS_INPUT: ConflictInput[] = [
   {
@@ -290,8 +294,15 @@ const MOCK_CONFLICTS_INPUT: ConflictInput[] = [
 export const MOCK_CONFLICTS: Conflict[] = MOCK_CONFLICTS_INPUT.map((c) => {
   const registry = registryEntryByMockSlug(c.slug);
   const participants = registry?.participantCountries ?? c.countryCodesInvolved;
+  const { lastUpdateMinutesAgo, ...rest } = c;
   return {
-    ...c,
+    ...rest,
+    locationKnown: true,
+    lastEventAt: new Date(new Date(MOCK_NOW).getTime() - lastUpdateMinutesAgo * 60_000).toISOString(),
+    updatedAt: MOCK_NOW,
+    fullScaleWar: registry?.fullScaleWar ?? false,
+    classificationConfidence: "established",
+    familySlug: null,
     severity: severityFromScore(c.intensity),
     status: registry?.statusAudit && registry.status ? registry.status : c.status,
     countryCodesInvolved: participants,

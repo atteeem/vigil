@@ -1,4 +1,4 @@
-import { independentSourceCount } from "@/lib/data/independence";
+import { independentSourceCount, normalizeSourceUrl } from "@/lib/data/independence";
 import type { ConflictEvent, SourceRef } from "@/lib/types";
 import type { EventType, Severity } from "@/lib/types";
 import type { DbVerificationStatus, EventAdminDTO } from "@/lib/types/db";
@@ -42,11 +42,19 @@ export function dbEventToConflictEvent(event: EventWithSources & { history?: Eve
       SOURCE_TYPE_LABEL[link.rawIngestionItem.source.type] ??
       "OSINT",
     sourceRole: link.rawIngestionItem.source.sourceRole,
-    url: link.rawIngestionItem.originalUrl ?? "",
+    url: link.rawIngestionItem.originalUrl && link.rawIngestionItem.originalUrl.trim() ? link.rawIngestionItem.originalUrl : null,
     publishedAt: (link.rawIngestionItem.publishedAt ?? link.rawIngestionItem.receivedAt).toISOString(),
     attachedAt: link.createdAt.toISOString(),
     note: link.relationship === "relay" ? "Relay — not an independent confirmation of the originating source." : undefined,
   }));
+  // The same article listed twice is one piece of evidence: flag the repeat.
+  const seenUrls = new Set<string>();
+  for (const source of sources) {
+    const key = normalizeSourceUrl(source.url);
+    if (!key) continue;
+    if (seenUrls.has(key)) source.note = source.note ?? "Same article as a report already listed — not independent evidence.";
+    seenUrls.add(key);
+  }
 
   return {
     id: event.id,

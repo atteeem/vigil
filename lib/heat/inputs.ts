@@ -1,5 +1,5 @@
 import type { Conflict, ConflictEvent } from "@/lib/types";
-import { computeSeverityScore } from "@/lib/scoring/severity";
+import { computeSeverityScore, effectiveSeverityLabel } from "@/lib/scoring/severity";
 import { computeConfidenceScore } from "@/lib/scoring/confidence";
 import { distanceKm } from "@/lib/utils/geo";
 import { maxSeverity } from "@/lib/utils/severity";
@@ -78,7 +78,7 @@ export function buildHeatInput({ conflicts = [], events: allEvents, nowIso, live
     const anchors = [{ lat: c.lat, lng: c.lng }, ...own.map((e) => ({ lat: e.lat, lng: e.lng }))];
     const spreadKm = anchors.reduce((max, a) => Math.max(max, distanceKm(anchors[0]!, a)), 0);
     const severity = computeSeverityScore({
-      severityLabel: c.severity,
+      severityLabel: effectiveSeverityLabel(c.severity, c.fullScaleWar, c.status),
       status: c.status,
       intensity: c.intensity,
       spreadKm,

@@ -1,30 +1,21 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getConflictBySlug, MOCK_CONFLICTS } from "@/lib/data/mock-conflicts";
+import { getPublicConflictDetail } from "@/lib/public/conflict-detail";
 import { ConflictDetailClient } from "@/components/conflicts/conflict-detail-client";
 
-export function generateStaticParams() {
-  return MOCK_CONFLICTS.map((c) => ({ slug: c.slug }));
+// Real conflict intelligence page: registry geography, scores, DB events,
+// actors, territorial control, sources and coverage. Rendered on demand.
+export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const detail = await getPublicConflictDetail(slug);
+  return { title: detail ? `${detail.conflict.name} — Vigil` : "Conflict — Vigil" };
 }
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}): Promise<Metadata> {
+export default async function ConflictDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const conflict = getConflictBySlug(slug);
-  return { title: conflict ? `${conflict.name} — Vigil` : "Conflict — Vigil" };
-}
-
-export default async function ConflictDetailPage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
-  const { slug } = await params;
-  const conflict = getConflictBySlug(slug);
-  if (!conflict) notFound();
-
-  return <ConflictDetailClient conflict={conflict} />;
+  const detail = await getPublicConflictDetail(slug);
+  if (!detail) notFound();
+  return <ConflictDetailClient detail={detail} />;
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { MOCK_COUNTRIES } from "@/lib/data/mock-countries";
+import { COUNTRIES } from "@/lib/reference/countries";
 import { useAppStore } from "@/hooks/use-app-store";
 import { cn } from "@/lib/utils";
 
@@ -10,7 +10,7 @@ export function CountrySelector({ className }: { className?: string }) {
   const baseCountryCode = useAppStore((s) => s.baseCountryCode);
   const setBaseCountryCode = useAppStore((s) => s.setBaseCountryCode);
   const [open, setOpen] = useState(false);
-  const current = MOCK_COUNTRIES.find((c) => c.code === baseCountryCode);
+  const current = COUNTRIES.find((c) => c.code === baseCountryCode);
 
   return (
     <div className={cn("relative", className)}>
@@ -29,7 +29,7 @@ export function CountrySelector({ className }: { className?: string }) {
           role="listbox"
           className="glass-card absolute left-0 top-9 z-30 max-h-64 w-56 overflow-y-auto rounded-xl border border-border p-1"
         >
-          {MOCK_COUNTRIES.map((c) => (
+          {COUNTRIES.map((c) => (
             <li key={c.code}>
               <button
                 role="option"

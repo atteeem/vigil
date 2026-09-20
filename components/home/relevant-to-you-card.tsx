@@ -5,21 +5,25 @@ import { ArrowRight } from "lucide-react";
 import { GlassCard } from "@/components/ui/card";
 import { CountrySelector } from "./country-selector";
 import { getCountryByCode, getTopConflictsForCountry } from "@/lib/data";
+import type { Conflict } from "@/lib/types";
+import { EmptyState } from "@/components/public/data-states";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export function RelevantToYouCard({
   baseCountryCode,
+  conflicts,
   onSelectConflict,
   className,
 }: {
   baseCountryCode: string;
+  conflicts: readonly Conflict[];
   onSelectConflict?: (slug: string) => void;
   className?: string;
 }) {
   const country = getCountryByCode(baseCountryCode);
   if (!country) return null;
-  const top = getTopConflictsForCountry(country, 3);
+  const top = getTopConflictsForCountry(country, conflicts, 3);
 
   return (
     <GlassCard className={cn("w-full max-w-[300px] p-5", className)} data-testid="relevant-to-you-card">
@@ -30,6 +34,7 @@ export function RelevantToYouCard({
       </div>
       <CountrySelector className="mt-2" />
 
+      {top.length === 0 && <EmptyState className="mt-3" title="No conflicts to rank" detail="Nothing tracked affects this country yet." testId="relevant-empty" />}
       <ol className="mt-3 space-y-2.5">
         {top.map(({ conflict, impact }, i) => (
           <li key={conflict.id}>

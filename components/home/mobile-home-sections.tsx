@@ -7,14 +7,11 @@ import { SEVERITY_TEXT_CLASS, severityFromScore } from "@/lib/utils/severity";
 import { exposureLabel } from "@/lib/utils/exposure";
 import { formatSigned, cn } from "@/lib/utils";
 import { getCountryByCode, getTopConflictsForCountry, DIMENSION_LABEL } from "@/lib/data";
+import type { Conflict } from "@/lib/types";
 
-export function MobileStatusStrip({
-  score,
-  change24h,
-}: {
-  score: number;
-  change24h: number;
-}) {
+export function MobileStatusStrip({ status }: { status: { score: number; change24h: number } | null }) {
+  if (!status) return null;
+  const { score, change24h } = status;
   const severity = severityFromScore(score);
   return (
     <div className="flex items-center gap-4 px-4">
@@ -36,14 +33,16 @@ export function MobileStatusStrip({
 
 export function MobileTopExposureCard({
   baseCountryCode,
+  conflicts,
   onSeeWhy,
 }: {
   baseCountryCode: string;
+  conflicts: readonly Conflict[];
   onSeeWhy: (slug: string) => void;
 }) {
   const country = getCountryByCode(baseCountryCode);
   if (!country) return null;
-  const [top] = getTopConflictsForCountry(country, 1);
+  const [top] = getTopConflictsForCountry(country, conflicts, 1);
   if (!top) return null;
   const { conflict, impact } = top;
 

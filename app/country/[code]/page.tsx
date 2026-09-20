@@ -1,19 +1,19 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getCountryByCode, MOCK_COUNTRIES } from "@/lib/data/mock-countries";
+import { getCountryByCode } from "@/lib/reference/countries";
 import { computeCountryExposure, getTopConflictsForCountry } from "@/lib/data/impact";
-import { getRecentEvents } from "@/lib/data/mock-events";
-import { MOCK_EVENTS } from "@/lib/data/mock-events";
+import { listPublicConflicts } from "@/lib/public/conflicts";
+import { listPublicEvents } from "@/lib/public/events";
+import { EmptyState } from "@/components/public/data-states";
 import { ExposureCategoryCard } from "@/components/impact/exposure-category-card";
 import { EventCard } from "@/components/events/event-card";
 import { SetBaseCountryButton } from "@/components/home/set-base-country-button";
 import { SEVERITY_LABEL, SEVERITY_TEXT_CLASS, severityFromScore } from "@/lib/utils/severity";
 import { formatSigned, cn } from "@/lib/utils";
 
-export function generateStaticParams() {
-  return MOCK_COUNTRIES.map((c) => ({ code: c.code }));
-}
+// Real conflicts and events, read on demand.
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
@@ -34,11 +34,11 @@ export default async function CountryPage({
   const country = getCountryByCode(code.toUpperCase());
   if (!country) notFound();
 
-  const exposure = computeCountryExposure(country);
+  const conflicts = await listPublicConflicts();
+  const exposure = computeCountryExposure(country, conflicts);
   const severity = severityFromScore(exposure.score);
-  const topConflicts = getTopConflictsForCountry(country, 5);
-  const countryEvents = MOCK_EVENTS.filter((e) => e.countryCode === country.code).slice(0, 6);
-  const recentGlobal = countryEvents.length > 0 ? countryEvents : getRecentEvents(4);
+  const topConflicts = getTopConflictsForCountry(country, conflicts, 5);
+  const countryEvents = (await listPublicEvents({ countryCode: country.code, limit: 6, sinceDays: 365 })).events;
 
   return (
     <main className="mx-auto max-w-[1000px] px-4 pb-28 pt-24 sm:px-6 sm:pt-32">
@@ -85,6 +85,7 @@ export default async function CountryPage({
       <h2 className="mb-3 mt-10 text-sm font-semibold uppercase tracking-wide text-ink-faint">
         Relevant Conflicts
       </h2>
+      {topConflicts.length === 0 && <EmptyState title="No tracked conflicts affect this country" testId="country-conflicts-empty" />}
       <div className="space-y-2">
         {topConflicts.map(({ conflict, impact }) => (
           <Link
@@ -98,14 +99,16 @@ export default async function CountryPage({
         ))}
       </div>
 
-      <h2 className="mb-3 mt-10 text-sm font-semibold uppercase tracking-wide text-ink-faint">
-        {countryEvents.length > 0 ? "Latest Events Involving This Country" : "Latest Global Activity"}
-      </h2>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {recentGlobal.map((e) => (
-          <EventCard key={e.id} event={e} compact />
-        ))}
-      </div>
+      <h2 className="mb-3 mt-10 text-sm font-semibold uppercase tracking-wide text-ink-faint">Latest Events In This Country</h2>
+      {countryEvents.length === 0 ? (
+        <EmptyState title="No published events for this country" detail="Nothing has been reported and published here in the last year." testId="country-events-empty" />
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {countryEvents.map((e) => (
+            <EventCard key={e.id} event={e} compact />
+          ))}
+        </div>
+      )}
     </main>
   );
 }

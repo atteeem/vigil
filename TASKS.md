@@ -1066,3 +1066,24 @@ Deferred / notes:
 - Territorial-control polygons do not yet feed the field (the conflict's footprint is its fighting countries near its anchors). Deriving footprint from published control polygons is a natural follow-up.
 - First enable costs ~100 ms of field compute plus ~1 s to encode the map image on the main thread; a worker would remove it if it ever matters (not needed yet).
 - The basemap's own graticule lines (pre-existing) still show through on the flat map.
+
+## Public Data Unification & Real Conflict Intelligence Pages
+
+Goal: the public Vigil experience reads the same database, scoring, registry, sources, territorial control and timeline systems as admin — no mock data in production paths.
+
+- [x] Build check first: production build against `4269b21` passed (no heatmap regressions).
+- [x] One public data layer (`lib/public/*`): `conflicts.ts` (DB row -> UI `Conflict`, single severity derivation, real event counts + latest event in one grouped query), `events.ts` (bounded, published-only reads with a cursor; event detail with actors, related events and approved territorial changes), `overview.ts` (bounded homepage/globe/For You/heat payload + freshness), `conflict-detail.ts` (registry geography, scoring engine, coverage, territory, actors, history), `territory.ts`, `actors.ts`, `search.ts`. Client: `hooks/use-public-overview.ts` (one shared fetch/poll), `/api/public/overview`, `/api/public/search`, bounded `/api/events` (`limit`, `before` cursor, 45-day window).
+- [x] Mock data removed from production: `lib/data/mock-*.ts`, `situation-brief` and the seeded PRNG moved to `lib/dev-fixtures/` (test-only; `tests/public-data.spec.ts` fails if any production file imports it, or contains example.com / localhost / seeded-random / MOCK_* references). Country reference data moved to `lib/reference/countries.ts`. Markets pages now say "unavailable" (no market feed). The RSS test-fixture route 404s unless `TEST_FIXTURES=true` (set only by the Playwright server). `MOCK_NOW` no longer drives any production timestamp: relative times use the real clock after mount (`RelativeTime`), server render shows absolute UTC.
+- [x] Homepage: real conflicts/events for cards, feed, globe pins and the heat field; global status is `null` (and says so) with no active conflicts; freshness line shows real last-event and last-source-fetch stamps with a stale flag; latest approved territorial changes widget; selected-country impact via the centralized engine.
+- [x] For You / conflicts list / country / intel / search read the same real data; impact and exposure functions now take the conflict list (no hidden global); an active registry full-scale war is scored "extreme" => 100 everywhere (`effectiveSeverityLabel`).
+- [x] Conflict page: overview (status, start date, full-scale-war flag, severity, classification confidence, freshness), geography (fighting vs participants vs supporters kept apart), scores with reasons, recent events, actors (linked), territorial control + latest changes, sources + coverage state (healthy/weak/stale/no-source), latest reports with original links, monthly history, on-demand map. Empty sections show empty states.
+- [x] Event page: event vs supporting reports, location precision, evidence summary (independent sources vs reports), actor links, territorial-change relationship, related events, update history. New `/actor/[ref]` page (aliases, conflicts, events, parent/child, equipment/commanders, provenance).
+- [x] Source-link integrity: audited feed -> raw item -> event source -> API -> rendered link. No fallback URL exists anywhere in the chain; the only gap was `""` being passed to the UI for a missing URL — now `null` => "Source unavailable" with no `<a>`. Duplicate article URLs (normalized: scheme/host case, `www.`, tracking params, trailing slash) count as one piece of evidence and are flagged. Tests prove RSS (`https://fixture.test/...`) and Telegram permalinks survive to the public event page with publication time and source name.
+- [x] Tests: `tests/public-data.spec.ts` plus updated `exposure`, `conflict-registry`, `heat-field`, `report-counts`, `globe-rendering` specs.
+
+Deferred / notes:
+- `/api/events?at=` (historical reconstruction) still loads every event created by T before trimming to the 45-day window; a windowed query in `reconstructWorldStateAt` is the follow-up.
+- `lib/registry/conflict-registry.ts` still carries a `mockSlug` field (used only by the dev fixtures).
+- `components/markets/*` are now unused; remove when a market feed is designed.
+- Conflict-level confidence (`scoreConflict`) still approximates evidence by event count; a per-source rollup would be better.
+- The territorial-control map itself is unchanged; the conflict page summarizes published areas and links to /world.

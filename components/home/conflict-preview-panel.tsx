@@ -8,18 +8,13 @@ import { SeverityBadge } from "@/components/ui/severity-badge";
 import { buttonVariants } from "@/components/ui/button";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { exposureLabel } from "@/lib/utils/exposure";
-import { timeAgo, cn } from "@/lib/utils";
-import { MOCK_NOW } from "@/lib/data/constants";
+import { cn } from "@/lib/utils";
+import { RelativeTime } from "@/components/ui/relative-time";
 import type { Conflict } from "@/lib/types";
 import { computeImpact, DIMENSION_LABEL } from "@/lib/data/impact";
-import { getCountryByCode } from "@/lib/data/mock-countries";
+import { getCountryByCode } from "@/lib/reference/countries";
 
 function PreviewContent({ conflict, impactScore }: { conflict: Conflict; impactScore: number }) {
-  const now = new Date(MOCK_NOW);
-  const updateIso = new Date(
-    now.getTime() - conflict.lastUpdateMinutesAgo * 60000,
-  ).toISOString();
-
   return (
     <div>
       <div className="flex items-center justify-between gap-3">
@@ -44,10 +39,10 @@ function PreviewContent({ conflict, impactScore }: { conflict: Conflict; impactS
         </div>
       </div>
 
-      <p className="mt-4 text-[13px] leading-relaxed text-ink-dim">{conflict.summary}</p>
+      {conflict.summary && <p className="mt-4 text-[13px] leading-relaxed text-ink-dim">{conflict.summary}</p>}
 
-      <p className="mt-3 text-xs text-ink-faint">
-        Latest update {timeAgo(updateIso, MOCK_NOW)}
+      <p className="mt-3 text-xs text-ink-faint" data-testid="preview-last-event">
+        {conflict.lastEventAt ? <RelativeTime iso={conflict.lastEventAt} prefix="Last event " /> : "No published events yet"}
       </p>
 
       <Link

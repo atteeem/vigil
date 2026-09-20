@@ -15,7 +15,14 @@ import {
   MobileTopExposureCard,
 } from "@/components/home/mobile-home-sections";
 import { useAppStore } from "@/hooks/use-app-store";
-import { MOCK_CONFLICTS, getGlobalStatus, MOCK_EVENTS } from "@/lib/data";
+import { getGlobalStatus } from "@/lib/data";
+import { usePublicOverview, useRefreshOnFocus } from "@/hooks/use-public-overview";
+import { LatestTerritorialChanges } from "@/components/home/latest-territorial-changes";
+import { FreshnessStamp } from "@/components/public/data-states";
+import { STALE_SOURCE_HOURS } from "@/lib/public/stale";
+
+const EMPTY_CONFLICTS: never[] = [];
+const EMPTY_EVENTS: never[] = [];
 
 export default function HomePage() {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
@@ -24,17 +31,25 @@ export default function HomePage() {
   const viewMode = useAppStore((s) => s.globeViewMode);
   const globeLayers = useAppStore((s) => s.globeLayers);
   const contentSensitivity = useAppStore((s) => s.contentSensitivity);
-  const { score, change24h } = getGlobalStatus();
+  // Real, DB-backed data — the same conflicts and events /world uses.
+  useRefreshOnFocus();
+  const overview = usePublicOverview();
+  const conflicts = overview.data?.conflicts ?? EMPTY_CONFLICTS;
+  const events = overview.data?.events ?? EMPTY_EVENTS;
+  const freshness = overview.data?.freshness ?? null;
+  const loading = overview.status === "loading";
+  const status = getGlobalStatus(conflicts);
+  const activeCount = conflicts.filter((c) => c.status === "active" || c.status === "reduced").length;
 
-  const selectedConflict = MOCK_CONFLICTS.find((c) => c.slug === selectedSlug) ?? null;
+  const selectedConflict = conflicts.find((c) => c.slug === selectedSlug) ?? null;
 
   return (
     <main className="min-h-screen bg-bg">
       <section className="relative h-[62vh] w-full overflow-hidden sm:h-[86vh]">
         <ConflictGlobe
           className="absolute inset-0 h-full w-full"
-          conflicts={MOCK_CONFLICTS}
-          events={MOCK_EVENTS}
+          conflicts={conflicts}
+          events={events}
           selectedSlug={selectedSlug}
           onSelectConflict={(c) => setSelectedSlug(c.slug)}
           layer={layer}
@@ -51,19 +66,28 @@ export default function HomePage() {
         {/* Desktop overlay chrome */}
         <div className="pointer-events-none absolute inset-0 hidden sm:block">
           <div className="pointer-events-auto absolute left-6 top-24">
-            <GlobalStatusCard score={score} change24h={change24h} />
+            <GlobalStatusCard status={status} conflicts={conflicts} loading={loading} />
           </div>
           <div className="pointer-events-auto absolute right-6 top-24 flex flex-col items-end gap-2">
             <GlobeControls />
             <RelevantToYouCard
               baseCountryCode={baseCountryCode}
+              conflicts={conflicts}
               onSelectConflict={setSelectedSlug}
             />
           </div>
-          <div className="pointer-events-none absolute inset-x-0 top-24 flex justify-center">
+          <div className="pointer-events-none absolute inset-x-0 top-24 flex flex-col items-center gap-0.5" data-testid="home-data-summary">
             <p className="text-[11px] font-medium text-ink-faint">
-              {MOCK_EVENTS.length} tracked events · {MOCK_CONFLICTS.filter((c) => c.status === "active" || c.status === "reduced").length} active conflicts
+              {loading ? "Loading data…" : `${events.length} published events (last 30 days) · ${activeCount} active conflicts`}
             </p>
+            {!loading && (
+              <p className="text-[10px] text-ink-faint">
+                <FreshnessStamp label="Last event" iso={freshness?.lastEventAt} staleAfterHours={STALE_SOURCE_HOURS} className="text-[10px]" />
+                {" · "}
+                <FreshnessStamp label="Last source fetch" iso={freshness?.lastIngestionAt} staleAfterHours={STALE_SOURCE_HOURS} none="never" className="text-[10px]" />
+                {overview.status === "error" && <span className="ml-1.5 text-elevated" data-testid="home-data-error">· may be out of date</span>}
+              </p>
+            )}
           </div>
           <div
             className={
@@ -81,12 +105,13 @@ export default function HomePage() {
 
       {/* Mobile stacked sections, overlapping the globe fold slightly */}
       <div className="relative z-10 -mt-6 space-y-4 rounded-t-3xl bg-bg pb-24 pt-5 sm:hidden">
-        <MobileStatusStrip score={score} change24h={change24h} />
-        <MobileTopExposureCard baseCountryCode={baseCountryCode} onSeeWhy={setSelectedSlug} />
+        <MobileStatusStrip status={status} />
+        <MobileTopExposureCard baseCountryCode={baseCountryCode} conflicts={conflicts} onSeeWhy={setSelectedSlug} />
         <div className="px-4">
           <TimeLayerControls className="items-start" />
         </div>
-        <LatestEventsFeed className="px-4" limit={6} />
+        <LatestEventsFeed className="px-4" events={events} loading={loading} limit={6} />
+        <LatestTerritorialChanges className="px-4" changes={overview.data?.territorialChanges ?? []} />
         <Link href="/intel" className="mx-4 flex items-center gap-1.5 text-xs font-medium text-accent hover:underline">
           <Newspaper className="h-3.5 w-3.5" />
           Regional Intel Briefings
@@ -97,7 +122,8 @@ export default function HomePage() {
       {/* Desktop: latest activity below the fold */}
       <div className="mx-auto hidden max-w-[1600px] px-6 py-10 sm:block">
         <div className="max-w-2xl">
-          <LatestEventsFeed limit={8} />
+          <LatestEventsFeed events={events} loading={loading} limit={8} />
+          <LatestTerritorialChanges className="mt-6" changes={overview.data?.territorialChanges ?? []} />
           <Link
             href="/intel"
             className="mt-4 flex items-center gap-1.5 text-xs font-medium text-accent hover:underline"

@@ -1,7 +1,7 @@
 import type { ConflictEvent, EventType, Severity, SourceRef, VerificationStatus } from "@/lib/types";
 import { MOCK_CONFLICTS } from "./mock-conflicts";
 import { OUTLET_POOL } from "./mock-sources";
-import { seededRandom } from "@/lib/utils/seed";
+import { seededRandom } from "./seed";
 import { MOCK_NOW } from "./constants";
 import { SEVERITY_LEVELS } from "@/lib/utils/severity";
 

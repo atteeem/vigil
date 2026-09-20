@@ -9,7 +9,10 @@ export interface SourceRef {
    * (components/events/source-role-icon.tsx); a missing/unrecognized
    * value always falls back to a generic source icon, never a blank one. */
   sourceRole?: string | null;
-  url: string;
+  /** The stored original article / post URL (publisher page, or the Telegram/public-feed
+   * permalink). null when the report has none — the UI then says "Source unavailable"
+   * and renders no link; it never invents one. */
+  url: string | null;
   publishedAt: string; // ISO datetime — the report's own timestamp
   /** ISO datetime this source was actually ATTACHED to this event
    * (EventSource.createdAt) — distinct from `publishedAt` above, since a

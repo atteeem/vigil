@@ -1,5 +1,5 @@
 import type { MarketAsset } from "@/lib/types";
-import { seededRandom } from "@/lib/utils/seed";
+import { seededRandom } from "./seed";
 
 function sparkline(seedKey: string, base: number, points = 24, volatility = 0.015): number[] {
   const rand = seededRandom(seedKey);

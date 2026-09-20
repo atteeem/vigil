@@ -1,39 +1,48 @@
 import Link from "next/link";
-import { MOCK_CONFLICTS } from "@/lib/data/mock-conflicts";
-import { getEventsForConflict } from "@/lib/data/mock-events";
+import { listPublicConflicts } from "@/lib/public/conflicts";
+import { EmptyState } from "@/components/public/data-states";
 import { SeverityBadge } from "@/components/ui/severity-badge";
 import { REGIONS } from "@/lib/types";
 import { getGlobalStatus } from "@/lib/data/global-status";
 import { SEVERITY_LABEL, severityFromScore } from "@/lib/utils/severity";
 
-export default function IntelPage() {
-  const { score, change24h } = getGlobalStatus();
-  const severity = severityFromScore(score);
+// Real registry conflicts, read on demand.
+export const dynamic = "force-dynamic";
+
+export default async function IntelPage() {
+  const allConflicts = await listPublicConflicts();
+  const status = getGlobalStatus(allConflicts);
 
   return (
     <main className="mx-auto max-w-[1000px] px-4 pb-28 pt-24 sm:px-6 sm:pt-32">
       <h1 className="text-2xl font-semibold text-ink sm:text-[28px]">Global Brief</h1>
-      <p className="mt-1 text-sm text-ink-dim">
-        Global Status is {score}/100 ({SEVERITY_LABEL[severity]}),{" "}
-        {change24h >= 0 ? "up" : "down"} {Math.abs(change24h)} over the past 24 hours.
-      </p>
+      {status ? (
+        <p className="mt-1 text-sm text-ink-dim">
+          Global Status is {status.score}/100 ({SEVERITY_LABEL[severityFromScore(status.score)]})
+          {status.change24h !== 0 && (
+            <>
+              , {status.change24h > 0 ? "up" : "down"} {Math.abs(status.change24h)} over the past 24 hours
+            </>
+          )}
+          .
+        </p>
+      ) : (
+        <EmptyState className="mt-4" title="No active conflicts tracked" testId="intel-empty" />
+      )}
 
       <div className="mt-8 space-y-8">
         {REGIONS.map((region) => {
-          const conflicts = MOCK_CONFLICTS.filter((c) => c.region === region).sort(
+          const conflicts = allConflicts.filter((c) => c.region === region && (c.status === "active" || c.status === "reduced")).sort(
             (a, b) => b.intensity - a.intensity,
           );
           if (conflicts.length === 0) return null;
-          const events24h = conflicts.reduce(
-            (a, c) => a + getEventsForConflict(c.id).length,
-            0,
-          );
+          const publishedEvents = conflicts.reduce((a, c) => a + c.eventCount, 0);
 
           return (
             <section key={region} className="rounded-2xl border border-border bg-card/70 p-5">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-ink">{region}</h2>
-                <span className="text-xs text-ink-faint">{events24h} monitored events</span>
+                <span className="text-xs text-ink-faint">{publishedEvents} published events</span>
               </div>
 
               <p className="mt-2 text-sm leading-relaxed text-ink-dim">

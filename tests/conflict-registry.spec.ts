@@ -4,7 +4,8 @@ import { REGISTRY_CONFLICTS, REGISTRY_FAMILIES, familyMembers, registryEntry } f
 import { conflictGeographyOf, geographyIssues, geographyRole, parseCodes } from "@/lib/registry/geography";
 import { COVERAGE_THRESHOLDS, classifySource, computeCoverage, summarizeCoverage, type CoverageSource } from "@/lib/registry/coverage";
 import { normalizeConflictStatus } from "@/lib/registry/status";
-import { computeImpact, getCountryByCode, MOCK_CONFLICTS } from "@/lib/data";
+import { computeImpact, getCountryByCode } from "@/lib/data";
+import { MOCK_CONFLICTS } from "@/lib/dev-fixtures/mock-conflicts";
 
 // Global Conflict Registry: geography (fighting vs participants vs supporters),
 // families, central actor aliases and coverage health. Pure tests — no server.

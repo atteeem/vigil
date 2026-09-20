@@ -105,12 +105,12 @@ const unique = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 const LAT = -41.3;
 const LNG = -128.4;
 
-async function publishEventWithReports(request: APIRequestContext, title: string, lat: number, lng: number, reports: number) {
+async function publishEventWithReports(request: APIRequestContext, title: string, lat: number, lng: number, reports: number, conflictId?: string) {
   const source = await request
     .post("/api/admin/sources", { data: { name: `Report count source ${unique()}`, type: "manual", enabled: true, autoIngest: false } })
     .then((r) => r.json());
   const created = await request.post("/api/admin/events", {
-    data: { title, summary: "Report count fixture.", eventType: "artillery", latitude: lat, longitude: lng, occurredAt: new Date().toISOString(), severity: "elevated", published: true, sourceName: `Origin ${unique()}` },
+    data: { title, summary: "Report count fixture.", eventType: "artillery", latitude: lat, longitude: lng, occurredAt: new Date().toISOString(), severity: "elevated", published: true, sourceName: `Origin ${unique()}`, ...(conflictId ? { conflictId } : {}) },
   });
   expect(created.status()).toBe(201);
   const event = await created.json();
@@ -214,7 +214,9 @@ test.describe.serial("Report counts on the rendered map", () => {
 test.describe("Report counts on the 3D globe", () => {
   test.use({ isMobile: false });
 
-  test("Homepage globe markers show report totals (not event counts) and never claim more than 99+", async ({ page }) => {
+  test("Homepage globe markers show report totals (not event counts) and never claim more than 99+", async ({ page, request }) => {
+    // The homepage reads the real database: publish something to show.
+    await publishEventWithReports(request, `RC event G ${unique()}`, 50.4, 30.5, 3);
     await page.goto("/");
     await page.waitForTimeout(1500);
     await page.getByRole("button", { name: "Globe layers" }).first().click();
@@ -235,7 +237,11 @@ test.describe("Report counts on the 3D globe", () => {
 test.describe("Report counts on globe conflict hotspots", () => {
   test.use({ isMobile: false });
 
-  test("Every conflict hotspot dot on the default globe shows the summed report count of its events (99+ capped)", async ({ page }) => {
+  test("Every conflict hotspot dot on the default globe shows the summed report count of its events (99+ capped)", async ({ page, request }) => {
+    // A published event with 3 reports attached to a real registry conflict.
+    const conflicts = (await request.get("/api/admin/conflicts").then((r) => r.json())) as { id: string; slug: string }[];
+    const ukraine = conflicts.find((c) => c.slug === "russia-ukraine")!;
+    await publishEventWithReports(request, `RC event H ${unique()}`, 50.4, 30.5, 3, ukraine.id);
     await page.goto("/");
     const markers = page.getByTestId("globe-conflict-marker");
     await expect(markers.first()).toBeAttached({ timeout: 30_000 });

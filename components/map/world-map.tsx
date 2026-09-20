@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Map as MapLibreMap,
   NavigationControl,
@@ -23,7 +23,6 @@ import { aggregateReportBuckets, formatReportCount, REPORT_COUNT_CAP } from "@/l
 import { createEventIconImageData } from "@/lib/map/event-icons";
 import { createContestedPatternImageData } from "@/lib/map/territorial-pattern";
 import { SEVERITY_HEX } from "@/lib/utils/severity";
-import { MOCK_NOW } from "@/lib/data/constants";
 import type { TerritoryFeatureProperties } from "@/lib/types/territorial-control";
 
 // Simplified colored-dot markers ("medium zoom") give way to full
@@ -411,7 +410,7 @@ export function WorldMap({
   events,
   viewMode,
   conflicts,
-  nowIso = MOCK_NOW,
+  nowIso: nowIsoProp,
   live = true,
   basemapMode,
   onSelectEvent,
@@ -432,6 +431,9 @@ export function WorldMap({
   const apiKey = getMapTilerKey();
   const [missingKeyNotice, setMissingKeyNotice] = useState(false);
   const heatUrlRef = useRef<string | null>(null);
+  // Reference time for the heat surface: the caller's (timeline asOf) or the real clock when the data last changed.
+  const clockIso = useMemo(() => new Date().toISOString(), [events]); // eslint-disable-line react-hooks/exhaustive-deps
+  const nowIso = nowIsoProp ?? clockIso;
 
   // Continuous conflict-intensity surface (lib/heat): computed only while
   // Heatmap is the active mode, memoized on its inputs, rasterized to a

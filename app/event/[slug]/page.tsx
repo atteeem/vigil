@@ -2,49 +2,39 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { MapPin } from "lucide-react";
-import { getEventBySlug, MOCK_EVENTS } from "@/lib/data/mock-events";
-import { getDbEventBySlug } from "@/lib/data/world-events";
+import { getPublicEventDetail } from "@/lib/public/events";
 import { EventDetailPanel } from "@/components/events/event-detail-panel";
 import { EventCard } from "@/components/events/event-card";
 
-export function generateStaticParams() {
-  return MOCK_EVENTS.map((e) => ({ slug: e.slug }));
+// Real, database-backed event page (published events only). Rendered on demand.
+export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const detail = await getPublicEventDetail(slug);
+  return { title: detail ? `${detail.event.title} — Vigil` : "Event — Vigil" };
 }
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}): Promise<Metadata> {
+export default async function EventDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const event = getEventBySlug(slug) ?? (await getDbEventBySlug(slug));
-  return { title: event ? `${event.title} — Vigil` : "Event — Vigil" };
-}
-
-export default async function EventDetailPage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
-  const { slug } = await params;
-  // Mock events are the common case (checked first, no DB round-trip);
-  // published admin-review events (e.g. from RSS ingestion) fall back to
-  // the DB lookup — see lib/data/world-events.ts.
-  const event = getEventBySlug(slug) ?? (await getDbEventBySlug(slug));
-  if (!event) notFound();
-
-  const related = MOCK_EVENTS.filter(
-    (e) => e.id !== event.id && e.conflictId === event.conflictId,
-  ).slice(0, 4);
+  const detail = await getPublicEventDetail(slug);
+  if (!detail) notFound();
+  const { event, conflict, actors, related, territorialChanges } = detail;
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-28 pt-24 sm:px-6 sm:pt-32">
       <div className="rounded-2xl border border-border bg-card/70 p-6">
-        <EventDetailPanel event={event} linkToFullPage={false} />
+        <EventDetailPanel
+          event={event}
+          conflict={conflict ? { slug: conflict.slug, shortName: conflict.shortName } : null}
+          actors={actors}
+          territorialChanges={territorialChanges}
+          linkToFullPage={false}
+        />
       </div>
 
       {related.length > 0 && (
-        <div className="mt-8">
+        <div className="mt-8" data-testid="related-events">
           <h2 className="mb-3 flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-ink-faint">
             <MapPin className="h-3.5 w-3.5" /> Related Events
           </h2>

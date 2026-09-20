@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
-import { MOCK_CONFLICTS, MOCK_EVENTS } from "@/lib/data";
-import { MOCK_NOW } from "@/lib/data/constants";
+import { MOCK_CONFLICTS } from "@/lib/dev-fixtures/mock-conflicts";
+import { MOCK_EVENTS } from "@/lib/dev-fixtures/mock-events";
+import { MOCK_NOW } from "@/lib/dev-fixtures/constants";
 import { HEAT_MODEL, computeHeatField, heatInputSignature, isLandAt, sampleIntensity, type HeatConflict, type HeatIncident } from "@/lib/heat/field";
 import { HEAT_GRID, cellIndexAt, distanceTransformKm, landMask } from "@/lib/heat/grid";
 import { buildHeatInput } from "@/lib/heat/inputs";

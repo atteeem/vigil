@@ -17,6 +17,9 @@ import { getRssFixture } from "@/lib/testing/rss-fixtures";
 // ?retryAfter=N additionally sends a Retry-After header (seconds) on
 // that error response, for the Retry-After-respects-backoff test.
 export async function GET(request: Request, { params }: { params: Promise<{ name: string }> }) {
+  // Test-only: serves fabricated feeds, so it exists only when the test server
+  // sets TEST_FIXTURES=true (playwright.config.ts). A normal server 404s.
+  if (process.env.TEST_FIXTURES !== "true") return new NextResponse("Not found", { status: 404 });
   const { name } = await params;
   const url = new URL(request.url);
 

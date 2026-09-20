@@ -1,6 +1,9 @@
+// Static reference data (country names, regions, centroids, populations) used to
+// locate a selected country for impact scoring and the country pickers. It is
+// reference data, not conflict intelligence.
 import type { Country } from "@/lib/types";
 
-export const MOCK_COUNTRIES: Country[] = [
+export const COUNTRIES: Country[] = [
   { code: "FI", name: "Finland", region: "Europe", lat: 61.9241, lng: 25.7482, population: 5_600_000, flag: "🇫🇮" },
   { code: "UA", name: "Ukraine", region: "Europe", lat: 48.3794, lng: 31.1656, population: 36_700_000, flag: "🇺🇦" },
   { code: "RU", name: "Russia", region: "Europe", lat: 61.524, lng: 105.3188, population: 143_800_000, flag: "🇷🇺" },
@@ -33,5 +36,5 @@ export const MOCK_COUNTRIES: Country[] = [
 ];
 
 export function getCountryByCode(code: string): Country | undefined {
-  return MOCK_COUNTRIES.find((c) => c.code === code);
+  return COUNTRIES.find((c) => c.code === code);
 }

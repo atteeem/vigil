@@ -9,15 +9,34 @@ import { formatSigned, cn } from "@/lib/utils";
 import { distanceKm } from "@/lib/utils/geo";
 import { useAppStore } from "@/hooks/use-app-store";
 import { getCountryByCode, computeCountryExposure, getTopConflictsForCountry } from "@/lib/data";
+import { usePublicOverview } from "@/hooks/use-public-overview";
+import { EmptyState, FreshnessStamp, LoadingLine } from "@/components/public/data-states";
+import { STALE_SOURCE_HOURS } from "@/lib/public/stale";
 
 export default function ForYouPage() {
   const baseCountryCode = useAppStore((s) => s.baseCountryCode);
   const country = getCountryByCode(baseCountryCode);
+  // Real, DB-backed conflicts (the same set the homepage uses). Relevance comes only from the
+  // explicitly selected country, through the centralized impact engine.
+  const overview = usePublicOverview();
   if (!country) return null;
-
-  const exposure = computeCountryExposure(country);
+  if (!overview.data) {
+    return (
+      <main className="mx-auto max-w-[1000px] px-4 pb-28 pt-24 sm:px-6 sm:pt-32">
+        <h1 className="text-2xl font-semibold text-ink sm:text-[28px]">How The World Affects You</h1>
+        {overview.status === "loading" ? (
+          <LoadingLine className="mt-6" />
+        ) : (
+          <EmptyState className="mt-6" title="Conflict data could not be loaded" detail="Try again in a moment." testId="for-you-error" />
+        )}
+      </main>
+    );
+  }
+  const conflicts = overview.data.conflicts;
+  const activeCount = conflicts.filter((c) => c.status === "active" || c.status === "reduced").length;
+  const exposure = computeCountryExposure(country, conflicts);
   const severity = severityFromScore(exposure.score);
-  const topConflicts = getTopConflictsForCountry(country, 6);
+  const topConflicts = getTopConflictsForCountry(country, conflicts, 6);
 
   return (
     <main className="mx-auto max-w-[1000px] px-4 pb-28 pt-24 sm:px-6 sm:pt-32">
@@ -43,8 +62,10 @@ export default function ForYouPage() {
           <span className="text-xs text-ink-faint">{formatSigned(exposure.change24h)} today</span>
         </div>
         <p className="mt-2 max-w-xl text-sm text-ink-dim">
-          Estimated exposure for {country.name}, based on current available
-          indicators across active monitored conflicts. Not a prediction.
+          Estimated exposure for {country.name} (your selected country), based on the current registry indicators for {activeCount} active conflict{activeCount === 1 ? "" : "s"}. Not a prediction.
+        </p>
+        <p className="mt-1" data-testid="for-you-freshness">
+          <FreshnessStamp label="Last event" iso={overview.data.freshness.lastEventAt} staleAfterHours={STALE_SOURCE_HOURS} none="no published events" />
         </p>
       </div>
 
@@ -64,6 +85,7 @@ export default function ForYouPage() {
       <h2 className="mb-3 mt-10 text-sm font-semibold uppercase tracking-wide text-ink-faint">
         Top Conflicts Affecting You
       </h2>
+      {topConflicts.length === 0 && <EmptyState title="No conflicts to rank" detail="Nothing tracked affects this country yet." testId="for-you-empty" />}
       <div className="space-y-2">
         {topConflicts.map(({ conflict, impact }) => {
           const km = Math.round(distanceKm(country, conflict));

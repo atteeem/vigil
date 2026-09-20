@@ -9,11 +9,38 @@ import { isAggregatorRole } from "@/lib/registry/source-tiers";
 
 interface LinkLike {
   isOriginatingSource: boolean;
-  rawIngestionItem: { source: { sourceRole: string | null } };
+  rawIngestionItem: { originalUrl?: string | null; source: { sourceRole: string | null } };
+}
+
+/** Comparable form of an article URL: scheme-less, lower-case host, no fragment,
+ * no tracking parameters, no trailing slash. Two links that normalize the same
+ * point at the same page. */
+export function normalizeSourceUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    for (const key of [...u.searchParams.keys()]) if (/^(utm_|fbclid$|gclid$|ref$)/i.test(key)) u.searchParams.delete(key);
+    const path = u.pathname.replace(/\/+$/, "");
+    return `${u.hostname.replace(/^www\./i, "").toLowerCase()}${path}${u.search}`;
+  } catch {
+    return url.trim().toLowerCase();
+  }
 }
 
 export function independentSourceCount(links: readonly LinkLike[]): number {
   const originating = links.filter((l) => l.isOriginatingSource);
-  const independent = originating.filter((l) => !isAggregatorRole(l.rawIngestionItem.source.sourceRole)).length;
+  // The same article attached twice (two ingested copies, a re-fetch) is ONE
+  // piece of evidence, not two independent confirmations.
+  const seen = new Set<string>();
+  let independent = 0;
+  for (const l of originating) {
+    if (isAggregatorRole(l.rawIngestionItem.source.sourceRole)) continue;
+    const key = normalizeSourceUrl(l.rawIngestionItem.originalUrl);
+    if (key) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+    }
+    independent++;
+  }
   return independent > 0 ? independent : originating.length > 0 ? 1 : 0;
 }

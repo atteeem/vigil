@@ -3,9 +3,8 @@ import { MapPin } from "lucide-react";
 import type { ConflictEvent } from "@/lib/types";
 import { EventTypeIcon, getEventTypeLabel } from "./event-type-icon";
 import { VerificationBadge } from "@/components/ui/verification-badge";
-import { timeAgo } from "@/lib/utils/format";
-import { MOCK_NOW } from "@/lib/data/constants";
-import { getCountryByCode } from "@/lib/data/mock-countries";
+import { RelativeTime } from "@/components/ui/relative-time";
+import { getCountryByCode } from "@/lib/reference/countries";
 import { cn } from "@/lib/utils";
 
 export function EventCard({
@@ -31,7 +30,7 @@ export function EventCard({
         <EventTypeIcon eventType={event.eventType} className="h-3.5 w-3.5" />
         {getEventTypeLabel(event.eventType)}
         <span aria-hidden>·</span>
-        <span>{timeAgo(event.occurredAt, MOCK_NOW)}</span>
+        <RelativeTime iso={event.occurredAt} />
       </div>
       <h3 className={cn("mt-1.5 font-medium text-ink", compact ? "text-sm" : "text-[15px]")}>
         {event.title}

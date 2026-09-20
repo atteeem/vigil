@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
-import { getCountryByCode, computeCountryExposure, computeImpact, MOCK_CONFLICTS } from "@/lib/data";
+import { getCountryByCode, computeCountryExposure, computeImpact } from "@/lib/data";
+import { MOCK_CONFLICTS } from "@/lib/dev-fixtures/mock-conflicts";
 import { aggregateExposure, combineDamped } from "@/lib/scoring/exposure";
 
 // Global Exposure aggregation (lib/scoring/exposure.ts + lib/data/impact.ts).
@@ -12,7 +13,7 @@ const conflictBySlug = (slug: string) => MOCK_CONFLICTS.find((c) => c.slug === s
 
 test.describe("Country exposure hard floors", () => {
   test("Ukraine: active full-scale war inside the country -> overall exposure 100 (not diluted)", () => {
-    const exposure = computeCountryExposure(country("UA"));
+    const exposure = computeCountryExposure(country("UA"), MOCK_CONFLICTS);
     expect(exposure.score).toBe(100);
     expect(computeImpact(country("UA"), conflictBySlug("russia-ukraine")).score).toBe(100);
     // Security strongly reflects the own-country war.
@@ -23,7 +24,7 @@ test.describe("Country exposure hard floors", () => {
     const impact = computeImpact(country("FI"), conflictBySlug("russia-ukraine"));
     expect(impact.score).toBeGreaterThanOrEqual(75);
     expect(impact.hardFloor).toBe("bordering_war");
-    const exposure = computeCountryExposure(country("FI"));
+    const exposure = computeCountryExposure(country("FI"), MOCK_CONFLICTS);
     expect(exposure.score).toBeGreaterThanOrEqual(75);
     expect(exposure.components.find((c) => c.dimension === "security")!.value).toBeGreaterThanOrEqual(75);
   });
@@ -32,8 +33,8 @@ test.describe("Country exposure hard floors", () => {
     const impact = computeImpact(country("PL"), conflictBySlug("russia-ukraine"));
     expect(impact.score).toBeGreaterThanOrEqual(75);
     expect(impact.hardFloor).toBe("bordering_war");
-    expect(computeCountryExposure(country("PL")).score).toBeGreaterThanOrEqual(75);
-    expect(computeCountryExposure(country("PL")).components.find((c) => c.dimension === "security")!.value).toBeGreaterThanOrEqual(75);
+    expect(computeCountryExposure(country("PL"), MOCK_CONFLICTS).score).toBeGreaterThanOrEqual(75);
+    expect(computeCountryExposure(country("PL"), MOCK_CONFLICTS).components.find((c) => c.dimension === "security")!.value).toBeGreaterThanOrEqual(75);
   });
 
   test("Germany is neither a party to the war nor bordering one: no hard floor", () => {
@@ -43,14 +44,14 @@ test.describe("Country exposure hard floors", () => {
   });
 
   test("a distant country with no direct exposure scores clearly lower than a bordering one", () => {
-    const distant = computeCountryExposure(country("JP")).score;
-    const bordering = computeCountryExposure(country("PL")).score;
+    const distant = computeCountryExposure(country("JP"), MOCK_CONFLICTS).score;
+    const bordering = computeCountryExposure(country("PL"), MOCK_CONFLICTS).score;
     expect(distant).toBeLessThan(75);
     expect(distant).toBeLessThan(bordering);
   });
 
   test("results are deterministic (no random jitter): the same country always gets identical numbers", () => {
-    expect(computeCountryExposure(country("FI"))).toEqual(computeCountryExposure(country("FI")));
+    expect(computeCountryExposure(country("FI"), MOCK_CONFLICTS)).toEqual(computeCountryExposure(country("FI"), MOCK_CONFLICTS));
     expect(computeImpact(country("FI"), conflictBySlug("syria"))).toEqual(computeImpact(country("FI"), conflictBySlug("syria")));
   });
 });
@@ -113,7 +114,7 @@ test.describe("aggregateExposure", () => {
 
 test.describe("Exposure dimensions are honest about what they are", () => {
   test("only Security is computed; energy/trade/finance/food are labelled estimated", () => {
-    const { components } = computeCountryExposure(country("FI"));
+    const { components } = computeCountryExposure(country("FI"), MOCK_CONFLICTS);
     const basis = Object.fromEntries(components.map((c) => [c.dimension, c.basis]));
     expect(basis).toEqual({ security: "computed", energy: "estimated", trade: "estimated", finance: "estimated", food_supply: "estimated" });
   });

@@ -8,11 +8,10 @@ import type {
 } from "@/lib/types";
 import { distanceKm } from "@/lib/utils/geo";
 import { clamp } from "@/lib/utils/format";
-import { computeSeverityScore } from "@/lib/scoring/severity";
+import { computeSeverityScore, effectiveSeverityLabel } from "@/lib/scoring/severity";
 import { computeImpactScore } from "@/lib/scoring/impact";
 import { aggregateExposure, combineDamped } from "@/lib/scoring/exposure";
 import type { ImpactScoreResult } from "@/lib/scoring/types";
-import { MOCK_CONFLICTS } from "./mock-conflicts";
 
 // Country impact/exposure. Everything here is a deterministic function of the
 // country, the conflict's own fields and the Central Conflict Scoring Engine —
@@ -71,15 +70,18 @@ export interface ConflictImpactDetail extends ImpactScore {
   hardFloor: ImpactScoreResult["hardFloor"];
 }
 
+const isScored = (c: Conflict) => c.status !== "ended" && c.status !== "resolved";
+
 export function computeImpact(country: Country, conflict: Conflict): ConflictImpactDetail {
-  const dist = distanceKm(country, conflict);
+  // A conflict with no known location contributes no proximity (never a distance to 0,0).
+  const dist = conflict.locationKnown === false ? Number.POSITIVE_INFINITY : distanceKm(country, conflict);
   const proximity = clamp(100 - dist / 120, 0, 100);
   const sameRegion = country.region === conflict.region;
   const involved = conflict.participantCountryCodes.includes(country.code);
   const effects = new Set(conflict.primaryEffects);
 
   const severity = computeSeverityScore({
-    severityLabel: conflict.severity,
+    severityLabel: effectiveSeverityLabel(conflict.severity, conflict.fullScaleWar, conflict.status),
     status: conflict.status,
     intensity: conflict.intensity,
     escalationTrend: conflict.intensityChange24h,
@@ -171,8 +173,9 @@ export function computeImpact(country: Country, conflict: Conflict): ConflictImp
   };
 }
 
-export function computeCountryExposure(country: Country): ImpactScore {
-  const perConflict = MOCK_CONFLICTS.map((c) => ({ conflict: c, impact: computeImpact(country, c) }));
+/** Country exposure over the given (real, DB-backed) conflicts. Ended conflicts add nothing. */
+export function computeCountryExposure(country: Country, conflicts: readonly Conflict[]): ImpactScore {
+  const perConflict = conflicts.filter(isScored).map((c) => ({ conflict: c, impact: computeImpact(country, c) }));
 
   // Headline: the explainable aggregate (lib/scoring/exposure.ts) over the
   // per-conflict centralized impact scores — never an average of dimensions.
@@ -235,8 +238,8 @@ export function computeCountryExposure(country: Country): ImpactScore {
   };
 }
 
-export function getTopConflictsForCountry(country: Country, limit = 5) {
-  return MOCK_CONFLICTS.map((conflict) => ({
+export function getTopConflictsForCountry(country: Country, conflicts: readonly Conflict[], limit = 5) {
+  return conflicts.filter(isScored).map((conflict) => ({
     conflict,
     impact: computeImpact(country, conflict),
   }))

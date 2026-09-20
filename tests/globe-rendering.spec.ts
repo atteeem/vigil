@@ -6,6 +6,11 @@ import { test, expect } from "@playwright/test";
 // pure-function coverage of the clustering math itself with a real
 // render pass, and tests/homepage-globe-overlay.spec.ts's existing
 // conflict-preview-overlay coverage.
+test.afterAll(async () => {
+  const { prisma } = await import("@/lib/db/client");
+  await prisma.event.deleteMany({ where: { title: { startsWith: "GR event" } } });
+});
+
 test.describe("Homepage globe rendering", () => {
   test("1. Borders and Labels are on by default on the Intel globe, and the globe renders with no console errors", async ({
     page,
@@ -37,7 +42,13 @@ test.describe("Homepage globe rendering", () => {
 
   test("2. Enabling the Events layer renders event-cluster markers with correct aria-labels (count + worst severity), and no console errors", async ({
     page,
+    request,
   }) => {
+    // The homepage globe reads the real database, so publish a recent event to render.
+    const created = await request.post("/api/admin/events", {
+      data: { title: `GR event ${Date.now()}`, summary: "Globe rendering fixture.", eventType: "artillery", latitude: 48.5, longitude: 37, occurredAt: new Date().toISOString(), severity: "elevated", published: true, sourceName: `GR source ${Date.now()}` },
+    });
+    expect(created.status()).toBe(201);
     const errors: string[] = [];
     page.on("pageerror", (err) => errors.push(err.message));
     page.on("console", (msg) => {
@@ -56,7 +67,7 @@ test.describe("Homepage globe rendering", () => {
     // At least one marker (conflict hotspot or event cluster) with an
     // aria-label mentioning "report" should exist once Events is on —
     // proves clusterEvents() actually ran and produced renderable markers
-    // from the real mock event set, not just an empty array.
+    // from the real published event set, not just an empty array.
     const clusterMarkers = page.locator('[aria-label*="report"]');
     await expect(clusterMarkers.first()).toBeAttached();
 

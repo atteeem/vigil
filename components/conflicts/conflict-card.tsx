@@ -2,9 +2,9 @@ import Link from "next/link";
 import { ArrowUp, ArrowDown, Minus } from "lucide-react";
 import type { Conflict } from "@/lib/types";
 import { SeverityBadge } from "@/components/ui/severity-badge";
-import { timeAgo, cn } from "@/lib/utils";
-import { MOCK_NOW } from "@/lib/data/constants";
-import { getCountryByCode } from "@/lib/data/mock-countries";
+import { cn } from "@/lib/utils";
+import { RelativeTime } from "@/components/ui/relative-time";
+import { getCountryByCode } from "@/lib/reference/countries";
 import { computeImpact } from "@/lib/data/impact";
 
 export function ConflictCard({
@@ -18,10 +18,6 @@ export function ConflictCard({
 }) {
   const country = getCountryByCode(baseCountryCode);
   const impact = country ? computeImpact(country, conflict) : null;
-  const now = new Date(MOCK_NOW);
-  const updateIso = new Date(
-    now.getTime() - conflict.lastUpdateMinutesAgo * 60000,
-  ).toISOString();
 
   const TrendIcon =
     conflict.intensityChange24h > 0 ? ArrowUp : conflict.intensityChange24h < 0 ? ArrowDown : Minus;
@@ -37,7 +33,9 @@ export function ConflictCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold text-ink">{conflict.shortName}</h3>
-          <p className="mt-0.5 text-xs text-ink-faint">{conflict.region} · Updated {timeAgo(updateIso, MOCK_NOW)}</p>
+          <p className="mt-0.5 text-xs text-ink-faint">
+            {conflict.region} · {conflict.lastEventAt ? <RelativeTime iso={conflict.lastEventAt} prefix="Last event " /> : "No events recorded"}
+          </p>
         </div>
         <SeverityBadge severity={conflict.severity} size="sm" />
       </div>

@@ -52,6 +52,13 @@ export interface SeverityScoreInput {
   escalationTrend?: number | null;
 }
 
+/** The severity label a conflict is SCORED with. A registry-flagged active
+ * full-scale war is scored as "extreme" (=> severityScore 100, the deepest heat
+ * band) whatever label its intensity happened to map to. */
+export function effectiveSeverityLabel(label: Severity, fullScaleWar: boolean | null | undefined, status: string | null | undefined): Severity {
+  return fullScaleWar && status === "active" ? "extreme" : label;
+}
+
 /** Active full-scale war is the ONLY way to reach 100 — a hard ceiling
  * everywhere else in this function, per spec's own banding table treating
  * 100 as its own distinct band, separate from "80-99 severe". This keeps

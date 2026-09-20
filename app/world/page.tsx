@@ -7,9 +7,7 @@ import { MapFilters, type TypeFilter, type RegionFilter, type ViewMode } from "@
 import { EventCard } from "@/components/events/event-card";
 import { EventDetailPanel } from "@/components/events/event-detail-panel";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
-import { MOCK_EVENTS } from "@/lib/data/mock-events";
-import { MOCK_CONFLICTS } from "@/lib/data/mock-conflicts";
-import { MOCK_NOW } from "@/lib/data/constants";
+import { usePublicOverview } from "@/hooks/use-public-overview";
 import { isWithinRange } from "@/lib/utils/time-range";
 import { cn } from "@/lib/utils";
 import type { ConflictEvent, TimeRange } from "@/lib/types";
@@ -72,18 +70,12 @@ export default function WorldPage() {
     setSelectedTerritory(properties);
   }
 
-  // Published admin events are merged in alongside the mock-data set, so
-  // /world keeps working exactly as before with zero live events (e.g. a
-  // fresh DB) and grows automatically as reports get published — see
-  // Implementation Order #13 / spec §15. In historical mode, mock events
-  // are deliberately EXCLUDED: they have no createdAt/history to
-  // reconstruct from, so mixing them into "the world as it was at time
-  // T" would be showing data with no real historical grounding — spec
-  // "do not show current event state while the map is in historical
-  // mode" is read here as "only show data that's actually been
-  // reconstructed for T."
+  // Live: the bounded published-event window from the database (the same data
+  // the homepage globe uses). Historical: the world as reconstructed for the
+  // timeline's asOf — never the current state. An empty database is an empty
+  // map, not sample data.
   const allEvents = useMemo(
-    () => (timeline.isHistorical ? historicalEvents : [...MOCK_EVENTS, ...liveEvents]),
+    () => (timeline.isHistorical ? historicalEvents : liveEvents),
     [timeline.isHistorical, historicalEvents, liveEvents],
   );
 
@@ -92,11 +84,18 @@ export default function WorldPage() {
   // their CURRENT state, which is not "known at T"; the surface then derives
   // conflict bases from the timeline's own reconstructed events. Reference
   // time is the same asOf the events/territory already use.
+  const overview = usePublicOverview();
+  const realConflicts = overview.data?.conflicts;
+  const selectedConflictRef = useMemo(() => {
+    const c = selected?.conflictId ? realConflicts?.find((x) => x.id === selected.conflictId) : undefined;
+    return c ? { slug: c.slug, shortName: c.shortName } : null;
+  }, [selected, realConflicts]);
   const heatConflicts = useMemo(
-    () => (timeline.isHistorical ? undefined : MOCK_CONFLICTS.filter((c) => region === "Global" || c.region === region)),
-    [timeline.isHistorical, region],
+    () => (timeline.isHistorical ? undefined : realConflicts?.filter((c) => c.locationKnown && (region === "Global" || c.region === region))),
+    [timeline.isHistorical, region, realConflicts],
   );
-  const heatNowIso = useMemo(() => (timeline.asOf ? timeline.asOf.toISOString() : MOCK_NOW), [timeline.asOf]);
+  // Live: real clock at the time the event set last changed. Historical: the timeline's asOf.
+  const heatNowIso = useMemo(() => (timeline.asOf ? timeline.asOf.toISOString() : new Date().toISOString()), [timeline.asOf, liveEvents]); // eslint-disable-line react-hooks/exhaustive-deps -- liveEvents: re-read the clock when new data arrives
 
   const filteredEvents = useMemo(() => {
     return allEvents.filter((e) => {
@@ -108,7 +107,7 @@ export default function WorldPage() {
       // everything when viewing a point further back than the recency
       // window — skipped while historical, since "show me everything
       // known as of T" is the whole point of that mode.
-      if (!timeline.isHistorical && !isWithinRange(e.occurredAt, timeRange, MOCK_NOW)) return false;
+      if (!timeline.isHistorical && !isWithinRange(e.occurredAt, timeRange, new Date().toISOString())) return false;
       return true;
     });
   }, [allEvents, typeFilter, region, timeRange, timeline.isHistorical]);
@@ -212,7 +211,7 @@ export default function WorldPage() {
               >
                 <X className="h-3.5 w-3.5" /> Close
               </button>
-              <EventDetailPanel event={selected} />
+              <EventDetailPanel event={selected} conflict={selectedConflictRef} />
             </>
           ) : selectedTerritory ? (
             <>
@@ -234,7 +233,7 @@ export default function WorldPage() {
 
       {/* Mobile bottom sheet */}
       <BottomSheet open={!!selected} onClose={() => setSelected(null)} label={selected?.title}>
-        {selected && <EventDetailPanel event={selected} />}
+        {selected && <EventDetailPanel event={selected} conflict={selectedConflictRef} />}
       </BottomSheet>
       <BottomSheet
         open={!!selectedTerritory}

@@ -1,10 +1,10 @@
 import { prisma } from "@/lib/db/client";
 import type { Conflict, Event } from "@prisma/client";
-import { computeSeverityScore } from "@/lib/scoring/severity";
+import { computeSeverityScore, effectiveSeverityLabel } from "@/lib/scoring/severity";
 import { computeConfidenceScore } from "@/lib/scoring/confidence";
 import { computeImpactScore } from "@/lib/scoring/impact";
 import type { SeverityScoreResult, ImpactScoreResult, ConfidenceScoreResult } from "@/lib/scoring/types";
-import { getCountryByCode } from "@/lib/data/mock-countries";
+import { getCountryByCode } from "@/lib/reference/countries";
 import { conflictGeographyOf } from "@/lib/registry/geography";
 import { distanceKm } from "@/lib/utils/geo";
 
@@ -55,7 +55,7 @@ function computeConflictSeverityInput(conflict: Conflict, events: Event[]) {
   const infrastructureDamage = events.some((e) => e.eventType === "infrastructure" || jsonArray(e.infrastructureDamage).length > 0);
   const displacement = events.some((e) => e.eventType === "humanitarian");
   return {
-    severityLabel: conflict.severity as import("@/lib/types/severity").Severity,
+    severityLabel: effectiveSeverityLabel(conflict.severity as import("@/lib/types/severity").Severity, conflict.fullScaleWar, conflict.status),
     status: conflict.status as import("@/lib/scoring/types").ConflictStatusLike,
     intensity: conflict.intensity,
     spreadKm,

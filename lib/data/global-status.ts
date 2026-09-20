@@ -1,14 +1,17 @@
-import { MOCK_CONFLICTS } from "./mock-conflicts";
+import type { Conflict } from "@/lib/types";
 
 /** Global Status: a single, non-personalized read of overall world tension. */
-export function getGlobalStatus(): { score: number; change24h: number } {
-  const weightSum = MOCK_CONFLICTS.reduce((a, c) => a + weightFor(c.severity), 0);
+export function getGlobalStatus(allConflicts: readonly Conflict[]): { score: number; change24h: number } | null {
+  const conflicts = allConflicts.filter((c) => c.status === "active" || c.status === "reduced");
+  // Nothing tracked yet: there is no honest score to show.
+  if (conflicts.length === 0) return null;
+  const weightSum = conflicts.reduce((a, c) => a + weightFor(c.severity), 0);
   const score = Math.round(
-    MOCK_CONFLICTS.reduce((a, c) => a + c.intensity * weightFor(c.severity), 0) / weightSum,
+    conflicts.reduce((a, c) => a + c.intensity * weightFor(c.severity), 0) / weightSum,
   );
   const change24h =
     Math.round(
-      (MOCK_CONFLICTS.reduce((a, c) => a + c.intensityChange24h * weightFor(c.severity), 0) /
+      (conflicts.reduce((a, c) => a + c.intensityChange24h * weightFor(c.severity), 0) /
         weightSum) *
         10,
     ) / 10;

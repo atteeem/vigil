@@ -3,15 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Search, X, Globe2, Flame, LineChart, Newspaper } from "lucide-react";
+import { Search, X, Globe2, Flame, Users, Newspaper } from "lucide-react";
 import { useAppStore } from "@/hooks/use-app-store";
-import { searchAll, type SearchResult } from "@/lib/data";
+import type { SearchResult } from "@/lib/public/search";
 import { cn } from "@/lib/utils";
 
 const ICON: Record<SearchResult["type"], React.ComponentType<{ className?: string }>> = {
   country: Globe2,
   conflict: Flame,
-  market: LineChart,
+  actor: Users,
   event: Newspaper,
 };
 
@@ -21,7 +21,30 @@ export function CommandSearch() {
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
-  const results = searchAll(query);
+  const [results, setResults] = useState<SearchResult[]>([]);
+
+  // Search runs against the real database (countries, conflicts, published events, actors).
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setResults([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/public/search?q=${encodeURIComponent(q)}`);
+        if (res.ok && !cancelled) setResults((await res.json()) as SearchResult[]);
+      } catch {
+        if (!cancelled) setResults([]);
+      }
+    }, 150);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
