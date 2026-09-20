@@ -459,12 +459,14 @@ test.describe("Public map", () => {
     const order = await page.evaluate(() => {
       const map = (window as unknown as { __vigilMap: { getStyle: () => { layers: { id: string }[] }; getLayoutProperty: (l: string, p: string) => string } }).__vigilMap;
       const ids = map.getStyle().layers.map((l) => l.id);
-      return { fill: ids.indexOf("territory-fill"), marker: ids.indexOf("unclustered-point"), heat: ids.indexOf("events-heat-core"), vis: map.getLayoutProperty("territory-fill", "visibility") };
+      return { fill: ids.indexOf("territory-fill"), marker: ids.indexOf("unclustered-point"), heat: ids.indexOf("heat-surface"), vis: map.getLayoutProperty("territory-fill", "visibility") };
     });
     expect(order.vis).toBe("visible");
     expect(order.fill).toBeGreaterThan(-1);
     expect(order.marker).toBeGreaterThan(order.fill);
-    expect(order.heat).toBeGreaterThan(order.fill);
+    // The continuous heat surface sits BENEATH the territory polygons (which stay readable on top of it).
+    expect(order.heat).toBeGreaterThan(-1);
+    expect(order.heat).toBeLessThan(order.fill);
   });
 
   test("timeline: before the change the whole old polygon renders, after it the split halves", async ({ page, request }) => {

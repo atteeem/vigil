@@ -1045,3 +1045,24 @@ Goal: use the Registry/Coverage dashboard to improve real-world source coverage 
 Decisions: a source's tier comes from its role, never from volume; `specialist_research` counts as grounded coverage; aggregator posts are discovery leads (relay links, capped confidence, never sole territorial evidence).
 
 Remaining coverage gaps: `kurdish-turkey-pkk` (no feed found), `kurdish-iran` (thin), `ecuador` (InSight Crime only), `cameroon`, `northeast-india`, `libya`, `philippines-insurgencies` (single source), `somalia` and `niger` (no local source), `israel-lebanon` / `persian-gulf-iran` thin. Liveuamap stays disabled until authorised Telegram credentials exist. Coverage "healthy" in production needs the scheduler to ingest these feeds for a while (the test DB has no ingestion history).
+
+## Continuous Global Conflict Heatmap
+
+Goal: replace the isolated heat circles with one continuous conflict-intensity surface over the world's land, as the main Heatmap mode on the flat map and a Heat layer on the globe.
+
+- [x] Model (`lib/heat/field.ts`): 0.5-degree world grid (720x360). Value = "observed conflict intensity / conflict pressure", never a probability, personal danger or legal status. Baseline 8 (bottom of the scale, no invented events). Two layers in one field: sustained conflict base (severityScore from the central scoring engine — active full-scale war = 100 — over the conflict's fighting-country cells within reach of its anchors, then gaussian decay by geodesic distance) and recent incidents (event severity x 30 h half-life recency, radius from importance/location precision, dropped after 7 days).
+- [x] Combination: strongest contribution wins; other contributions add a saturating lift capped at 35% of the dominant one and 20% of the headroom, so many low values never dilute or pile up into red. Deterministic (sorted contributors, fixed arithmetic), clamped 0-100.
+- [x] Report/article count is never an input to intensity. Confidence (from the existing engine) only nudges saturation (<=18%) and opacity (<=14%).
+- [x] Geography: land mask and country footprints rasterized from the existing Natural Earth topology; 5x5 chamfer geodesic distance transform (round isolines), windowed per conflict, cached.
+- [x] Colour scale (`lib/heat/scale.ts`): one centralized stop table, deep cool blue -> blue -> blue-grey -> yellow -> orange -> red -> deep red; shared by both renderers and the legend.
+- [x] Flat map: field rasterized to a Web-Mercator image (bicubic resample, vector land clip so oceans are transparent), one image source + raster layer beneath territory/markers/labels; own country borders + coastline lines on top; old circle layers/sources and `lib/map/heat-layers.ts` removed. Report-count labels kept.
+- [x] Globe: same field rasterized equirectangularly onto one sphere between the land fill and the borders (no cells, no seams); `Heat` toggle in the Layers popover (persisted, store v2 migration adds it, default on); shared legend.
+- [x] Timeline: `/world` passes the timeline's asOf as the reference time; historical mode drops the curated (current-state) conflicts and derives bases from the timeline's own events; events after asOf are excluded; ages quantized to whole hours so playback ticks reuse the cached field.
+- [x] Legend with info tooltip (colour = observed intensity, not a prediction, blue is not "safe", report counts do not set colour).
+- [x] Tests: `tests/heat-field.spec.ts` (grid/land/ocean, baseline, decay, full-scale war, dilution, incidents/recency, asOf, determinism, colour scale, report count) and `tests/world-map-heat.spec.ts` (surface layer, legend, tooltip, labels, timeline, globe toggle). `three` is now a direct dependency (was transitive via react-globe.gl) with a `three.d.ts` shim.
+
+Deferred / notes:
+- The homepage globe has no timeline, so it always shows the live state; it is fed by the curated mock conflicts/events only (no live DB events yet).
+- Territorial-control polygons do not yet feed the field (the conflict's footprint is its fighting countries near its anchors). Deriving footprint from published control polygons is a natural follow-up.
+- First enable costs ~100 ms of field compute plus ~1 s to encode the map image on the main thread; a worker would remove it if it ever matters (not needed yet).
+- The basemap's own graticule lines (pre-existing) still show through on the flat map.

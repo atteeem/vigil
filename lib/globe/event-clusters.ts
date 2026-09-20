@@ -12,8 +12,8 @@ export interface EventCluster {
    * the marker displays — never the event count. */
   reportCount: number;
   /** Worst (max-ranked) severity among the cluster's events — same
-   * "max, never an average or the count" reduction the heatmap's conflict
-   * base layer uses (lib/map/heat-layers.ts), so a cluster of mostly-minor
+   * "max, never an average or the count" principle the heat field
+   * uses (lib/heat/field.ts), so a cluster of mostly-minor
    * reports with one severe incident still reads as severe, and a big
    * cluster of low-severity reports never inflates into looking severe
    * purely from its size. */

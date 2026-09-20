@@ -8,6 +8,7 @@ import { EventCard } from "@/components/events/event-card";
 import { EventDetailPanel } from "@/components/events/event-detail-panel";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { MOCK_EVENTS } from "@/lib/data/mock-events";
+import { MOCK_CONFLICTS } from "@/lib/data/mock-conflicts";
 import { MOCK_NOW } from "@/lib/data/constants";
 import { isWithinRange } from "@/lib/utils/time-range";
 import { cn } from "@/lib/utils";
@@ -86,6 +87,17 @@ export default function WorldPage() {
     [timeline.isHistorical, historicalEvents, liveEvents],
   );
 
+  // Heat surface inputs. Live: the curated conflicts (sustained base) narrowed
+  // by the region filter. Historical: no curated conflicts — those carry only
+  // their CURRENT state, which is not "known at T"; the surface then derives
+  // conflict bases from the timeline's own reconstructed events. Reference
+  // time is the same asOf the events/territory already use.
+  const heatConflicts = useMemo(
+    () => (timeline.isHistorical ? undefined : MOCK_CONFLICTS.filter((c) => region === "Global" || c.region === region)),
+    [timeline.isHistorical, region],
+  );
+  const heatNowIso = useMemo(() => (timeline.asOf ? timeline.asOf.toISOString() : MOCK_NOW), [timeline.asOf]);
+
   const filteredEvents = useMemo(() => {
     return allEvents.filter((e) => {
       if (typeFilter !== "all" && e.eventType !== typeFilter) return false;
@@ -129,6 +141,9 @@ export default function WorldPage() {
           <WorldMap
             events={filteredEvents}
             viewMode={viewMode}
+            conflicts={heatConflicts}
+            nowIso={heatNowIso}
+            live={!timeline.isHistorical}
             basemapMode={basemapMode}
             onSelectEvent={selectEvent}
             territorialFeatures={territorialFeatures}

@@ -18,6 +18,8 @@ export interface GlobeLayerVisibility {
   events: boolean;
   borders: boolean;
   labels: boolean;
+  /** Continuous conflict-intensity surface (lib/heat) painted over the land. */
+  heat: boolean;
 }
 
 // Conflicts hotspots, country Borders, and Labels (country + city names)
@@ -40,6 +42,7 @@ const DEFAULT_GLOBE_LAYERS: GlobeLayerVisibility = {
   events: false,
   borders: true,
   labels: true,
+  heat: true,
 };
 
 interface AppState {
@@ -119,11 +122,15 @@ export const useAppStore = create<AppState>()(
       // pinning both to the OLD default forever — "enabled in config" is
       // not the same as "actually visible in a real browser" for anyone
       // who'd loaded this app before this fix shipped.
-      version: 1,
+      version: 2,
       migrate: (persistedState, version) => {
         const state = persistedState as Partial<AppState>;
         if (version < 1 && state.globeLayers) {
           state.globeLayers = { ...state.globeLayers, borders: true, labels: true };
+        }
+        // v2: the continuous heat surface layer is new and on by default.
+        if (version < 2 && state.globeLayers) {
+          state.globeLayers = { ...state.globeLayers, heat: true };
         }
         return state;
       },

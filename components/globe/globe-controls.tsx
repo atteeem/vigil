@@ -10,6 +10,8 @@ const LAYER_ITEMS: { key: keyof GlobeLayerVisibility; label: string }[] = [
   { key: "events", label: "Events" },
   { key: "borders", label: "Borders" },
   { key: "labels", label: "Labels" },
+  // Last, so the existing layers keep their positions.
+  { key: "heat", label: "Heat" },
 ];
 
 /**

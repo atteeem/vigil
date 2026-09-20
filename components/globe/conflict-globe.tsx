@@ -8,6 +8,9 @@ import type { Conflict, ConflictEvent } from "@/lib/types";
 import { SEVERITY_HEX } from "@/lib/utils/severity";
 import { getLandFeatures } from "@/lib/globe/land-geo";
 import { reportCountOf } from "@/lib/map/report-counts";
+import { useHeatField } from "@/hooks/use-heat-field";
+import { HeatLegend } from "@/components/heat/heat-legend";
+import { MOCK_NOW } from "@/lib/data/constants";
 import { clusterEvents, clusterRadiusForAltitude, formatClusterCount, type EventCluster } from "@/lib/globe/event-clusters";
 import { ENERGY_ARCS, TRADE_ARCS, type GlobeArc } from "@/lib/globe/arcs";
 import type { MapLayer, GlobeViewMode, GlobeLayerVisibility, ContentSensitivity } from "@/hooks/use-app-store";
@@ -119,6 +122,8 @@ export function ConflictGlobe({
   const [countryLabels, setCountryLabels] = useState<CountryLabel[]>([]);
   const [cityLabels, setCityLabels] = useState<CityLabel[]>([]);
   const [cameraAltitude, setCameraAltitude] = useState(2.15);
+  const heatMeshRef = useRef<{ material: { map: { needsUpdate: boolean; dispose: () => void }; dispose: () => void }; geometry: { dispose: () => void } } | null>(null);
+  const heatCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     // One-time client-only capability probe: must run after mount since
@@ -150,6 +155,60 @@ export function ConflictGlobe({
   }, []);
 
   const isMobile = size.width < 640;
+
+  // Continuous conflict-intensity surface. The SAME field the flat map paints
+  // (hooks/use-heat-field), rasterized equirectangularly and wrapped on a
+  // sphere just above the land fill (0.006) and below the borders (0.0065):
+  // one texture on one sphere, so there are no cells or seams to see.
+  const heatField = useHeatField({ enabled: globeLayers.heat !== false, conflicts, events, nowIso: MOCK_NOW, live: true });
+  useEffect(() => {
+    if (!ready || !globeRef.current || !heatField) return;
+    let cancelled = false;
+    Promise.all([import("three"), import("@/lib/heat/render")]).then(([THREE, render]) => {
+      const globe = globeRef.current;
+      if (cancelled || !globe) return;
+      const canvas = render.renderHeatCanvas(heatField, { projection: "equirect", width: isMobile ? 1024 : 2048 }, heatCanvasRef.current ?? undefined);
+      heatCanvasRef.current = canvas;
+      const existing = heatMeshRef.current;
+      if (existing) {
+        existing.material.map.needsUpdate = true;
+        return;
+      }
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 8;
+      const mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(globe.getGlobeRadius() * 1.0062, 96, 96),
+        new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false }),
+      );
+      // three-globe rotates its own group by -90deg about Y so longitude 0 faces +Z; match it.
+      mesh.rotation.y = -Math.PI / 2;
+      mesh.renderOrder = 1;
+      mesh.name = "heat-surface";
+      globe.scene().add(mesh);
+      heatMeshRef.current = mesh;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, heatField, isMobile]);
+  // Remove the surface when the layer is switched off, the canvas size class
+  // changes (mobile/desktop), or the globe unmounts.
+  useEffect(() => {
+    const dropMesh = () => {
+      const mesh = heatMeshRef.current as unknown as { removeFromParent: () => void } & NonNullable<typeof heatMeshRef.current>;
+      if (!mesh) return;
+      mesh.removeFromParent();
+      mesh.material.map.dispose();
+      mesh.material.dispose();
+      mesh.geometry.dispose();
+      heatMeshRef.current = null;
+      heatCanvasRef.current = null;
+    };
+    if (!heatField) dropMesh();
+    return dropMesh;
+    // isMobile: a different texture size needs a fresh texture.
+  }, [heatField === null, isMobile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const el = containerRef.current;
@@ -317,7 +376,8 @@ export function ConflictGlobe({
   }
 
   return (
-    <div ref={containerRef} className={className} aria-label="Interactive global conflict map">
+    <div ref={containerRef} className={className} aria-label="Interactive global conflict map" data-heat-signature={heatField?.signature} data-heat-peak={heatField ? Math.round(heatField.peak) : undefined}>
+      {heatField && <HeatLegend className="absolute bottom-3 left-3 z-10" />}
       {webglOk === null ? (
         <GlobeLoading />
       ) : (

@@ -6,15 +6,19 @@ import {
   NavigationControl,
   config as maplibreConfig,
   type GeoJSONSource,
+  type ImageSource,
   type MapLayerMouseEvent,
   type ExpressionSpecification,
   type DataDrivenPropertyValueSpecification,
 } from "maplibre-gl";
-import type { ConflictEvent } from "@/lib/types";
+import type { Conflict, ConflictEvent } from "@/lib/types";
 import { EVENT_TYPES } from "@/lib/types";
 import { getMapStyle, getMapTilerKey, type MapBasemapMode } from "@/lib/map/style";
 import { eventsToGeoJSON, type EventFeatureProps } from "@/lib/map/events-to-geojson";
-import { eventsToHeatGeoJSON, conflictBaseGeoJSON } from "@/lib/map/heat-layers";
+import { useHeatField } from "@/hooks/use-heat-field";
+import { renderHeatCanvas, MERCATOR_MAX_LAT } from "@/lib/heat/render";
+import { getHeatBorders } from "@/lib/heat/borders";
+import { HeatLegend } from "@/components/heat/heat-legend";
 import { aggregateReportBuckets, formatReportCount, REPORT_COUNT_CAP } from "@/lib/map/report-counts";
 import { createEventIconImageData } from "@/lib/map/event-icons";
 import { createContestedPatternImageData } from "@/lib/map/territorial-pattern";
@@ -70,6 +74,13 @@ if (typeof window !== "undefined") {
 export interface WorldMapProps {
   events: ConflictEvent[];
   viewMode: "markers" | "heatmap";
+  /** Curated conflicts feeding the heat surface's sustained base. Omit in
+   * historical mode (the surface then derives bases from `events` alone). */
+  conflicts?: readonly Conflict[];
+  /** Reference time for the heat surface: the timeline's asOf, else the app's live "now". */
+  nowIso?: string;
+  /** True for the live view (see HeatInputArgs.live); false while a historical asOf is active. */
+  live?: boolean;
   basemapMode: MapBasemapMode;
   onSelectEvent: (event: ConflictEvent) => void;
   // Territorial Control Mode (spec §1 "keep these layers architecturally
@@ -133,8 +144,6 @@ const TERRITORY_LAYER_IDS = [
 function addEventLayers(
   map: MapLibreMap,
   initialData: GeoJSON.FeatureCollection,
-  initialHeatData: GeoJSON.FeatureCollection,
-  initialConflictBaseData: GeoJSON.FeatureCollection,
   initialTerritoryData: GeoJSON.FeatureCollection,
 ) {
   // A basemap-mode switch calls setStyle(), which discards every source and
@@ -142,7 +151,19 @@ function addEventLayers(
   // so this whole setup must be safely re-runnable, not just mount-once.
   if (map.getSource("events")) return;
 
-  // Territorial polygons are added FIRST so they render beneath every
+  // Continuous conflict-intensity surface: one image over the land (oceans
+  // transparent), added before everything else so territorial polygons,
+  // borders, markers and labels all sit above it. Inserted beneath the
+  // basemap's own symbol (label) layers when the style has any, so place
+  // names stay readable through the surface.
+  map.addSource("heat-surface", { type: "image", url: TRANSPARENT_PIXEL, coordinates: HEAT_IMAGE_COORDINATES });
+  const firstSymbol = map.getStyle().layers.find((l) => l.type === "symbol")?.id;
+  map.addLayer(
+    { id: "heat-surface", type: "raster", source: "heat-surface", layout: { visibility: "none" }, paint: { "raster-opacity": 1, "raster-resampling": "linear", "raster-fade-duration": 0 } },
+    firstSymbol,
+  );
+
+  // Territorial polygons are added next so they render beneath every
   // marker/heat layer added below (spec §1/§8 "territorial polygons
   // underneath... heatmap/event hotspots must remain clickable above
   // territorial polygons") — MapLibre stacks layers in addLayer() call
@@ -210,14 +231,6 @@ function addEventLayers(
   // geographic bucket per zoom (see refreshReportHeatLabels), so the label
   // count stays small however many events exist.
   map.addSource("report-heat-labels", { type: "geojson", data: EMPTY_FEATURE_COLLECTION });
-  // Separate, uncluster-ed sources for heatmap mode — clustering the
-  // "events" source above is specifically for the marker-mode point/icon
-  // layers (grouping nearby pins at low zoom); the heat visualization
-  // needs every individual event's own severity/recency/corroboration,
-  // and a second, pre-aggregated per-conflict source for the broader
-  // "ongoing conflict" base glow (see lib/map/heat-layers.ts).
-  map.addSource("events-heat", { type: "geojson", data: initialHeatData });
-  map.addSource("conflict-bases", { type: "geojson", data: initialConflictBaseData });
 
   map.addLayer({
     id: "clusters",
@@ -311,125 +324,17 @@ function addEventLayers(
       "icon-halo-width": 1.2,
     },
   });
-  // Conflict base layer (spec #4): a wide, soft, severity-colored glow per
-  // ongoing conflict, sized by the geographic spread of its own events —
-  // rendered BELOW the per-event hotspots so a sustained conflict reads as
-  // a broad affected area, not just a cluster of isolated dots. Opacity
-  // only nudges up mildly with how many events feed it (eventCount, capped
-  // at a modest 0.42) — a mild "more corroborated as an ongoing situation"
-  // signal, never enough on its own to look "severe"; color is entirely
-  // driven by the group's worst severity (see conflictBaseGeoJSON), never
-  // by event count, so this can never become a wrongly-red area purely
-  // from report volume. Recency-independent — an active conflict's base
-  // presence persists through reporting gaps (spec #6), so no age input.
-  //
-  // spreadKm is the conflict's own events' geographic extent; the floor
-  // (110px even for a tight/single-point cluster) is what makes a
-  // sustained conflict read as a broad AREA rather than a dot the moment
-  // it has 2+ events, and the interpolation scales up sharply for
-  // genuinely regional conflicts (spec's West Bank example).
-  const conflictBaseRadius: DataDrivenPropertyValueSpecification<number> = [
-    "interpolate",
-    ["linear"],
-    ["get", "spreadKm"],
-    0,
-    110,
-    50,
-    160,
-    200,
-    260,
-    600,
-    380,
-  ];
-  const conflictBaseOpacity: DataDrivenPropertyValueSpecification<number> = [
-    "interpolate",
-    ["linear"],
-    ["get", "eventCount"],
-    1,
-    0.22,
-    6,
-    0.42,
-  ];
-  // Each "heat glow" (conflict base and individual event alike) is three
-  // concentric circles sharing one center rather than one blurred disc —
-  // MapLibre's circle-blur alone fades a single circle's own edge, but
-  // many overlapping same-severity blobs in a dense area still composite
-  // toward a fairly solid-looking core with only the outermost boundary
-  // visibly soft. Stacking a wide/faint outer ring, a medium ring, and a
-  // small/denser core (same shape, just radius/opacity scaled down and
-  // blur reduced toward the center) reads unambiguously as "transparent
-  // at the edges, strongest at the center" — spec #1's smooth radial
-  // gradient requirement — regardless of how many neighboring glows
-  // overlap it.
-  const GRADIENT_RINGS = [
-    { suffix: "outer", radiusScale: 1, opacityScale: 0.32, blur: 1 },
-    { suffix: "mid", radiusScale: 0.62, opacityScale: 0.62, blur: 0.9 },
-    { suffix: "core", radiusScale: 0.3, opacityScale: 1, blur: 0.75 },
-  ] as const;
-  for (const ring of GRADIENT_RINGS) {
-    map.addLayer({
-      id: `conflict-base-heat-${ring.suffix}`,
-      type: "circle",
-      source: "conflict-bases",
-      layout: { visibility: "none" },
-      paint: {
-        "circle-radius": ring.radiusScale === 1 ? conflictBaseRadius : ["*", conflictBaseRadius, ring.radiusScale],
-        "circle-color": SEVERITY_COLOR_MATCH,
-        "circle-opacity":
-          ring.opacityScale === 1 ? conflictBaseOpacity : ["*", conflictBaseOpacity, ring.opacityScale],
-        "circle-blur": ring.blur,
-      },
-    });
-  }
-
-  // Scope (spec #3): importance is the existing "how significant is this
-  // incident" scalar (already drives marker size in markers mode) —
-  // reused here so a major event visibly dominates its area while a minor
-  // one stays modest. Kept well under conflictBaseRadius's own 110px floor
-  // (above) even at max importance, so a single local incident can never
-  // out-size the broad glow reserved for a genuinely regional/ongoing
-  // conflict — only spreadKm (a conflict's own geographic extent) earns
-  // that larger radius.
-  const eventHeatRadius: DataDrivenPropertyValueSpecification<number> = [
-    "interpolate",
-    ["linear"],
-    ["get", "importance"],
-    20,
-    16,
-    55,
-    32,
-    100,
-    58,
-  ];
-  // Opacity = confidence x recency (Central Conflict Scoring Engine §7
-  // "confidence influences opacity"), multiplied rather than added so
-  // neither factor alone can force full strength: a low-confidence report
-  // stays modest even if brand new, and a well-evidenced report still
-  // fades once old. confidenceScore (lib/scoring/confidence.ts, computed
-  // in lib/map/heat-layers.ts) replaces the previous direct sourceCount
-  // interpolation — the same formula admin/conflict views use, not a
-  // second ad hoc one living only here.
-  const eventHeatOpacity: DataDrivenPropertyValueSpecification<number> = [
-    "*",
-    ["interpolate", ["linear"], ["get", "confidenceScore"], 30, 0.4, 60, 0.75, 90, 1],
-    ["interpolate", ["linear"], ["get", "ageHours"], 0, 1, 24, 0.65, 168, 0.25, 720, 0.08],
-  ];
-  for (const ring of GRADIENT_RINGS) {
-    map.addLayer({
-      id: `events-heat-${ring.suffix}`,
-      type: "circle",
-      source: "events-heat",
-      layout: { visibility: "none" },
-      paint: {
-        "circle-radius": ring.radiusScale === 1 ? eventHeatRadius : ["*", eventHeatRadius, ring.radiusScale],
-        // Color = severity, per event, never touched by nearby report
-        // volume (spec #1/#7) — same match expression the marker layers use.
-        "circle-color": SEVERITY_COLOR_MATCH,
-        "circle-opacity": ring.opacityScale === 1 ? eventHeatOpacity : ["*", eventHeatOpacity, ring.opacityScale],
-        "circle-blur": ring.blur,
-      },
-    });
-  }
+  // Country borders + coastlines from our own topology, above the heat
+  // surface and territory fill: the surface tints the land, these keep
+  // geography legible on any basemap (including the key-less fallback).
+  map.addSource("heat-borders", { type: "geojson", data: getHeatBorders() });
+  map.addLayer({
+    id: "heat-borders",
+    type: "line",
+    source: "heat-borders",
+    layout: { visibility: "none" },
+    paint: { "line-color": "#d5dde8", "line-opacity": ["match", ["get", "kind"], "coast", 0.42, 0.24], "line-width": ["match", ["get", "kind"], "coast", 0.9, 0.6] },
+  });
 
   // Report count on every individual marker (marker mode): the supporting
   // reports of THAT event, capped at "99+". Sits on the dot at medium zoom
@@ -489,19 +394,25 @@ function refreshReportHeatLabels(map: MapLibreMap, events: ConflictEvent[]) {
   });
 }
 
-const HEAT_LAYER_IDS = [
-  "report-heat-label",
-  "conflict-base-heat-outer",
-  "conflict-base-heat-mid",
-  "conflict-base-heat-core",
-  "events-heat-outer",
-  "events-heat-mid",
-  "events-heat-core",
+const HEAT_LAYER_IDS = ["heat-surface", "heat-borders", "report-heat-label"];
+
+const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+// Web-Mercator square: the surface is rasterized in mercator rows, so a
+// plain four-corner image is geometrically exact.
+const HEAT_IMAGE_COORDINATES: [[number, number], [number, number], [number, number], [number, number]] = [
+  [-180, MERCATOR_MAX_LAT],
+  [180, MERCATOR_MAX_LAT],
+  [180, -MERCATOR_MAX_LAT],
+  [-180, -MERCATOR_MAX_LAT],
 ];
+const HEAT_TEXTURE_WIDTH = 2048;
 
 export function WorldMap({
   events,
   viewMode,
+  conflicts,
+  nowIso = MOCK_NOW,
+  live = true,
   basemapMode,
   onSelectEvent,
   territorialFeatures = EMPTY_FEATURE_COLLECTION,
@@ -520,6 +431,17 @@ export function WorldMap({
   const appliedModeRef = useRef<MapBasemapMode | null>(null);
   const apiKey = getMapTilerKey();
   const [missingKeyNotice, setMissingKeyNotice] = useState(false);
+  const heatUrlRef = useRef<string | null>(null);
+
+  // Continuous conflict-intensity surface (lib/heat): computed only while
+  // Heatmap is the active mode, memoized on its inputs, rasterized to a
+  // mercator image and swapped into one image source — never rebuilt per frame.
+  const heatField = useHeatField({ enabled: viewMode === "heatmap", conflicts, events, nowIso, live });
+
+  const applyHeatSurface = (map: MapLibreMap) => {
+    const source = map.getSource("heat-surface") as ImageSource | undefined;
+    if (source && heatUrlRef.current) source.updateImage({ url: heatUrlRef.current, coordinates: HEAT_IMAGE_COORDINATES });
+  };
 
   useEffect(() => {
     eventsRef.current = events;
@@ -597,13 +519,8 @@ export function WorldMap({
     // (re)wires source/layers/interactions — it must stay idempotent-safe
     // per addEventLayers' own getSource() guard.
     map.on("style.load", () => {
-      addEventLayers(
-        map,
-        eventsToGeoJSON(eventsRef.current),
-        eventsToHeatGeoJSON(eventsRef.current, MOCK_NOW),
-        conflictBaseGeoJSON(eventsRef.current),
-        territorialFeaturesRef.current,
-      );
+      addEventLayers(map, eventsToGeoJSON(eventsRef.current), territorialFeaturesRef.current);
+      applyHeatSurface(map);
       refreshReportHeatLabels(map, eventsRef.current);
       applyViewModeVisibility(map);
       applyTerritorialVisibility(map);
@@ -681,11 +598,29 @@ export function WorldMap({
   }, [basemapMode]);
 
   useEffect(() => {
+    if (!heatField) return;
+    let cancelled = false;
+    const frame = window.setTimeout(() => {
+      const canvas = renderHeatCanvas(heatField, { projection: "mercator", width: HEAT_TEXTURE_WIDTH });
+      canvas.toBlob((blob) => {
+        if (cancelled || !blob) return;
+        const previous = heatUrlRef.current;
+        heatUrlRef.current = URL.createObjectURL(blob);
+        const map = mapRef.current;
+        if (map) applyHeatSurface(map);
+        if (previous) setTimeout(() => URL.revokeObjectURL(previous), 3000);
+      }, "image/png");
+    }, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(frame);
+    };
+  }, [heatField]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     (map.getSource("events") as GeoJSONSource | undefined)?.setData(eventsToGeoJSON(events));
-    (map.getSource("events-heat") as GeoJSONSource | undefined)?.setData(eventsToHeatGeoJSON(events, MOCK_NOW));
-    (map.getSource("conflict-bases") as GeoJSONSource | undefined)?.setData(conflictBaseGeoJSON(events));
     refreshReportHeatLabels(map, events);
   }, [events]);
 
@@ -720,8 +655,9 @@ export function WorldMap({
   }, [showTerritorial]);
 
   return (
-    <div className={className} style={{ position: "relative" }}>
+    <div className={className} style={{ position: "relative" }} data-heat-signature={heatField?.signature} data-heat-peak={heatField ? Math.round(heatField.peak) : undefined}>
       <div ref={containerRef} className="h-full w-full" role="application" aria-label="Operational conflict map" />
+      {viewMode === "heatmap" && <HeatLegend className="absolute bottom-20 left-3 z-10 sm:bottom-7" />}
       {missingKeyNotice && (
         <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-xs rounded-lg border border-border bg-surface/90 px-3 py-2 text-xs text-ink-faint backdrop-blur">
           Street/Satellite need a MapTiler key. Add <code className="text-ink-dim">NEXT_PUBLIC_MAPTILER_KEY</code> to{" "}
