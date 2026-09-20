@@ -879,6 +879,10 @@ model TerritorialChangeCandidate {
   // Approved as a verified territorial-change record, but no geometry was
   // available to apply: surfaced separately until an admin adds geometry.
   geometryPending  Boolean  @default(false) @map("geometry_pending")
+  // Role of the source that first reported the claim (aggregator, relay, ...).
+  // A claim backed ONLY by aggregator/relay evidence can never modify
+  // Territorial Control — see assertIndependentEvidence.
+  sourceRole       String?  @map("source_role")
 
   @@index([conflictId, status])
   @@index([claimKey])

@@ -1,3 +1,4 @@
+import { independentSourceCount } from "@/lib/data/independence";
 import type { ConflictEvent, SourceRef } from "@/lib/types";
 import type { EventType, Severity } from "@/lib/types";
 import type { DbVerificationStatus, EventAdminDTO } from "@/lib/types/db";
@@ -69,7 +70,7 @@ export function dbEventToConflictEvent(event: EventWithSources & { history?: Eve
     // transparency) but must NOT inflate this count — only links marked
     // isOriginatingSource (the true originating report, or a genuinely
     // separate corroborating source) count.
-    sourceCount: event.sources.filter((link) => link.isOriginatingSource).length,
+    sourceCount: independentSourceCount(event.sources),
     sources,
     timeline: [
       {
@@ -116,7 +117,7 @@ export function toEventAdminDTO(event: EventWithSources): EventAdminDTO {
     createdAt: event.createdAt.toISOString(),
     updatedAt: event.updatedAt.toISOString(),
     conflictId: event.conflictId,
-    sourceCount: event.sources.filter((link) => link.isOriginatingSource).length,
+    sourceCount: independentSourceCount(event.sources),
     supportingReportCount: event.sources.length,
   };
 }

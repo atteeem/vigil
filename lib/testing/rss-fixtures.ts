@@ -206,6 +206,54 @@ const FEEDS: Record<string, string> = {
 </item>
 </channel>
 </rss>`,
+  // Coverage-Driven Source Expansion tests (tests/source-expansion.spec.ts) —
+  // original text. Mimics real regional feeds' quirks: EMPTY <guid> elements
+  // (every item must still dedupe by its own link), Dublin Core dates instead of
+  // pubDate, numeric character references, and a dc:creator byline. Item 1 states
+  // a territorial claim in the active voice; the aggregator fixture channel
+  // states the same claim, so the two share one claim key.
+  "expansion-local-feed": `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<channel>
+<title>Vigil Test Fixture — Local Outlet</title>
+<item>
+<title>Fixland forces captured Fixtown after fighting</title>
+<link>https://fixture.test/expansion/local/fixtown-captured</link>
+<guid isPermaLink="false"></guid>
+<dc:creator><![CDATA[Fixture Local Reporter]]></dc:creator>
+<pubDate>Thu, 01 Jan 2026 13:00:00 GMT</pubDate>
+<description><![CDATA[Fixland forces captured Fixtown after fighting on the outskirts, residents said.]]></description>
+</item>
+<item>
+<title>Caf&#233; owners return to Fixcity market</title>
+<link>https://fixture.test/expansion/local/fixcity-market</link>
+<guid isPermaLink="false"></guid>
+<dc:date>2026-01-01T14:00:00Z</dc:date>
+<description>Traders reopened stalls in Fixcity on Thursday.</description>
+</item>
+<item>
+<title>Fixland army shelling reported near Fixridge</title>
+<link>https://fixture.test/expansion/local/fixridge-shelling</link>
+<guid isPermaLink="false"></guid>
+<pubDate>Thu, 01 Jan 2026 15:00:00 GMT</pubDate>
+<description>Artillery shelling was reported near Fixridge overnight.</description>
+</item>
+</channel>
+</rss>`,
+  "expansion-specialist-feed": `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<channel>
+<title>Vigil Test Fixture — Specialist Monitor</title>
+<item>
+<title>Monitor brief: front-line assessment for the Fixland theatre</title>
+<link>https://fixture.test/expansion/specialist/fixland-assessment</link>
+<guid>fixture-expansion-specialist-assessment</guid>
+<dc:creator><![CDATA[Fixture Analyst]]></dc:creator>
+<pubDate>Thu, 01 Jan 2026 16:00:00 GMT</pubDate>
+<description>An assessment of recent fighting near the front line.</description>
+</item>
+</channel>
+</rss>`,
 };
 
 export function getRssFixture(name: string): string | null {

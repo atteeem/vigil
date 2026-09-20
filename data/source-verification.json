@@ -1,0 +1,1163 @@
+{
+ "verifiedAt": "2026-09-20T04:35:20.628Z",
+ "base": "http://localhost:3000",
+ "total": 36,
+ "passed": 36,
+ "results": [
+  {
+   "name": "Radio Dabanga",
+   "url": "https://www.dabangasudan.org/en/feed",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 12,
+   "itemsStored": 12,
+   "sample": {
+    "title": "South Darfur to offer people displaced to Nyala ‘voluntary return’ to North Darfur",
+    "url": "https://www.dabangasudan.org/en/all-news/article/south-darfur-to-offer-people-displaced-to-nyala-voluntary-return-to-north-darfur",
+    "publishedAt": "2026-09-15T15:18:00.000Z",
+    "author": "Dabanga Sudan"
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "sudan"
+   ]
+  },
+  {
+   "name": "Radio Okapi",
+   "url": "https://www.radiookapi.net/feed",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 50,
+   "itemsStored": 50,
+   "sample": {
+    "title": "Dr Muyembe demande au Gouvernement de renforcer le système de surveillance sanitaire",
+    "url": "https://www.radiookapi.net/2026/09/16/actualite/sante/dr-muyembe-demande-au-gouvernement-de-renforcer-le-systeme-de",
+    "publishedAt": "2026-09-16T20:30:10.000Z",
+    "author": "Radio Okapi"
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "drc"
+   ]
+  },
+  {
+   "name": "Actualite.cd",
+   "url": "https://actualite.cd/rss.xml",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 10,
+   "itemsStored": 10,
+   "sample": {
+    "title": "RDC : Son vélo portait un message de paix, son voyage vers Rabat s’arrête à Ouesso, Miguel",
+    "url": "https://actualite.cd/2026/09/19/rdc-son-velo-portait-un-message-de-paix-son-voyage-vers-rabat-sarrete-ouesso-miguel",
+    "publishedAt": "2026-09-19T10:42:25.000Z",
+    "author": "PMaki"
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "drc"
+   ]
+  },
+  {
+   "name": "Malijet",
+   "url": "https://malijet.com/feed",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 50,
+   "itemsStored": 50,
+   "sample": {
+    "title": "Stade Malien : le club alerte sur de faux communiqués diffusés en son nom",
+    "url": "https://malijet.com/actualite_sportive_au_mali/311882-stade-malien-le-club-alerte-sur-de-faux-communiques-diffus.html",
+    "publishedAt": "2026-09-17T10:24:48.000Z",
+    "author": null
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "sahel"
+   ]
+  },
+  {
+   "name": "Lefaso.net",
+   "url": "https://lefaso.net/spip.php?page=backend",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 77,
+   "itemsStored": 77,
+   "sample": {
+    "title": "Dédougou : La CNSS soulage les peines de ses assurés sociaux",
+    "url": "https://lefaso.net/spip.php?article149279",
+    "publishedAt": "2026-09-17T10:26:00.000Z",
+    "author": "Jacques"
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "burkina-faso"
+   ]
+  },
+  {
+   "name": "Premium Times (Nigeria)",
+   "url": "https://www.premiumtimesng.com/feed",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 15,
+   "itemsStored": 15,
+   "sample": {
+    "title": "Akwa Ibom local council bans use of pupils for manual labour in schools",
+    "url": "https://www.premiumtimesng.com/regional/south-south-regional/910883-akwa-ibom-local-council-bans-use-of-pupils-for-manual-labour-in-schools.html",
+    "publishedAt": "2026-09-19T18:11:33.000Z",
+    "author": "Press Release"
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "nigeria-insurgencies"
+   ]
+  },
+  {
+   "name": "Le Nouvelliste (Haiti)",
+   "url": "https://lenouvelliste.com/rss",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 27,
+   "itemsStored": 27,
+   "sample": {
+    "title": "ONA Aims to Modernize Retirement System and Broaden Social Coverage for Insured Members",
+    "url": "https://lenouvelliste.com/article/271993/ona-aims-to-modernize-retirement-system-and-broaden-social-coverage-for-insured-members",
+    "publishedAt": "2026-09-16T05:45:50.000Z",
+    "author": "Esther Kimberly Bazile"
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "haiti"
+   ]
+  },
+  {
+   "name": "The Haitian Times",
+   "url": "https://haitiantimes.com/feed/",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 10,
+   "itemsStored": 10,
+   "sample": {
+    "title": "Haiti begins candidate filings for national elections as insecurity alters where some subm",
+    "url": "https://haitiantimes.com/2026/09/15/haiti-candidate-filings-oas-criminal-links-elections/",
+    "publishedAt": "2026-09-15T15:41:41.000Z",
+    "author": "Juhakenson Blaise"
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "haiti"
+   ]
+  },
+  {
+   "name": "El Tiempo (Colombia)",
+   "url": "https://www.eltiempo.com/rss/colombia.xml",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 10,
+   "itemsStored": 10,
+   "sample": {
+    "title": "Medicina Legal confirmó que Michel Dahiana, niña de 6 años hallada muerta en Antioquia, fu",
+    "url": "https://www.eltiempo.com/colombia/medellin/medicina-legal-confirma-la-causa-de-la-muerte-de-la-nina-de-6-anos-michel-dahiana-henao-fue-asesinada-3587343",
+    "publishedAt": "2026-09-19T21:42:20.000Z",
+    "author": null
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "colombia"
+   ]
+  },
+  {
+   "name": "Colombia Reports",
+   "url": "https://colombiareports.com/feed/",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 10,
+   "itemsStored": 10,
+   "sample": {
+    "title": "Marco Rubio and the Shield of the Americas, with Adam Isacson",
+    "url": "https://colombiareports.com/marco-rubio-and-the-shield-of-the-americas-with-adam-isacson/",
+    "publishedAt": "2026-09-10T18:06:40.000Z",
+    "author": "Adriaan Alsema"
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "colombia"
+   ]
+  },
+  {
+   "name": "Indepaz",
+   "url": "https://indepaz.org.co/feed/",
+   "role": "specialist_research",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 15,
+   "itemsStored": 15,
+   "sample": {
+    "title": "Popayán: una alerta que no puede pasar inadvertida",
+    "url": "https://indepaz.org.co/popayan-una-alerta-que-no-puede-pasar-inadvertida/?utm_source=rss&#038;utm_medium=rss&#038;utm_campaign=popayan-una-alerta-que-no-puede-pasar-inadvertida",
+    "publishedAt": "2026-08-24T11:47:05.000Z",
+    "author": "Leonardo González Perafán"
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "colombia"
+   ]
+  },
+  {
+   "name": "Mexico News Daily",
+   "url": "https://mexiconewsdaily.com/feed/",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 10,
+   "itemsStored": 13,
+   "sample": {
+    "title": "The MND News Quiz of the Week: September 19th",
+    "url": "https://mexiconewsdaily.com/mnd-intelligence/the-mnd-news-quiz-week-september-19th/",
+    "publishedAt": "2026-09-19T18:00:48.000Z",
+    "author": "MND Intelligence"
+   },
+   "originalUrlStatus": 403,
+   "botProtected": true,
+   "linkedConflicts": [
+    "mexico-cartel"
+   ]
+  },
+  {
+   "name": "Enab Baladi (English)",
+   "url": "https://english.enabbaladi.net/feed/",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 20,
+   "itemsStored": 20,
+   "sample": {
+    "title": "Al-Sharaa Focuses on Rebuilding, Investment: Syria Can Feed 70 Million",
+    "url": "https://english.enabbaladi.net/archives/2026/09/al-sharaa-focuses-on-rebuilding-investment-syria-can-feed-70-million/",
+    "publishedAt": "2026-09-15T15:39:49.000Z",
+    "author": null
+   },
+   "originalUrlStatus": 403,
+   "botProtected": true,
+   "linkedConflicts": [
+    "syria"
+   ]
+  },
+  {
+   "name": "Syria Direct",
+   "url": "https://syriadirect.org/feed/",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 10,
+   "itemsStored": 10,
+   "sample": {
+    "title": "Rushed justice won’t bury Syria’s past",
+    "url": "https://syriadirect.org/rushed-justice-wont-bury-syrias-past/",
+    "publishedAt": "2026-08-13T17:44:17.000Z",
+    "author": "Robin Yassin-Kassab"
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "syria"
+   ]
+  },
+  {
+   "name": "Amu TV",
+   "url": "https://amu.tv/feed/",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 10,
+   "itemsStored": 10,
+   "sample": {
+    "title": "Amu TV 8pm News 17 Sep 2026",
+    "url": "https://amu.tv/252538/",
+    "publishedAt": "2026-09-17T20:20:52.000Z",
+    "author": "Amu TV"
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "afghanistan-pakistan"
+   ]
+  },
+  {
+   "name": "TOLOnews",
+   "url": "https://tolonews.com/rss.xml",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 30,
+   "itemsStored": 30,
+   "sample": {
+    "title": "اقتصاد افغانستان در کانون بحث‌های شورای امنیت",
+    "url": "https://tolonews.com/fa/business-200869",
+    "publishedAt": "2026-09-17T10:42:11.000Z",
+    "author": "Liluma.qadiry"
+   },
+   "originalUrlStatus": 403,
+   "botProtected": true,
+   "linkedConflicts": [
+    "afghanistan-pakistan"
+   ]
+  },
+  {
+   "name": "Dawn (Pakistan)",
+   "url": "https://www.dawn.com/feeds/home",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 28,
+   "itemsStored": 28,
+   "sample": {
+    "title": "An eye on Balochistan border",
+    "url": "https://www.dawn.com/news/2031271/an-eye-on-balochistan-border",
+    "publishedAt": "2026-09-20T04:29:08.000Z",
+    "author": null
+   },
+   "originalUrlStatus": 403,
+   "botProtected": true,
+   "linkedConflicts": [
+    "afghanistan-pakistan"
+   ]
+  },
+  {
+   "name": "Sana'a Center for Strategic Studies",
+   "url": "https://sanaacenter.org/feed",
+   "role": "specialist_research",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 20,
+   "itemsStored": 20,
+   "sample": {
+    "title": "The Past Can Wait: Memory Construction, Victims, and Reconciliation in Yemen",
+    "url": "https://sanaacenter.org/publications/policy-research/27045",
+    "publishedAt": "2026-04-30T11:21:53.000Z",
+    "author": "Marta Mendes"
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "yemen-red-sea"
+   ]
+  },
+  {
+   "name": "Ethiopia Insight",
+   "url": "https://www.ethiopia-insight.com/feed/",
+   "role": "specialist_research",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 9,
+   "itemsStored": 9,
+   "sample": {
+    "title": "Amhara Nationalism Faces Historic Choice in National Dialogue",
+    "url": "https://www.ethiopia-insight.com/2026/07/27/amhara-nationalism-faces-historic-choice-in-national-dialogue/?utm_source=rss&#038;utm_medium=rss&#038;utm_campaign=amhara-nationalism-faces-historic-choice-in-national-dialogue&#038;utm_source=rss&#038;utm_medium=rss&#038;utm_campaign=amhara-nationalism-faces-historic-choice-in-national-dialogue",
+    "publishedAt": "2026-07-27T09:37:48.000Z",
+    "author": "Henok Ambachew"
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "ethiopia"
+   ]
+  },
+  {
+   "name": "The Irrawaddy",
+   "url": "https://www.irrawaddy.com/feed",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 10,
+   "itemsStored": 10,
+   "sample": {
+    "title": "Japan Parliament Latest Target of Myanmar Regime’s Legitimacy Push",
+    "url": "https://www.irrawaddy.com/news/burma/japan-parliament-latest-target-of-myanmar-regimes-legitimacy-push.html",
+    "publishedAt": "2026-09-16T10:44:33.000Z",
+    "author": "The Irrawaddy"
+   },
+   "originalUrlStatus": 403,
+   "botProtected": true,
+   "linkedConflicts": [
+    "myanmar"
+   ]
+  },
+  {
+   "name": "Democratic Voice of Burma (DVB)",
+   "url": "https://english.dvb.no/feed/",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 10,
+   "itemsStored": 10,
+   "sample": {
+    "title": "How Aung Kyaw Moe lets the National Unity Government off the hook",
+    "url": "https://english.dvb.no/how-aung-kyaw-moe-lets-the-national-unity-government-off-the-hook/",
+    "publishedAt": "2026-09-17T22:55:00.000Z",
+    "author": "CONTRIBUTING AUTHORS"
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "myanmar"
+   ]
+  },
+  {
+   "name": "Rappler",
+   "url": "https://www.rappler.com/feed/",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 10,
+   "itemsStored": 10,
+   "sample": {
+    "title": "How Ubisoft Philippines helps bring game worlds to life",
+    "url": "https://www.rappler.com/technology/features/ubisoft-philippines-tour-interview/",
+    "publishedAt": "2026-09-19T07:00:00.000Z",
+    "author": "Victor Barreiro Jr."
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "philippines-insurgencies"
+   ]
+  },
+  {
+   "name": "Mimi Mefo Info",
+   "url": "https://mimimefoinfos.com/feed/",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 10,
+   "itemsStored": 10,
+   "sample": {
+    "title": "Finances publiques : le MINFI affirme que le Cameroun n’est pas allé à Londres pour s’ende",
+    "url": "https://mimimefoinfos.com/finances-publiques-le-minfi-affirme-que-le-cameroun-nest-pas-alle-a-londres-pour-sendetter-davantage/",
+    "publishedAt": "2026-09-15T14:59:16.000Z",
+    "author": "Mimi Mefo Info Francais (Editor)"
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "cameroon"
+   ]
+  },
+  {
+   "name": "Radio Ndeke Luka",
+   "url": "https://www.radiondekeluka.org/feed",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 10,
+   "itemsStored": 10,
+   "sample": {
+    "title": "Education : une baisse des prix des fournitures scolaires qui rassure les parents",
+    "url": "https://www.radiondekeluka.org/105859-education-une-baisse-des-prix-des-fournitures-scolaires-qui-rassure-les-parents",
+    "publishedAt": "2026-09-17T11:55:16.000Z",
+    "author": "Vianney Ingasso"
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "central-african-republic"
+   ]
+  },
+  {
+   "name": "Imphal Free Press",
+   "url": "https://www.ifp.co.in/feed",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 1,
+   "itemsStored": 1,
+   "sample": {
+    "title": "About Imphal Free Press",
+    "url": "https://www.ifp.co.in/about-imphal-free-press/",
+    "publishedAt": "2026-08-31T08:40:12.000Z",
+    "author": "Nain"
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "northeast-india"
+   ]
+  },
+  {
+   "name": "InSight Crime",
+   "url": "https://insightcrime.org/feed/",
+   "role": "specialist_research",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 11,
+   "itemsStored": 11,
+   "sample": {
+    "title": "Chapitos",
+    "url": "https://insightcrime.org/mexico-organized-crime-news/los-chapitos/",
+    "publishedAt": "2026-09-09T15:39:48.000Z",
+    "author": "InSight Crime"
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "mexico-cartel",
+    "colombia",
+    "ecuador",
+    "haiti"
+   ]
+  },
+  {
+   "name": "The New Humanitarian",
+   "url": "https://www.thenewhumanitarian.org/rss/all.xml",
+   "role": "specialist_research",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 10,
+   "itemsStored": 10,
+   "sample": {
+    "title": "Visible crises, invisible people",
+    "url": "https://www.thenewhumanitarian.org/opinion/2026/09/11/visible-crises-invisible-people",
+    "publishedAt": "2026-09-11T08:31:43.000Z",
+    "author": "Avishan Chanani"
+   },
+   "originalUrlStatus": 403,
+   "botProtected": true,
+   "linkedConflicts": [
+    "sudan",
+    "drc",
+    "sahel",
+    "burkina-faso",
+    "niger",
+    "ethiopia",
+    "haiti",
+    "somalia",
+    "nigeria-insurgencies",
+    "syria",
+    "central-african-republic"
+   ]
+  },
+  {
+   "name": "FDD's Long War Journal",
+   "url": "https://www.longwarjournal.org/feed",
+   "role": "specialist_research",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 30,
+   "itemsStored": 30,
+   "sample": {
+    "title": "Taliban force surrender of dissident commander, kill senior anti-Taliban resistance leader",
+    "url": "https://www.longwarjournal.org/archives/2026/08/taliban-force-surrender-of-dissident-commander-kill-senior-anti-taliban-resistance-leader.php",
+    "publishedAt": "2026-08-24T12:04:37.000Z",
+    "author": "Will Selber"
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "somalia",
+    "sahel",
+    "burkina-faso",
+    "niger",
+    "afghanistan-pakistan",
+    "nigeria-insurgencies",
+    "syria",
+    "yemen-red-sea",
+    "libya"
+   ]
+  },
+  {
+   "name": "Ukrainska Pravda (English)",
+   "url": "https://www.pravda.com.ua/eng/rss/",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 20,
+   "itemsStored": 20,
+   "sample": {
+    "title": "Zelenskyy unveils new interceptor drone for jet-powered Shahed drones – video",
+    "url": "https://www.pravda.com.ua/eng/news/2026/09/19/8054224/",
+    "publishedAt": "2026-09-19T11:20:00.000Z",
+    "author": "Roman Petrenko"
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "russia-ukraine"
+   ]
+  },
+  {
+   "name": "Ukrinform",
+   "url": "https://www.ukrinform.net/rss/block-lastnews",
+   "role": "official",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 30,
+   "itemsStored": 30,
+   "sample": {
+    "title": "Europe falls behind in drone warfare technology, vulnerable to Russian missile attacks — L",
+    "url": "https://www.ukrinform.net/rubric-polytics/4165771-europe-falls-behind-in-drone-warfare-technology-vulnerable-to-russian-missile-attacks-latvian-president.html",
+    "publishedAt": "2026-09-19T12:19:00.000Z",
+    "author": null
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "russia-ukraine"
+   ]
+  },
+  {
+   "name": "Euromaidan Press",
+   "url": "https://euromaidanpress.com/feed/",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 29,
+   "itemsStored": 29,
+   "sample": {
+    "title": "Ukraine strikes two Russian S-400 launchers in Bryansk. The same systems were used to atta",
+    "url": "https://euromaidanpress.com/2026/09/17/ukraine-strikes-two-russian-s-400-launchers-in-bryansk/",
+    "publishedAt": "2026-09-17T14:09:47.000Z",
+    "author": "Benjamin Murdoch"
+   },
+   "originalUrlStatus": 403,
+   "botProtected": true,
+   "linkedConflicts": [
+    "russia-ukraine"
+   ]
+  },
+  {
+   "name": "Meduza (English)",
+   "url": "https://meduza.io/rss/en/all",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 30,
+   "itemsStored": 30,
+   "sample": {
+    "title": "‘Nestlé is committed to taking all necessary steps to protect its rights’: Nestlé and Auch",
+    "url": "https://meduza.io/en/news/2026/09/18/nestle-is-committed-to-taking-all-necessary-steps-to-protect-its-rights-nestle-and-auchan-respond-to-putin-s-decree-placing-their-russian-assets-under-temporary-management",
+    "publishedAt": "2026-09-18T10:03:17.000Z",
+    "author": null
+   },
+   "originalUrlStatus": 200,
+   "botProtected": false,
+   "linkedConflicts": [
+    "russia-ukraine"
+   ]
+  },
+  {
+   "name": "Times of Israel",
+   "url": "https://www.timesofisrael.com/feed/",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 14,
+   "itemsStored": 29,
+   "sample": {
+    "title": "US nearly raided Chinese ship after AI falsely flagged ‘nuclear’ cargo for Iran — CNN",
+    "url": "https://www.timesofisrael.com/us-nearly-raided-chinese-ship-after-ai-falsely-flagged-nuclear-cargo-for-iran-cnn/",
+    "publishedAt": "2026-09-19T15:36:57.000Z",
+    "author": null
+   },
+   "originalUrlStatus": 403,
+   "botProtected": true,
+   "linkedConflicts": [
+    "israel-palestine",
+    "israel-lebanon"
+   ]
+  },
+  {
+   "name": "+972 Magazine",
+   "url": "https://www.972mag.com/feed/",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 10,
+   "itemsStored": 10,
+   "sample": {
+    "title": "The Israeli right is rekindling a Zionist classic: Judaizing the Galilee",
+    "url": "https://www.972mag.com/israeli-right-judaizing-galilee/",
+    "publishedAt": "2026-09-07T16:36:56.000Z",
+    "author": "Baker Zoubi"
+   },
+   "originalUrlStatus": 403,
+   "botProtected": true,
+   "linkedConflicts": [
+    "israel-palestine"
+   ]
+  },
+  {
+   "name": "IranWire",
+   "url": "https://iranwire.com/en/feed/",
+   "role": "local_media",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "fetchedWithoutError": true,
+    "atLeastOneItem": true,
+    "originalUrlOnPublisherDomain": true,
+    "publishedAtValid": true,
+    "originalUrlResolves": true,
+    "noDuplicatesOnRefetch": true,
+    "conflictAssociation": true
+   },
+   "note": "",
+   "fetchedItems": 511,
+   "itemsStored": 511,
+   "sample": {
+    "title": "Iranians Learn to Live (and Ignore) Pro-Regime Rallies",
+    "url": "https://iranwire.com/en/features/157777-iranians-learn-to-live-and-ignore-pro-regime-rallies/",
+    "publishedAt": "2026-09-18T16:14:56.000Z",
+    "author": null
+   },
+   "originalUrlStatus": 403,
+   "botProtected": true,
+   "linkedConflicts": [
+    "persian-gulf-iran"
+   ]
+  },
+  {
+   "name": "Liveuamap (official Telegram)",
+   "url": "@liveuamap",
+   "role": "aggregator",
+   "ok": true,
+   "checks": {
+    "singleSourceRecord": true,
+    "roleClassified": true,
+    "enabledAsSpecified": true,
+    "disabledWithoutCredentials": true
+   },
+   "note": "Telegram adapter disabled — no authorized credentials configured (source: @liveuamap). Set TELEGRAM_API_ID / TELEGRAM_API_HASH / TELEGRAM_SESSION."
+  }
+ ]
+}

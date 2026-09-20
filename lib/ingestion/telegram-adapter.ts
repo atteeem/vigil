@@ -1,5 +1,6 @@
 import type { Source } from "@prisma/client";
 import type { SourceAdapter, NormalizedItem, HealthCheckResult } from "@/lib/ingestion/types";
+import { getTelegramFixture } from "@/lib/testing/telegram-fixtures";
 
 /**
  * Real MTProto integration (spec "Telegram architecture"), entirely
@@ -22,6 +23,12 @@ import type { SourceAdapter, NormalizedItem, HealthCheckResult } from "@/lib/ing
  * is used exactly as documented; still, treat this as the first thing to
  * validate once real credentials are configured.
  */
+/** Test-server-only fixture channels (never set in dev/production): lets the
+ * adapter be tested end-to-end without credentials or network. */
+function fixtureMode(): boolean {
+  return process.env.TELEGRAM_FIXTURES === "true" && process.env.NODE_ENV !== "production";
+}
+
 function credentialsConfigured(): boolean {
   return Boolean(process.env.TELEGRAM_API_ID && process.env.TELEGRAM_API_HASH && process.env.TELEGRAM_SESSION);
 }
@@ -76,6 +83,10 @@ const MESSAGES_PER_POLL = 20;
 
 export const TelegramAuthorizedSourceAdapter: SourceAdapter = {
   async fetchLatest(source: Source): Promise<unknown[]> {
+    if (fixtureMode() && source.telegramHandle) {
+      const fixture = getTelegramFixture(source.telegramHandle);
+      if (fixture) return fixture.filter((m) => m.text).map((m) => ({ messageId: m.messageId, channel: m.channel, text: m.text, date: m.date }));
+    }
     if (!credentialsConfigured() || !source.telegramHandle) return [];
     const client = await getClient();
     const handle = source.telegramHandle.replace(/^@/, "");
@@ -104,6 +115,7 @@ export const TelegramAuthorizedSourceAdapter: SourceAdapter = {
   },
 
   async healthCheck(source: Source): Promise<HealthCheckResult> {
+    if (fixtureMode() && source.telegramHandle && getTelegramFixture(source.telegramHandle)) return { ok: true };
     if (!credentialsConfigured()) {
       return {
         ok: false,

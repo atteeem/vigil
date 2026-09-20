@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/db/client";
 import { toConflictDTO } from "@/lib/db/repositories/conflicts";
-import { computeCoverage, summarizeCoverage, classifySource, type CoverageHealth, type CoverageSource, type CoverageSummary, type SourceKind } from "@/lib/registry/coverage";
+import { COVERAGE_THRESHOLDS, computeCoverage, summarizeCoverage, classifySource, type CoverageHealth, type CoverageSource, type CoverageSummary, type SourceKind } from "@/lib/registry/coverage";
 import { conflictGeographyOf, type ConflictGeography } from "@/lib/registry/geography";
 import { normalizeConflictStatus, type RegistryStatus } from "@/lib/registry/status";
+import { sourceTierOf, type SourceTier, type TierCounts } from "@/lib/registry/source-tiers";
 import type { ConflictDTO } from "@/lib/types/db";
 
 // Conflict coverage dashboard data: per conflict, which sources are relevant
@@ -13,6 +14,7 @@ export interface CoverageSourceDTO {
   id: string;
   name: string;
   kind: SourceKind;
+  tier: SourceTier;
   link: string;
   enabled: boolean;
   lastSuccessfulIngestion: string | null;
@@ -30,9 +32,13 @@ export interface CoverageRowDTO {
   specialistSources: number;
   generalSources: number;
   aggregatorSources: number;
+  tiers: TierCounts;
+  tierDiversity: number;
   independentSources: number;
   latestSourceAt: string | null;
   latestEventAt: string | null;
+  /** Latest report ingested from a conflict-specific source. */
+  latestReportAt: string | null;
   hasDedicatedSource: boolean;
   hasTerritorialData: boolean;
   territorialAreas: number;
@@ -66,7 +72,7 @@ export interface CoverageResult {
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
 
 async function loadRows(now: Date): Promise<CoverageRowDTO[]> {
-  const [conflicts, sources, links, eventLatest, contributions, territories, participants, candidateCounts] = await Promise.all([
+  const [conflicts, sources, links, eventLatest, contributions, territories, participants, candidateCounts, itemLatest] = await Promise.all([
     prisma.conflict.findMany({ include: { family: true }, orderBy: { name: "asc" } }),
     prisma.source.findMany({ select: { id: true, name: true, enabled: true, sourceRole: true, country: true, lastSuccessfulIngestion: true } }),
     prisma.sourceConflictLink.findMany({ select: { sourceId: true, conflictId: true, scope: true } }),
@@ -78,17 +84,27 @@ async function loadRows(now: Date): Promise<CoverageRowDTO[]> {
     prisma.conflictTerritory.groupBy({ by: ["conflictId"], where: { published: true }, _count: { _all: true } }),
     prisma.conflictParticipant.findMany({ include: { unit: { select: { name: true } } } }),
     prisma.sourceCandidate.groupBy({ by: ["conflictId"], where: { status: { in: ["candidate", "approved"] } }, _count: { _all: true } }),
+    prisma.rawIngestionItem.groupBy({ by: ["sourceId"], _max: { receivedAt: true } }),
   ]);
+  const latestItemBySource = new Map(itemLatest.map((i) => [i.sourceId, i._max.receivedAt]));
 
   const sourceById = new Map(sources.map((s) => [s.id, s]));
   const latestEvent = new Map(eventLatest.map((e) => [e.conflictId, e._max.occurredAt]));
   const territoryCount = new Map(territories.map((t) => [t.conflictId, t._count._all]));
   const candidateCount = new Map(candidateCounts.map((c) => [c.conflictId, c._count._all]));
-  const contributed = new Map<string, Set<string>>();
+  // How many published events each source contributed to each conflict. A source
+  // only counts as coverage for a conflict it merely mentions once it has
+  // contributed COVERAGE_THRESHOLDS.minContributedEvents.
+  const contributedCounts = new Map<string, Map<string, number>>();
   for (const c of contributions) {
     const conflictId = c.event.conflictId;
     if (!conflictId) continue;
-    (contributed.get(conflictId) ?? contributed.set(conflictId, new Set()).get(conflictId)!).add(c.rawIngestionItem.sourceId);
+    const perSource = contributedCounts.get(conflictId) ?? contributedCounts.set(conflictId, new Map()).get(conflictId)!;
+    perSource.set(c.rawIngestionItem.sourceId, (perSource.get(c.rawIngestionItem.sourceId) ?? 0) + 1);
+  }
+  const contributed = new Map<string, string[]>();
+  for (const [conflictId, perSource] of contributedCounts) {
+    contributed.set(conflictId, [...perSource].filter(([, n]) => n >= COVERAGE_THRESHOLDS.minContributedEvents).map(([id]) => id));
   }
 
   return conflicts.map((c): CoverageRowDTO => {
@@ -106,6 +122,14 @@ async function loadRows(now: Date): Promise<CoverageRowDTO[]> {
     for (const s of sources) if (s.country && geography.fighting.includes(s.country.toUpperCase())) add(s.id, "derived");
     for (const sourceId of contributed.get(c.id) ?? []) add(sourceId, "derived");
 
+    // Reporting activity: newest ingested item from a source that is specific to this
+    // conflict (dedicated link, or based in a country where it is fought).
+    const reportTimes = [...relevant.values()]
+      .filter((s) => s.enabled && (s.link === "dedicated" || (sourceById.get(s.id)?.country && geography.fighting.includes(sourceById.get(s.id)!.country!.toUpperCase()))))
+      .map((s) => latestItemBySource.get(s.id)?.getTime())
+      .filter((t): t is number => typeof t === "number");
+    const latestReportAt = reportTimes.length > 0 ? new Date(Math.max(...reportTimes)) : null;
+
     const actors = participants.filter((p) => p.conflictId === c.id).map((p) => ({ name: p.unit.name, role: p.role }));
     const territorialAreas = territoryCount.get(c.id) ?? 0;
     const coverage = computeCoverage(
@@ -114,6 +138,7 @@ async function loadRows(now: Date): Promise<CoverageRowDTO[]> {
         fullScaleWar: c.fullScaleWar,
         sources: [...relevant.values()],
         latestEventAt: latestEvent.get(c.id) ?? null,
+        latestReportAt,
         territorialAreas,
         actorCount: actors.length,
         geography,
@@ -132,9 +157,12 @@ async function loadRows(now: Date): Promise<CoverageRowDTO[]> {
       specialistSources: coverage.specialistSources,
       generalSources: coverage.generalSources,
       aggregatorSources: coverage.aggregatorSources,
+      tiers: coverage.tiers,
+      tierDiversity: coverage.tierDiversity,
       independentSources: coverage.independentSources,
       latestSourceAt: iso(coverage.latestSourceAt),
       latestEventAt: iso(coverage.latestEventAt),
+      latestReportAt: iso(coverage.latestReportAt),
       hasDedicatedSource: coverage.hasDedicatedSource,
       hasTerritorialData: coverage.hasTerritorialData,
       territorialAreas,
@@ -143,7 +171,7 @@ async function loadRows(now: Date): Promise<CoverageRowDTO[]> {
       flags: coverage.flags,
       sources: [...relevant.values()]
         .sort((a, b) => a.name.localeCompare(b.name))
-        .map((s) => ({ id: s.id, name: s.name, kind: classifySource(s), link: s.link, enabled: s.enabled, lastSuccessfulIngestion: iso(s.lastSuccessfulIngestion) })),
+        .map((s) => ({ id: s.id, name: s.name, kind: classifySource(s), tier: sourceTierOf(s.sourceRole), link: s.link, enabled: s.enabled, lastSuccessfulIngestion: iso(s.lastSuccessfulIngestion) })),
       actors,
     };
   });

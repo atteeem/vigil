@@ -30,6 +30,8 @@ import { detectTerritorialChangeMentions, baseConfidenceFor } from "@/lib/territ
 import { resolveLocationPrecision } from "@/lib/territory/location-precision";
 import { proposeTerritorialChange } from "@/lib/db/repositories/territorial-changes";
 import { findConflictByCountryCode } from "@/lib/db/repositories/conflicts";
+import { isAggregatorRole } from "@/lib/registry/source-tiers";
+import { upstreamMetadata } from "@/lib/ingestion/upstream";
 
 export interface FetchResult {
   fetched: number;
@@ -191,8 +193,10 @@ async function computeAndStoreTerritorialChangeCandidates(item: RawIngestionItem
         conflictId,
         description: m.description,
         changeType: m.changeType,
-        confidence: baseConfidenceFor(m, location.precision !== "unknown"),
-        evidence: `rule:${m.ruleId} | ${m.sentence}`,
+        // An aggregator/relay report is a discovery lead, not evidence: cap its confidence.
+        confidence: isAggregatorRole(source.sourceRole) ? Math.min(0.3, baseConfidenceFor(m, location.precision !== "unknown")) : baseConfidenceFor(m, location.precision !== "unknown"),
+        evidence: `rule:${m.ruleId} | ${m.sentence}${isAggregatorRole(source.sourceRole) ? " | AGGREGATOR SOURCE — corroborate before approving" : ""}`,
+        sourceRole: source.sourceRole,
         rawIngestionItemId: item.id,
         claimedActorId: claimed?.id,
         claimedActorName: claimed?.name ?? null,
@@ -231,6 +235,12 @@ export async function pollSource(source: Source): Promise<FetchResult> {
     const createdItems: RawIngestionItemDTO[] = [];
     for (const raw of rawItems) {
       const normalized = adapter.normalize(raw, source);
+      // Aggregator/relay posts: keep who they cite (and their own permalink) so the
+      // item can be traced upstream and is never counted as an independent source.
+      if (isAggregatorRole(source.sourceRole)) {
+        const upstream = upstreamMetadata(normalized.originalText || normalized.originalTitle);
+        if (Object.keys(upstream).length > 0) normalized.rawMetadata = { ...normalized.rawMetadata, ...upstream };
+      }
       const result = await createRawIngestionItemIfNew({ sourceId: source.id, ...normalized });
       if (result.created) {
         created++;

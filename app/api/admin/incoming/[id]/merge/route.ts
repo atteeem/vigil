@@ -5,6 +5,7 @@ import { setProcessingStatus } from "@/lib/db/repositories/raw-ingestion-items";
 import { proposeEventUpdatesFromReport } from "@/lib/db/repositories/event-updates";
 import { propagateUnitLinksToEvent } from "@/lib/db/repositories/military";
 import type { EventSourceRelationship } from "@/lib/types/db";
+import { isAggregatorRole } from "@/lib/registry/source-tiers";
 
 interface MergeBody {
   eventId: string;
@@ -25,7 +26,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const event = await prisma.event.findUnique({ where: { id: body.eventId } });
   if (!event) return NextResponse.json({ error: "Target event not found" }, { status: 404 });
 
-  const relationship = body.relationship ?? "corroborating";
+  // An aggregator/relay report is never an independent confirmation: whatever the
+  // caller asked for, it is attached as a relay (still shown as a supporting
+  // report, but not counted as an independent source).
+  const rawItem = await prisma.rawIngestionItem.findUnique({ where: { id }, include: { source: { select: { sourceRole: true } } } });
+  const relationship: EventSourceRelationship = isAggregatorRole(rawItem?.source.sourceRole) ? "relay" : (body.relationship ?? "corroborating");
   await linkEventSource(body.eventId, id, relationship, relationship !== "relay");
   const item = await setProcessingStatus(id, "merged");
 

@@ -1,5 +1,6 @@
 import { isLiveStatus, normalizeConflictStatus, type RegistryStatus } from "@/lib/registry/status";
 import { geographyIssues, type ConflictGeography } from "@/lib/registry/geography";
+import { emptyTierCounts, sourceTierOf, tierDiversity, type TierCounts } from "@/lib/registry/source-tiers";
 
 // Coverage / freshness for one conflict — pure functions of their input (with
 // an injectable `now`) so the health rules are deterministic and testable.
@@ -19,6 +20,10 @@ export const COVERAGE_THRESHOLDS = {
   eventFreshHours: { active: 72, reduced: 24 * 14 },
   /** Independent sources needed before coverage can be "healthy". */
   minIndependentSources: 2,
+  /** A general source that merely appeared on a conflict's events only counts as
+   * coverage for it after contributing this many published events — a global feed
+   * that occasionally mentions a conflict is not coverage for it. */
+  minContributedEvents: 3,
 } as const;
 
 export type CoverageHealth = "healthy" | "weak" | "stale" | "no_source" | "inactive";
@@ -35,7 +40,7 @@ export interface CoverageSource {
   lastSuccessfulIngestion: Date | null;
 }
 
-const LOCAL_ROLES = new Set(["local_media", "eyewitness_community"]);
+const LOCAL_ROLES = new Set(["local_media", "eyewitness_community", "specialist_research"]);
 const AGGREGATOR_ROLES = new Set(["aggregator", "relay"]);
 
 /** Dedicated (explicitly linked as conflict-specific) > specialist/local >
@@ -52,6 +57,11 @@ export interface CoverageInput {
   fullScaleWar?: boolean;
   sources: CoverageSource[];
   latestEventAt: Date | null;
+  /** Latest report INGESTED from a conflict-specific source (dedicated, or
+   * country-matched) — reporting activity that has not been through editorial
+   * review into a published event yet. General multi-conflict feeds don't count:
+   * an item from them proves nothing about this conflict. */
+  latestReportAt?: Date | null;
   territorialAreas: number;
   actorCount: number;
   geography: ConflictGeography;
@@ -64,10 +74,15 @@ export interface ConflictCoverage {
   specialistSources: number;
   generalSources: number;
   aggregatorSources: number;
+  /** Enabled relevant sources per tier (official / local / specialist / global / aggregator). */
+  tiers: TierCounts;
+  /** Distinct non-aggregator tiers present — diversity of VOICES, not volume. */
+  tierDiversity: number;
   /** Distinct independent sources: aggregators/relays together count as one. */
   independentSources: number;
   latestSourceAt: Date | null;
   latestEventAt: Date | null;
+  latestReportAt: Date | null;
   health: CoverageHealth;
   reasons: string[];
   hasDedicatedSource: boolean;
@@ -87,6 +102,8 @@ export function computeCoverage(input: CoverageInput, now: Date = new Date()): C
   const enabled = input.sources.filter((s) => s.enabled);
   const counts = { dedicated: 0, specialist_local: 0, general: 0, aggregator: 0 } satisfies Record<SourceKind, number>;
   for (const s of enabled) counts[classifySource(s)] += 1;
+  const tiers = emptyTierCounts();
+  for (const s of enabled) tiers[sourceTierOf(s.sourceRole)] += 1;
 
   const independent = counts.dedicated + counts.specialist_local + counts.general + (counts.aggregator > 0 ? 1 : 0);
   const successTimes = enabled.map((s) => s.lastSuccessfulIngestion?.getTime()).filter((t): t is number => typeof t === "number");
@@ -95,7 +112,9 @@ export function computeCoverage(input: CoverageInput, now: Date = new Date()): C
   const live = isLiveStatus(status);
   const window = status === "reduced" ? "reduced" : "active";
   const sourceFresh = latestSourceAt !== null && hoursBetween(now, latestSourceAt) <= COVERAGE_THRESHOLDS.sourceFreshHours[window];
-  const eventFresh = input.latestEventAt !== null && hoursBetween(now, input.latestEventAt) <= COVERAGE_THRESHOLDS.eventFreshHours[window];
+  const activityTimes = [input.latestEventAt, input.latestReportAt ?? null].filter((d): d is Date => d !== null).map((d) => d.getTime());
+  const latestActivity = activityTimes.length > 0 ? new Date(Math.max(...activityTimes)) : null;
+  const eventFresh = latestActivity !== null && hoursBetween(now, latestActivity) <= COVERAGE_THRESHOLDS.eventFreshHours[window];
 
   const reasons: string[] = [];
   let health: CoverageHealth;
@@ -113,7 +132,7 @@ export function computeCoverage(input: CoverageInput, now: Date = new Date()): C
     const weakReasons: string[] = [];
     if (independent < COVERAGE_THRESHOLDS.minIndependentSources) weakReasons.push(`Only ${independent} independent source${independent === 1 ? "" : "s"} (aggregators count once).`);
     if (specialised === 0 && independent < 3) weakReasons.push("No dedicated or local/specialist source.");
-    if (!eventFresh) weakReasons.push(input.latestEventAt ? "No recent events despite fresh sources." : "No events recorded yet.");
+    if (!eventFresh) weakReasons.push(latestActivity ? "No recent events or reports despite fresh sources." : "No events or reports recorded yet.");
     if (weakReasons.length > 0) {
       health = "weak";
       reasons.push(...weakReasons);
@@ -131,9 +150,12 @@ export function computeCoverage(input: CoverageInput, now: Date = new Date()): C
     specialistSources: counts.specialist_local,
     generalSources: counts.general,
     aggregatorSources: counts.aggregator,
+    tiers,
+    tierDiversity: tierDiversity(tiers),
     independentSources: independent,
     latestSourceAt,
     latestEventAt: input.latestEventAt,
+    latestReportAt: input.latestReportAt ?? null,
     health,
     reasons,
     hasDedicatedSource: counts.dedicated > 0,

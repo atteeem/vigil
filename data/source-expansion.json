@@ -1,0 +1,774 @@
+{
+  "_comment": "Coverage-Driven Source Expansion. Every RSS feed below was fetched during the audit and returned real items (see TASKS.md for the verification run). Only publicly advertised RSS feeds are used — no scraping, no paywall bypass; feeds that blocked automated access (HTTP 403) or returned no feed were left out and recorded in candidateUpdates instead. `links` are the ONLY explicit conflict relevance (scope dedicated = exists for that conflict; general = broader source that also covers it). A source with a `country` is additionally derived as local coverage for conflicts fought in that country. Tiers come from sourceRole: local_media / specialist_research / aggregator (see lib/registry/source-tiers.ts).",
+  "sources": [
+    {
+      "name": "Radio Dabanga",
+      "url": "https://www.dabangasudan.org/en/feed",
+      "type": "rss",
+      "language": "en",
+      "country": "SD",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "sudan",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "Radio Okapi",
+      "url": "https://www.radiookapi.net/feed",
+      "type": "rss",
+      "language": "fr",
+      "country": "CD",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "drc",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "Actualite.cd",
+      "url": "https://actualite.cd/rss.xml",
+      "type": "rss",
+      "language": "fr",
+      "country": "CD",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "drc",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "Malijet",
+      "url": "https://malijet.com/feed",
+      "type": "rss",
+      "language": "fr",
+      "country": "ML",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "sahel",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "Lefaso.net",
+      "url": "https://lefaso.net/spip.php?page=backend",
+      "type": "rss",
+      "language": "fr",
+      "country": "BF",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "burkina-faso",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "Premium Times (Nigeria)",
+      "url": "https://www.premiumtimesng.com/feed",
+      "type": "rss",
+      "language": "en",
+      "country": "NG",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "nigeria-insurgencies",
+          "scope": "general"
+        }
+      ]
+    },
+    {
+      "name": "Le Nouvelliste (Haiti)",
+      "url": "https://lenouvelliste.com/rss",
+      "type": "rss",
+      "language": "fr",
+      "country": "HT",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "haiti",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "The Haitian Times",
+      "url": "https://haitiantimes.com/feed/",
+      "type": "rss",
+      "language": "en",
+      "country": "HT",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "haiti",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "El Tiempo (Colombia)",
+      "url": "https://www.eltiempo.com/rss/colombia.xml",
+      "type": "rss",
+      "language": "es",
+      "country": "CO",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "colombia",
+          "scope": "general"
+        }
+      ]
+    },
+    {
+      "name": "Colombia Reports",
+      "url": "https://colombiareports.com/feed/",
+      "type": "rss",
+      "language": "en",
+      "country": "CO",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "colombia",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "Indepaz",
+      "url": "https://indepaz.org.co/feed/",
+      "type": "rss",
+      "language": "es",
+      "country": "CO",
+      "sourceRole": "specialist_research",
+      "sourceCategory": "Research",
+      "links": [
+        {
+          "conflict": "colombia",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "Mexico News Daily",
+      "url": "https://mexiconewsdaily.com/feed/",
+      "type": "rss",
+      "language": "en",
+      "country": "MX",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "mexico-cartel",
+          "scope": "general"
+        }
+      ]
+    },
+    {
+      "name": "Enab Baladi (English)",
+      "url": "https://english.enabbaladi.net/feed/",
+      "type": "rss",
+      "language": "en",
+      "country": "SY",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "syria",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "Syria Direct",
+      "url": "https://syriadirect.org/feed/",
+      "type": "rss",
+      "language": "en",
+      "country": "SY",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "syria",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "Amu TV",
+      "url": "https://amu.tv/feed/",
+      "type": "rss",
+      "language": "en",
+      "country": "AF",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "afghanistan-pakistan",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "TOLOnews",
+      "url": "https://tolonews.com/rss.xml",
+      "type": "rss",
+      "language": "en",
+      "country": "AF",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "afghanistan-pakistan",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "Dawn (Pakistan)",
+      "url": "https://www.dawn.com/feeds/home",
+      "type": "rss",
+      "language": "en",
+      "country": "PK",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "afghanistan-pakistan",
+          "scope": "general"
+        }
+      ]
+    },
+    {
+      "name": "Sana'a Center for Strategic Studies",
+      "url": "https://sanaacenter.org/feed",
+      "type": "rss",
+      "language": "en",
+      "country": "YE",
+      "sourceRole": "specialist_research",
+      "sourceCategory": "Research",
+      "links": [
+        {
+          "conflict": "yemen-red-sea",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "Ethiopia Insight",
+      "url": "https://www.ethiopia-insight.com/feed/",
+      "type": "rss",
+      "language": "en",
+      "country": "ET",
+      "sourceRole": "specialist_research",
+      "sourceCategory": "Research",
+      "links": [
+        {
+          "conflict": "ethiopia",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "The Irrawaddy",
+      "url": "https://www.irrawaddy.com/feed",
+      "type": "rss",
+      "language": "en",
+      "country": "MM",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "myanmar",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "Democratic Voice of Burma (DVB)",
+      "url": "https://english.dvb.no/feed/",
+      "type": "rss",
+      "language": "en",
+      "country": "MM",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "myanmar",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "Rappler",
+      "url": "https://www.rappler.com/feed/",
+      "type": "rss",
+      "language": "en",
+      "country": "PH",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "philippines-insurgencies",
+          "scope": "general"
+        }
+      ]
+    },
+    {
+      "name": "Mimi Mefo Info",
+      "url": "https://mimimefoinfos.com/feed/",
+      "type": "rss",
+      "language": "en",
+      "country": "CM",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "cameroon",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "Radio Ndeke Luka",
+      "url": "https://www.radiondekeluka.org/feed",
+      "type": "rss",
+      "language": "fr",
+      "country": "CF",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "central-african-republic",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "Imphal Free Press",
+      "url": "https://www.ifp.co.in/feed",
+      "type": "rss",
+      "language": "en",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "northeast-india",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "InSight Crime",
+      "url": "https://insightcrime.org/feed/",
+      "type": "rss",
+      "language": "en",
+      "sourceRole": "specialist_research",
+      "sourceCategory": "Research",
+      "links": [
+        {
+          "conflict": "mexico-cartel",
+          "scope": "general"
+        },
+        {
+          "conflict": "colombia",
+          "scope": "general"
+        },
+        {
+          "conflict": "ecuador",
+          "scope": "general"
+        },
+        {
+          "conflict": "haiti",
+          "scope": "general"
+        }
+      ]
+    },
+    {
+      "name": "The New Humanitarian",
+      "url": "https://www.thenewhumanitarian.org/rss/all.xml",
+      "type": "rss",
+      "language": "en",
+      "sourceRole": "specialist_research",
+      "sourceCategory": "Research",
+      "links": [
+        {
+          "conflict": "sudan",
+          "scope": "general"
+        },
+        {
+          "conflict": "drc",
+          "scope": "general"
+        },
+        {
+          "conflict": "sahel",
+          "scope": "general"
+        },
+        {
+          "conflict": "burkina-faso",
+          "scope": "general"
+        },
+        {
+          "conflict": "niger",
+          "scope": "general"
+        },
+        {
+          "conflict": "ethiopia",
+          "scope": "general"
+        },
+        {
+          "conflict": "haiti",
+          "scope": "general"
+        },
+        {
+          "conflict": "somalia",
+          "scope": "general"
+        },
+        {
+          "conflict": "nigeria-insurgencies",
+          "scope": "general"
+        },
+        {
+          "conflict": "syria",
+          "scope": "general"
+        },
+        {
+          "conflict": "central-african-republic",
+          "scope": "general"
+        }
+      ]
+    },
+    {
+      "name": "FDD's Long War Journal",
+      "url": "https://www.longwarjournal.org/feed",
+      "type": "rss",
+      "language": "en",
+      "sourceRole": "specialist_research",
+      "sourceCategory": "Research",
+      "links": [
+        {
+          "conflict": "somalia",
+          "scope": "general"
+        },
+        {
+          "conflict": "sahel",
+          "scope": "general"
+        },
+        {
+          "conflict": "burkina-faso",
+          "scope": "general"
+        },
+        {
+          "conflict": "niger",
+          "scope": "general"
+        },
+        {
+          "conflict": "afghanistan-pakistan",
+          "scope": "general"
+        },
+        {
+          "conflict": "nigeria-insurgencies",
+          "scope": "general"
+        },
+        {
+          "conflict": "syria",
+          "scope": "general"
+        },
+        {
+          "conflict": "yemen-red-sea",
+          "scope": "general"
+        },
+        {
+          "conflict": "libya",
+          "scope": "general"
+        }
+      ]
+    },
+    {
+      "name": "Ukrainska Pravda (English)",
+      "url": "https://www.pravda.com.ua/eng/rss/",
+      "type": "rss",
+      "language": "en",
+      "country": "UA",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "russia-ukraine",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "Ukrinform",
+      "url": "https://www.ukrinform.net/rss/block-lastnews",
+      "type": "rss",
+      "language": "en",
+      "country": "UA",
+      "sourceRole": "official",
+      "sourceCategory": "official",
+      "links": [
+        {
+          "conflict": "russia-ukraine",
+          "scope": "dedicated"
+        }
+      ],
+      "note": "Ukraine's national news agency (state-owned): an official/state voice, not independent of the Ukrainian government."
+    },
+    {
+      "name": "Euromaidan Press",
+      "url": "https://euromaidanpress.com/feed/",
+      "type": "rss",
+      "language": "en",
+      "country": "UA",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "russia-ukraine",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "Meduza (English)",
+      "url": "https://meduza.io/rss/en/all",
+      "type": "rss",
+      "language": "en",
+      "country": "RU",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "russia-ukraine",
+          "scope": "general"
+        }
+      ]
+    },
+    {
+      "name": "Times of Israel",
+      "url": "https://www.timesofisrael.com/feed/",
+      "type": "rss",
+      "language": "en",
+      "country": "IL",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "israel-palestine",
+          "scope": "general"
+        },
+        {
+          "conflict": "israel-lebanon",
+          "scope": "general"
+        }
+      ]
+    },
+    {
+      "name": "+972 Magazine",
+      "url": "https://www.972mag.com/feed/",
+      "type": "rss",
+      "language": "en",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "israel-palestine",
+          "scope": "dedicated"
+        }
+      ]
+    },
+    {
+      "name": "IranWire",
+      "url": "https://iranwire.com/en/feed/",
+      "type": "rss",
+      "language": "en",
+      "country": "IR",
+      "sourceRole": "local_media",
+      "sourceCategory": "News",
+      "links": [
+        {
+          "conflict": "persian-gulf-iran",
+          "scope": "general"
+        }
+      ]
+    },
+    {
+      "name": "Liveuamap (official Telegram)",
+      "type": "telegram",
+      "telegramHandle": "@liveuamap",
+      "language": "en",
+      "sourceRole": "aggregator",
+      "sourceCategory": "aggregator",
+      "reliabilityTier": "relay",
+      "permissionStatus": "unauthorized",
+      "enabled": false,
+      "autoIngest": false,
+      "note": "Aggregator/discovery only. Disabled: reading Telegram needs authorized credentials (TELEGRAM_API_ID / TELEGRAM_API_HASH / TELEGRAM_SESSION), which are not configured here, and the adapter never scrapes t.me. Posts keep their timestamp, t.me permalink, Liveuamap URL and the cited upstream source; a Liveuamap post and the upstream it cites are one report, never two independent confirmations, and an aggregator-only claim can never modify Territorial Control.",
+      "links": [
+        {
+          "conflict": "russia-ukraine",
+          "scope": "general"
+        },
+        {
+          "conflict": "israel-palestine",
+          "scope": "general"
+        },
+        {
+          "conflict": "syria",
+          "scope": "general"
+        }
+      ]
+    }
+  ],
+  "candidateUpdates": [
+    {
+      "name": "Radio Dabanga",
+      "status": "integrated"
+    },
+    {
+      "name": "Radio Okapi",
+      "status": "integrated"
+    },
+    {
+      "name": "Actualite.cd",
+      "status": "integrated"
+    },
+    {
+      "name": "Premium Times",
+      "status": "integrated"
+    },
+    {
+      "name": "Le Nouvelliste",
+      "status": "integrated"
+    },
+    {
+      "name": "El Tiempo",
+      "status": "integrated",
+      "notes": "Integrated via the Colombia section feed (eltiempo.com/rss/colombia.xml)."
+    },
+    {
+      "name": "Indepaz",
+      "status": "integrated"
+    },
+    {
+      "name": "Amu TV",
+      "status": "integrated"
+    },
+    {
+      "name": "Dawn",
+      "status": "integrated"
+    },
+    {
+      "name": "Rappler",
+      "status": "integrated"
+    },
+    {
+      "name": "Imphal Free Press",
+      "status": "integrated",
+      "notes": "Integrated; the public feed is small (a single recent item at audit time), so treat it as thin coverage."
+    },
+    {
+      "name": "Mimi Mefo Info",
+      "status": "integrated"
+    },
+    {
+      "name": "Radio Ndeke Luka",
+      "status": "integrated"
+    },
+    {
+      "name": "Lefaso.net",
+      "status": "integrated"
+    },
+    {
+      "name": "Sana'a Center for Strategic Studies",
+      "status": "integrated"
+    },
+    {
+      "name": "Enab Baladi (English)",
+      "status": "integrated"
+    },
+    {
+      "name": "Sudan Tribune",
+      "status": "rejected",
+      "notes": "Feed refused automated access (HTTP 403 at audit). Not bypassed; revisit only if the publisher offers a permitted feed or API."
+    },
+    {
+      "name": "Addis Standard",
+      "status": "rejected",
+      "notes": "Feed refused automated access (HTTP 403 at audit). Not bypassed."
+    },
+    {
+      "name": "HumAngle",
+      "status": "candidate",
+      "notes": "Feed rate-limited (HTTP 429) during the audit; retry later with a polite interval."
+    },
+    {
+      "name": "Hiiraan Online",
+      "status": "candidate",
+      "notes": "Public RSS returned an empty channel at audit; re-check."
+    },
+    {
+      "name": "Garowe Online",
+      "status": "candidate",
+      "notes": "RSS endpoint returned HTTP 500 at audit; re-check."
+    },
+    {
+      "name": "Animal Político",
+      "status": "candidate",
+      "notes": "No RSS feed found at the conventional path (404). Needs a permitted feed/API."
+    },
+    {
+      "name": "Primicias",
+      "status": "candidate",
+      "notes": "No RSS feed found (feed URL serves HTML). Needs a permitted feed/API."
+    },
+    {
+      "name": "Rudaw",
+      "status": "candidate",
+      "notes": "No RSS feed found (feed URLs serve HTML). Needs a permitted feed/API."
+    },
+    {
+      "name": "Kurdistan24",
+      "status": "candidate",
+      "notes": "No RSS feed found (feed URLs serve HTML). Needs a permitted feed/API."
+    },
+    {
+      "name": "L'Orient Today",
+      "status": "candidate",
+      "notes": "No RSS feed found (404)."
+    },
+    {
+      "name": "Libya Observer",
+      "status": "candidate",
+      "notes": "No RSS feed found (404)."
+    },
+    {
+      "name": "ActuNiger",
+      "status": "candidate",
+      "notes": "No RSS feed found (404)."
+    },
+    {
+      "name": "AlterPresse",
+      "status": "candidate",
+      "notes": "Backend URL serves HTML, not a feed."
+    }
+  ]
+}

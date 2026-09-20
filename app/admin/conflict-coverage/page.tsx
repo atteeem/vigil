@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { CoverageResult, CoverageRowDTO } from "@/lib/db/repositories/coverage";
 import { REGISTRY_STATUS_LABEL, type RegistryStatus } from "@/lib/registry/status";
+import { SOURCE_TIER_LABEL, type SourceTier } from "@/lib/registry/source-tiers";
 
 // Admin coverage tool: which conflicts the registry tracks, how well they are
 // sourced and how fresh that coverage is. Not a public ranking.
@@ -29,6 +30,15 @@ interface Filters {
   territorial: string;
 }
 const NO_FILTERS: Filters = { region: "", status: "", severity: "", health: "", dedicated: "", territorial: "" };
+
+interface Improvements {
+  baseline: { label: string; capturedAt: string; summary: Record<string, number> };
+  current: Record<string, number>;
+  improved: { slug: string; name: string; severity: string; reasons: string[]; before: { health: string; independentSources: number }; after: { health: string; independentSources: number } }[];
+  unchanged: { slug: string }[];
+  regressed: { slug: string; name: string }[];
+  stillUndercovered: { slug: string; name: string; severity: string; health: string; enabledSources: number; problems: string[] }[];
+}
 
 interface Detail extends CoverageRowDTO {
   provenance: { field: string; sourceName: string; sourceUrl: string | null; note: string | null }[];
@@ -111,7 +121,7 @@ function DetailPanel({ id }: { id: string }) {
           {data.sources.length === 0 && <li>None</li>}
           {data.sources.map((s) => (
             <li key={s.id}>
-              {s.name} — {KIND_LABEL[s.kind]} ({s.link}){s.enabled ? "" : " · disabled"} · last ingest {ago(s.lastSuccessfulIngestion)}
+              {s.name} — {SOURCE_TIER_LABEL[s.tier as SourceTier]} · {KIND_LABEL[s.kind]} ({s.link}){s.enabled ? "" : " · disabled"} · last ingest {ago(s.lastSuccessfulIngestion)}
             </li>
           ))}
         </ul>
@@ -194,6 +204,10 @@ export default function ConflictCoveragePage() {
     queryFn: async () => (await fetch(`/api/admin/conflict-coverage?${query}`)).json(),
   });
 
+  const { data: improvements } = useQuery<Improvements>({
+    queryKey: ["admin", "conflict-coverage", "improvements"],
+    queryFn: async () => (await fetch("/api/admin/conflict-coverage/improvements")).json(),
+  });
   const s = data?.summary;
   const cards: [string, string, number | undefined][] = [
     ["active", "Active conflicts tracked", s?.activeTracked],
@@ -227,6 +241,39 @@ export default function ConflictCoveragePage() {
           </Card>
         ))}
       </div>
+
+      {improvements && (
+        <div className="grid gap-3 lg:grid-cols-2" data-testid="cov-improvements">
+          <Card className="p-4">
+            <h2 className="text-sm font-semibold text-ink">Improved since source expansion</h2>
+            <p className="text-xs text-ink-faint" data-testid="cov-improvements-baseline">
+              Baseline: {improvements.baseline.label} ({new Date(improvements.baseline.capturedAt).toLocaleDateString()}) — {improvements.baseline.summary.noSource} conflicts had no source; now {improvements.current.noSource}.
+            </p>
+            <div className="mt-1 text-xs text-ink-dim" data-testid="cov-improvements-counts">
+              {improvements.improved.length} improved · {improvements.unchanged.length} unchanged · {improvements.regressed.length} regressed
+            </div>
+            <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto text-xs text-ink-dim" data-testid="cov-improved-list">
+              {improvements.improved.map((c) => (
+                <li key={c.slug} data-testid={`cov-improved-${c.slug}`}>
+                  <span className="text-ink">{c.name}</span> ({c.severity}): {c.reasons.join("; ")}
+                </li>
+              ))}
+            </ul>
+          </Card>
+          <Card className="p-4">
+            <h2 className="text-sm font-semibold text-ink">Still under-covered active conflicts</h2>
+            <p className="text-xs text-ink-faint">Worst first (severity). A fresh aggregator alone never makes coverage healthy.</p>
+            <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto text-xs text-ink-dim" data-testid="cov-undercovered-list">
+              {improvements.stillUndercovered.length === 0 && <li>None.</li>}
+              {improvements.stillUndercovered.map((c) => (
+                <li key={c.slug} data-testid={`cov-undercovered-${c.slug}`}>
+                  <span className="text-ink">{c.name}</span> ({c.severity}, {c.enabledSources} source{c.enabledSources === 1 ? "" : "s"}): {c.problems.join("; ")}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-end gap-3">
         <Select label="Region" value={filters.region} onChange={(v) => setFilters({ ...filters, region: v })} options={["Africa", "Americas", "Asia", "Europe", "Middle East"].map((r) => [r, r])} testId="cov-filter-region" />
@@ -287,7 +334,8 @@ export default function ConflictCoveragePage() {
                     </span>
                   </td>
                   <td className="px-3 py-2 text-ink-dim" data-testid={`cov-sources-${r.conflict.slug}`}>
-                    {r.enabledSources} ({r.dedicatedSources} dedicated · {r.specialistSources} local · {r.generalSources} general · {r.aggregatorSources} aggr)
+                    {r.enabledSources} ({r.dedicatedSources} dedicated · {r.specialistSources} local · {r.generalSources} general · {r.aggregatorSources} aggr){" · "}
+                    <span title="Distinct non-aggregator tiers: official / local / specialist / global media">{r.tierDiversity} tier{r.tierDiversity === 1 ? "" : "s"}</span>
                   </td>
                   <td className="px-3 py-2 text-ink-faint">{ago(r.latestEventAt)}</td>
                   <td className="px-3 py-2 text-ink-faint">{ago(r.latestSourceAt)}</td>

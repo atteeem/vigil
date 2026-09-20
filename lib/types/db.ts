@@ -26,6 +26,9 @@ export const SOURCE_ROLES = [
   "local_media",
   "eyewitness_community",
   "aggregator",
+  // Research / monitoring organisations (think tanks, conflict monitors,
+  // investigative outlets) — a specialist tier distinct from news media.
+  "specialist_research",
 ] as const;
 export type SourceRole = (typeof SOURCE_ROLES)[number];
 
@@ -577,6 +580,7 @@ export interface TerritorialChangeComparisonDTO {
 
 export interface TerritorialChangeCorroborationDTO {
   sourceName: string | null;
+  sourceRole?: string | null;
   sourceUrl: string | null;
   observedAt: string | null;
 }
@@ -613,6 +617,8 @@ export interface TerritorialChangeCandidateDTO {
   mergedIntoId: string | null;
   appliedTerritoryId: string | null;
   geometryPending: boolean;
+  /** Role of the reporting source; an aggregator/relay-only claim can't modify territory. */
+  sourceRole: string | null;
   /** Present on the list/detail responses of the review workflow. */
   comparison?: TerritorialChangeComparisonDTO;
   report?: { title: string | null; url: string | null; publishedAt: string | null } | null;

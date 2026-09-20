@@ -208,7 +208,9 @@ test.describe("Coverage health from real sources", () => {
     row = await rowFor(request, c.slug);
     expect(row.latestEventAt).not.toBeNull();
     expect(row.health).toBe("healthy");
-    expect(row.independentSources).toBe(3);
+    // A general source that contributed a single event is NOT coverage of this conflict
+    // (needs COVERAGE_THRESHOLDS.minContributedEvents), so the count stays local + aggregators.
+    expect(row.independentSources).toBe(2);
   });
 
   test("a conflict covered only by many aggregator feeds stays weak however fresh they are", async ({ request }) => {
@@ -273,9 +275,10 @@ test.describe("Coverage health from real sources", () => {
     const extreme = await coverage(request, "?severity=extreme");
     expect(extreme.rows.every((r) => r.conflict.severity === "extreme")).toBe(true);
     const none = await coverage(request, "?health=no_source");
-    expect(none.rows.length).toBeGreaterThan(3);
+    // Source expansion covered most conflicts; the ones with no feed found remain.
+    expect(none.rows.length).toBeGreaterThanOrEqual(1);
     expect(none.rows.every((r) => r.health === "no_source")).toBe(true);
-    expect(none.rows.some((r) => r.conflict.slug === "haiti")).toBe(true);
+    expect(none.rows.some((r) => r.conflict.slug === "kurdish-turkey-pkk")).toBe(true);
     const combined = await coverage(request, "?region=Africa&status=active&health=no_source");
     expect(combined.rows.every((r) => r.conflict.region === "Africa" && r.status === "active" && r.health === "no_source")).toBe(true);
 
@@ -283,7 +286,7 @@ test.describe("Coverage health from real sources", () => {
     expect(africa.summary).toEqual(all.summary);
     expect(all.summary.total).toBe(all.matched);
     expect(all.summary.activeTracked).toBeGreaterThan(15);
-    expect(all.summary.noSource).toBeGreaterThan(3);
+    expect(all.summary.noSource).toBeGreaterThanOrEqual(1);
     expect(all.summary.withDedicatedSources).toBeGreaterThanOrEqual(2);
   });
 
@@ -333,7 +336,7 @@ test.describe("Candidate source backlog", () => {
   });
 
   test("under-covered conflicts are the ones with candidate sources and no live coverage", async ({ request }) => {
-    const row = await rowFor(request, "haiti");
+    const row = await rowFor(request, "kurdish-turkey-pkk");
     expect(row.health).toBe("no_source");
     expect(row.candidateSourceCount).toBeGreaterThan(0);
   });
@@ -392,16 +395,16 @@ test.describe("Coverage dashboard", () => {
     await page.getByTestId("cov-filter-reset").click();
 
     await page.getByTestId("cov-filter-health").selectOption("no_source");
-    await expect(page.getByTestId("cov-row-haiti")).toBeVisible();
-    await expect(page.getByTestId("cov-health-haiti")).toHaveText("No source");
+    await expect(page.getByTestId("cov-row-kurdish-turkey-pkk")).toBeVisible();
+    await expect(page.getByTestId("cov-health-kurdish-turkey-pkk")).toHaveText("No source");
     await page.getByTestId("cov-filter-dedicated").selectOption("true");
-    await expect(page.getByTestId("cov-row-haiti")).toHaveCount(0);
+    await expect(page.getByTestId("cov-row-kurdish-turkey-pkk")).toHaveCount(0);
     await page.getByTestId("cov-filter-reset").click();
 
     await page.getByTestId("cov-filter-dedicated").selectOption("true");
     await expect(page.getByTestId("cov-row-myanmar")).toBeVisible();
     await expect(page.getByTestId("cov-row-russia-ukraine")).toBeVisible();
-    await expect(page.getByTestId("cov-row-sudan")).toHaveCount(0);
+    await expect(page.getByTestId("cov-row-kurdish-turkey-pkk")).toHaveCount(0);
   });
 
   test("a row expands to fighting vs participants vs supporters, family, actors, sources, provenance and candidates; a candidate can be added", async ({ page }) => {

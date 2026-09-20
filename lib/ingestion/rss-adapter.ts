@@ -36,7 +36,20 @@ function extractTag(block: string, tag: string): string | undefined {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    // Numeric character references ("&#233;" -> "é") — real non-English feeds
+    // (French, Spanish) use them heavily.
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => safeFromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec: string) => safeFromCodePoint(parseInt(dec, 10)))
+    .replace(/&nbsp;/g, " ")
     .trim();
+}
+
+function safeFromCodePoint(code: number): string {
+  try {
+    return String.fromCodePoint(code);
+  } catch {
+    return "";
+  }
 }
 
 function extractAllTags(block: string, tag: string): string[] {
@@ -58,7 +71,8 @@ function parseRss(xml: string): RssItem[] {
     title: extractTag(block, "title"),
     link: extractTag(block, "link"),
     guid: extractTag(block, "guid"),
-    pubDate: extractTag(block, "pubDate"),
+    // RSS 2.0 <pubDate>, else the Dublin Core / Atom-style date some feeds use.
+    pubDate: extractTag(block, "pubDate") ?? extractTag(block, "dc:date") ?? extractTag(block, "published") ?? extractTag(block, "updated"),
     description: extractTag(block, "description"),
     creator: extractTag(block, "dc:creator"),
     categories: extractAllTags(block, "category"),
@@ -75,6 +89,13 @@ const RSS_REQUEST_HEADERS = {
   Accept: "application/rss+xml, application/xml, text/xml, */*",
 };
 
+/** A valid Date or undefined — never an "Invalid Date" stored as a timestamp. */
+function parsePublishedAt(value: string | undefined): Date | undefined {
+  if (!value) return undefined;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
 export const RSSAdapter: SourceAdapter = {
   async fetchLatest(source: Source): Promise<unknown[]> {
     if (!source.url) return [];
@@ -86,7 +107,10 @@ export const RSSAdapter: SourceAdapter = {
 
   normalize(raw: unknown, source: Source): NormalizedItem {
     const item = raw as RssItem;
-    const externalId = item.guid ?? item.link ?? `${source.id}:${item.title ?? ""}`;
+    // `||`, not `??`: some feeds (Rappler) emit an EMPTY <guid>, which must fall
+    // through to the link — otherwise every item shares the id "" and dedup
+    // collapses the whole feed to one item.
+    const externalId = item.guid || item.link || `${source.id}:${item.title ?? ""}`;
     // "paid content" is the exact WordPress category several seeded/
     // candidate feeds (e.g. Myanmar Now) use to mark a paywalled article —
     // stored as a flag, never used to fetch/scrape beyond what the feed's
@@ -98,7 +122,7 @@ export const RSSAdapter: SourceAdapter = {
       originalTitle: item.title,
       originalText: item.description,
       language: source.language ?? undefined,
-      publishedAt: item.pubDate ? new Date(item.pubDate) : undefined,
+      publishedAt: parsePublishedAt(item.pubDate),
       rawMetadata: {
         ...(item.creator ? { author: item.creator } : {}),
         ...(item.categories.length > 0 ? { categories: item.categories } : {}),

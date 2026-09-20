@@ -981,6 +981,65 @@ async function seedRegistry() {
   console.log(`Seeded conflict registry: ${registry.conflicts.length} entries (${created} new), ${registry.sourceCandidates.length} candidate sources.`);
 }
 
+// ---------------------------------------------------------------------------
+// Coverage-Driven Source Expansion (data/source-expansion.json). Idempotent:
+// sources are matched by feed URL / Telegram handle (never duplicated), an
+// existing source's operational state (enabled, health, timestamps) is never
+// touched, and candidate-source statuses are only advanced from "candidate".
+async function seedSourceExpansion() {
+  const expansion = JSON.parse(readFileSync(new URL("../data/source-expansion.json", import.meta.url), "utf8"));
+  let created = 0;
+  for (const s of expansion.sources) {
+    const where = s.type === "telegram" ? { telegramHandle: s.telegramHandle } : { url: s.url };
+    let source = await prisma.source.findFirst({ where });
+    // Descriptive fields only. The name is set on create and never rewritten: an
+    // existing source with the same feed URL (e.g. from the base list) keeps its
+    // name, so the base seeder's by-name upsert can never create a duplicate.
+    const descriptive = {
+      language: s.language ?? null,
+      country: s.country ?? null,
+      sourceCategory: s.sourceCategory ?? null,
+      sourceRole: s.sourceRole,
+      reliabilityTier: s.reliabilityTier ?? (s.sourceRole === "specialist_research" ? "B" : "B"),
+    };
+    if (source) {
+      source = await prisma.source.update({ where: { id: source.id }, data: descriptive });
+    } else {
+      source = await prisma.source.create({
+        data: {
+          ...descriptive,
+          name: s.name,
+          type: s.type,
+          url: s.url ?? null,
+          telegramHandle: s.telegramHandle ?? null,
+          permissionStatus: s.permissionStatus ?? "authorized",
+          enabled: s.enabled ?? true,
+          autoIngest: s.autoIngest ?? true,
+          autoProcessing: true,
+          pollIntervalMinutes: s.pollIntervalMinutes ?? (s.sourceRole === "specialist_research" ? 60 : 30),
+        },
+      });
+      created += 1;
+    }
+    for (const link of s.links ?? []) {
+      const conflict = await prisma.conflict.findUnique({ where: { slug: link.conflict } });
+      if (!conflict) continue;
+      await prisma.sourceConflictLink.upsert({
+        where: { sourceId_conflictId: { sourceId: source.id, conflictId: conflict.id } },
+        update: { scope: link.scope },
+        create: { sourceId: source.id, conflictId: conflict.id, scope: link.scope, note: s.note ?? null },
+      });
+    }
+  }
+  for (const u of expansion.candidateUpdates) {
+    const rows = await prisma.sourceCandidate.findMany({ where: { name: u.name, status: "candidate" } });
+    for (const row of rows) {
+      await prisma.sourceCandidate.update({ where: { id: row.id }, data: { status: u.status, ...(u.notes ? { notes: u.notes } : {}) } });
+    }
+  }
+  console.log(`Seeded source expansion: ${expansion.sources.length} sources (${created} new).`);
+}
+
 async function main() {
   for (const source of sources) {
     const existing = await prisma.source.findFirst({ where: { name: source.name } });
@@ -1004,6 +1063,7 @@ async function main() {
   await seedMilitaryReference();
   await seedMyanmarReference();
   await seedRegistry();
+  await seedSourceExpansion();
 }
 
 main()

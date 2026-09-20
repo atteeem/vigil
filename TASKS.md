@@ -1024,3 +1024,24 @@ rather than left as stubs:
   pages onto the database registry is a larger change.
 - Candidate-source URLs were not verified for RSS/API availability or reuse terms.
 - Coverage does not yet weigh source language/regional fit beyond country match.
+
+## Coverage-Driven Source Expansion
+
+Goal: use the Registry/Coverage dashboard to improve real-world source coverage for under-covered active conflicts, without redesigning ingestion.
+
+- [x] Gap prioritisation from `/admin/conflict-coverage` (no source → weak diversity → stale → no local/specialist; high-severity active first). Baseline snapshot kept in `data/coverage-baseline.json` (22 of 32 conflicts had no source, 2 had a dedicated source).
+- [x] Source tiers (`lib/registry/source-tiers.ts`): official / local-originating / specialist-research / global media / aggregator-discovery, derived from `Source.sourceRole` (new role `specialist_research`). Tier diversity, not volume, drives coverage quality; aggregators never contribute tier diversity.
+- [x] 36 public RSS sources + disabled `@liveuamap` Telegram source in `data/source-expansion.json`, seeded idempotently by `seedSourceExpansion()` (match by URL/handle; never renames an existing source; conflict links by slug / family).
+- [x] Source→conflict relevance: explicit `SourceConflictLink` (`/api/admin/source-links` accepts conflictId | conflictSlugs | familySlug), country match, or derived only after `COVERAGE_THRESHOLDS.minContributedEvents` (3) published events. Multi-conflict specialists carry no `country`.
+- [x] Coverage activity: `latestReportAt` (ingested items from dedicated/country-matched sources) counts beside published events, so real feeds can make a conflict healthy before anything is published; an aggregator alone can never be healthy.
+- [x] Aggregator independence: `independentSourceCount` (aggregator + relays = one voice), merge route forces aggregator links to `relay`, aggregator-only territorial evidence cannot approve/apply geometry (`assertIndependentEvidence`, 409), aggregator candidate confidence capped at 0.3, candidate `sourceRole` stored (migration `territorial_candidate_source_role`).
+- [x] Provenance: original URL, publication time, author kept; aggregator posts keep `upstreamSource` / `upstreamUrl` / `aggregatorUrl` (`lib/ingestion/upstream.ts`).
+- [x] RSS adapter fixes found during real-feed verification: empty `<guid>` no longer collapses a feed (falls back to link), `dc:date` fallback, numeric character references decoded.
+- [x] Dashboard: improvement report + still-undercovered list (`/api/admin/conflict-coverage/improvements`), tier labels and tier diversity per conflict/source.
+- [x] Real-source verification (`scripts/verify-source-expansion.mjs` → `data/source-verification.json`): 36/36 pass (≥1 real item, original URL on publisher domain, valid publish time, role classification, conflict association, no duplicates on re-fetch, single source record). Article pages that answer 401/403/429 to automated readers are recorded as `botProtected`, never worked around; only feed excerpts are ingested.
+- [x] Liveuamap Telegram: feasible only through the existing credential-gated Telegram adapter (no scraping of t.me). Seeded as `@liveuamap`, role aggregator, **disabled** (no authorised Telegram credentials). Pipeline is exercised end-to-end with a fixture channel (`TELEGRAM_FIXTURES=true`, test server only): timestamp, t.me permalink, Liveuamap URL, upstream and dedupe verified.
+- [x] Tests: `tests/source-expansion.spec.ts` (roles/tiers, relevance, aggregator independence, coverage improvement, provenance, duplicate protection, disabled credential source, data integrity, dashboard). Updated `conflict-registry*.spec.ts` for post-expansion state (Haiti etc. are now covered; a single contributed event is not coverage; "No events or reports" wording).
+
+Decisions: a source's tier comes from its role, never from volume; `specialist_research` counts as grounded coverage; aggregator posts are discovery leads (relay links, capped confidence, never sole territorial evidence).
+
+Remaining coverage gaps: `kurdish-turkey-pkk` (no feed found), `kurdish-iran` (thin), `ecuador` (InSight Crime only), `cameroon`, `northeast-india`, `libya`, `philippines-insurgencies` (single source), `somalia` and `niger` (no local source), `israel-lebanon` / `persian-gulf-iran` thin. Liveuamap stays disabled until authorised Telegram credentials exist. Coverage "healthy" in production needs the scheduler to ingest these feeds for a while (the test DB has no ingestion history).

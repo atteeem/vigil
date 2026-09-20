@@ -1,4 +1,4 @@
-import { Newspaper, Landmark, Users, Rss, Radio } from "lucide-react";
+import { Newspaper, Landmark, Users, Rss, Radio, Microscope } from "lucide-react";
 import type { SourceRole } from "@/lib/types/db";
 
 // One central source-icon mapping (mirrors event-type-icon.tsx's pattern)
@@ -13,6 +13,7 @@ const SOURCE_ROLE_ICON: Record<SourceRole, React.ComponentType<{ className?: str
   local_media: Newspaper,
   eyewitness_community: Users,
   aggregator: Rss,
+  specialist_research: Microscope,
 };
 
 // Single source of truth for source-role display text — also used by
@@ -25,6 +26,7 @@ export const SOURCE_ROLE_LABEL: Record<SourceRole, string> = {
   local_media: "Local media",
   eyewitness_community: "Eyewitness / community",
   aggregator: "Aggregator",
+  specialist_research: "Specialist / research",
 };
 
 function isSourceRole(value: string | null | undefined): value is SourceRole {

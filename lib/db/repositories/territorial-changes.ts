@@ -19,6 +19,7 @@ import {
   type SplitPreview,
 } from "@/lib/db/repositories/territorial-control";
 import { validateTerritorialGeometry } from "@/lib/territory/geometry";
+import { isAggregatorRole } from "@/lib/registry/source-tiers";
 import { isValidTerritorialGeometry, parseTerritorialGeometry } from "@/lib/data/territorial-control";
 import { claimKeyFor, normalizeLocationKey } from "@/lib/territory/change-detection";
 import { isChangeType, proposedStatusFor, type TerritorialChangeType } from "@/lib/territory/change-types";
@@ -287,7 +288,7 @@ export async function proposeTerritorialChange(input: ProposeInput): Promise<Pro
       const known = new Set([existing.sourceName, ...extras.map((e) => e.sourceName)].map((s) => (s ?? "").toLowerCase()));
       const alreadyListed = extras.some((e) => e.sourceUrl === (input.sourceUrl ?? null));
       if (!alreadyListed) {
-        extras.push({ sourceName: input.sourceName ?? null, sourceUrl: input.sourceUrl ?? null, observedAt: input.observedAt ? input.observedAt.toISOString() : null });
+        extras.push({ sourceName: input.sourceName ?? null, sourceUrl: input.sourceUrl ?? null, sourceRole: input.sourceRole ?? null, observedAt: input.observedAt ? input.observedAt.toISOString() : null });
         const independent = !known.has((input.sourceName ?? "").toLowerCase());
         await prisma.territorialChangeCandidate.update({
           where: { id: existing.id },
@@ -307,6 +308,19 @@ export async function proposeTerritorialChange(input: ProposeInput): Promise<Pro
 }
 
 // ---- review actions ---------------------------------------------------------
+
+/** A territorial claim backed ONLY by aggregator/relay reports (e.g. a Liveuamap
+ * post and its reposts) can never modify Territorial Control: an aggregator is a
+ * discovery aid, not an independent confirmation. Needs at least one report from
+ * a non-aggregator source. Reports with no recorded role (manual, seeded) are
+ * treated as independent. */
+export function assertIndependentEvidence(row: { sourceRole: string | null; corroboration: string | null }): void {
+  const roles = [row.sourceRole, ...parseCorroboration(row.corroboration).map((c) => c.sourceRole ?? null)];
+  const known = roles.filter((r) => r !== null);
+  if (known.length > 0 && roles.every((r) => r !== null && isAggregatorRole(r))) {
+    throw new Error("Aggregator-only evidence cannot modify Territorial Control — corroborate it with an independent (non-aggregator) source first");
+  }
+}
 
 function assertOpen(status: string) {
   if (!(OPEN_CANDIDATE_STATUSES as readonly string[]).includes(status)) {
@@ -346,7 +360,7 @@ export async function mergeCandidate(id: string, intoId: string, note?: string |
 
   const extras = parseCorroboration(target.corroboration);
   const known = new Set([target.sourceName, ...extras.map((e) => e.sourceName)].map((s) => (s ?? "").toLowerCase()));
-  extras.push({ sourceName: source.sourceName, sourceUrl: source.sourceUrl, observedAt: source.observedAt ? source.observedAt.toISOString() : null });
+  extras.push({ sourceName: source.sourceName, sourceUrl: source.sourceUrl, sourceRole: source.sourceRole, observedAt: source.observedAt ? source.observedAt.toISOString() : null });
   for (const e of parseCorroboration(source.corroboration)) extras.push(e);
   const independent = !known.has((source.sourceName ?? "").toLowerCase());
 
@@ -392,6 +406,7 @@ export async function approveCandidate(id: string, options: ApproveOptions = {})
   const row = await prisma.territorialChangeCandidate.findUnique({ where: { id }, include: CANDIDATE_INCLUDE });
   if (!row) throw new Error("Candidate not found");
   assertOpen(row.status);
+  assertIndependentEvidence(row);
 
   // Optional admin corrections to location detail before applying.
   const precision = options.precision ? toLocationPrecision(options.precision) : toLocationPrecision(row.precision);
@@ -457,6 +472,7 @@ export async function attachGeometry(id: string, geometry: unknown, options: { v
   const row = await prisma.territorialChangeCandidate.findUnique({ where: { id }, include: CANDIDATE_INCLUDE });
   if (!row) throw new Error("Candidate not found");
   if (row.status !== "approved" || !row.geometryPending) throw new Error("Candidate is not approved and awaiting geometry");
+  assertIndependentEvidence(row);
   if (!isValidTerritorialGeometry(geometry)) throw new Error("Geometry must be a GeoJSON Polygon or MultiPolygon");
 
   const dto = toCandidateDTO(row);
@@ -547,6 +563,7 @@ export async function applyCandidateGeometry(
   if (options.confirm !== true) throw new Error("Explicit confirmation is required to publish territory");
   const ctx = await candidateEditContext(id);
   assertGeometryApplicable(ctx.row);
+  assertIndependentEvidence(ctx.row);
   assertValidGeometry(geometry);
 
   const now = new Date();

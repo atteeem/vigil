@@ -35,6 +35,8 @@ export default defineConfig({
     env: {
       DATABASE_URL: TEST_DB_URL,
       NEXT_DIST_DIR: ".next-test",
+      // Fixture Telegram channels for the credential-gated adapter (test server only).
+      TELEGRAM_FIXTURES: "true",
       // Forces the gazetteer-only geocoding provider (no live Nominatim
       // calls) so /api/admin/geocode is deterministic too — see
       // lib/geocoding/provider.ts.

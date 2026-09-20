@@ -108,6 +108,8 @@ export interface TerritorialChangeCandidateInput {
   sourceName?: string | null;
   sourceUrl?: string | null;
   observedAt?: Date | null;
+  /** Role of the reporting source (aggregator, relay, local_media, ...). */
+  sourceRole?: string | null;
 }
 
 export function parseCorroboration(json: string | null): TerritorialChangeCorroborationDTO[] {
@@ -148,6 +150,7 @@ export interface CandidateRow {
   mergedIntoId: string | null;
   appliedTerritoryId: string | null;
   geometryPending: boolean;
+  sourceRole: string | null;
 }
 
 export function toCandidateDTO(row: CandidateRow): TerritorialChangeCandidateDTO {
@@ -179,6 +182,7 @@ export function toCandidateDTO(row: CandidateRow): TerritorialChangeCandidateDTO
     mergedIntoId: row.mergedIntoId,
     appliedTerritoryId: row.appliedTerritoryId,
     geometryPending: row.geometryPending,
+    sourceRole: row.sourceRole,
   };
 }
 
@@ -225,6 +229,7 @@ export async function createTerritorialChangeCandidate(
       sourceName: input.sourceName ?? null,
       sourceUrl: input.sourceUrl ?? null,
       observedAt: input.observedAt ?? null,
+      sourceRole: input.sourceRole ?? null,
     },
     include: CANDIDATE_INCLUDE,
   });

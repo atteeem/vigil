@@ -207,7 +207,7 @@ test.describe("Coverage health", () => {
     expect(computeCoverage({ ...base, sources: good }, NOW).health).toBe("healthy");
     // Same sources but no recent events -> weak.
     expect(computeCoverage({ ...base, sources: good, latestEventAt: hoursAgo(24 * 10) }, NOW).health).toBe("weak");
-    expect(computeCoverage({ ...base, sources: good, latestEventAt: null }, NOW).reasons.join(" ")).toMatch(/No events recorded/);
+    expect(computeCoverage({ ...base, sources: good, latestEventAt: null }, NOW).reasons.join(" ")).toMatch(/No events or reports recorded/);
     // One source only -> weak even when fresh.
     expect(computeCoverage({ ...base, sources: [good[0]!] }, NOW).health).toBe("weak");
   });
