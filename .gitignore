@@ -24,3 +24,7 @@ prisma/dev.db.*.bak
 
 # Basemap archives are deployed as versioned files, never committed
 *.pmtiles
+
+# SQLite WAL sidecar files (the database now runs in WAL mode)
+*.db-wal
+*.db-shm
