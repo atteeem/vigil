@@ -31,7 +31,7 @@ export default defineConfig({
     url: `http://localhost:${TEST_PORT}`,
     // Never attach to an already-running (dev-DB) server.
     reuseExistingServer: false,
-    timeout: 480_000, // includes rebuilding + seeding the test DB before the server starts
+    timeout: 900_000, // includes rebuilding + seeding the test DB before the server starts
     env: {
       DATABASE_URL: TEST_DB_URL,
       NEXT_DIST_DIR: ".next-test",

@@ -295,7 +295,7 @@ test.describe.serial("Country page UI", () => {
     await expect(page.getByTestId("country-name")).toHaveText("Namibia");
     await expect(page.getByTestId("country-identity")).toContainText("Windhoek");
     await expect(page.getByTestId("country-identity")).toContainText("NAM");
-    await expect(page.getByTestId("overview-exposure")).toHaveText("100".length ? /\d+/ : "");
+    await expect(page.getByTestId("overview-exposure")).toHaveText(/^\d+$/);
     await expect(page.getByTestId("overview-status")).toContainText("active conflict");
     await expect(page.getByTestId("stat-domestic")).toContainText(/[1-9]/);
     await expect(page.getByTestId("country-neighbours")).toContainText("Botswana");
