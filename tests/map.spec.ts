@@ -26,6 +26,7 @@ test.describe("World map (/world)", () => {
     // aren't racing it (this suite doesn't reset the DB between spec
     // files, so other specs' published test events are visible here too).
     await page.waitForTimeout(500);
+    await page.getByTestId("left-tab-events").click();
     await expect(page.getByText(/events in range/)).toBeVisible();
     const countBefore = await page.getByText(/events in range/).textContent();
 
@@ -68,6 +69,7 @@ test.describe("World map (/world)", () => {
       // covered by responsive.spec.ts.
       test.skip();
     }
+    await page.getByTestId("left-tab-events").click();
     await expect(feed).toBeVisible();
     await feed.locator("..").locator("button").first().click();
     await expect(page.getByRole("button", { name: "Close" })).toBeVisible();

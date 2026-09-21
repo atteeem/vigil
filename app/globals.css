@@ -166,3 +166,16 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* World Command Center ticker: one pass across the strip; pauses on hover/focus; static + scrollable when the
+   user prefers reduced motion. */
+@keyframes vigil-ticker {
+  from { transform: translateX(100%); }
+  to { transform: translateX(-100%); }
+}
+.vigil-ticker-track { animation: vigil-ticker 80s linear infinite; }
+.vigil-ticker:hover .vigil-ticker-track, .vigil-ticker:focus-within .vigil-ticker-track { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .vigil-ticker-track { animation: none; }
+  .vigil-ticker { overflow-x: auto; }
+}

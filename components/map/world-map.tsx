@@ -34,6 +34,7 @@ import type { HazardLayer } from "@/lib/hazards/types";
 import { createHazardIconImageData, HAZARD_ICON_IDS } from "@/lib/map/hazard-icons";
 import { EMPTY_HAZARD_SOURCES, hazardsToSources, type HazardSourceData } from "@/lib/map/hazards-to-geojson";
 import type { HazardViewport } from "@/hooks/use-hazards";
+import type { MarkerConflict } from "@/lib/world/types";
 
 // Simplified colored-dot markers ("medium zoom") give way to full
 // category icons ("high zoom") at this threshold — see Map Requirements.md
@@ -106,7 +107,10 @@ export interface WorldMapProps {
   // per-conflict detail map is unaffected.
   hazards?: HazardCollection | null;
   /** Centre the map here once (notification deep links). */
-  focus?: { lat: number; lng: number; zoom: number } | null;
+  focus?: { lat: number; lng: number; zoom: number; animate?: boolean } | null;
+  /** Situation-level markers for active conflicts (name, severity, recent-development ring). One per conflict. */
+  activeConflicts?: readonly MarkerConflict[];
+  onSelectConflict?: (slug: string) => void;
   hazardLayers?: readonly HazardLayer[];
   onSelectHazard?: (id: string) => void;
   onViewportChange?: (viewport: HazardViewport) => void;
@@ -412,6 +416,30 @@ const HAZARD_CLICK_LAYERS = ["hz-quake-circle", "hz-thermal-point", "hz-fire-poi
 const QUAKE_RADIUS: DataDrivenPropertyValueSpecification<number> = ["interpolate", ["linear"], ["coalesce", ["get", "value"], 2.5], 2.5, 4, 4, 7, 5, 11, 6, 18, 7, 28, 8, 38];
 const AREA_FILTER: ExpressionSpecification = ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]];
 
+const CONFLICT_MARKER_LAYERS = ["conflict-halo", "conflict-core", "conflict-label"];
+
+function conflictMarkersToGeoJSON(list: readonly MarkerConflict[]): GeoJSON.FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: list.map((c) => ({ type: "Feature", geometry: { type: "Point", coordinates: [c.lng, c.lat] }, properties: { slug: c.slug, name: c.name, severity: c.severity, score: c.severityScore, recent: c.recent ? 1 : 0 } })),
+  };
+}
+
+const SEVERITY_MATCH: ExpressionSpecification = ["match", ["get", "severity"], "stable", SEVERITY_HEX.stable, "guarded", SEVERITY_HEX.guarded, "elevated", SEVERITY_HEX.elevated, "high", SEVERITY_HEX.high, "severe", SEVERITY_HEX.severe, "extreme", "#C2374F", SEVERITY_HEX.elevated];
+
+// Situation-level active-conflict markers: below the event clusters (events stay on top and clickable), gone once
+// the map is zoomed in far enough that individual events are the meaningful level. A conflict gets ONE marker
+// however many events it has; the ring is heavier when the conflict had a recent development.
+function addConflictMarkerLayers(map: MapLibreMap, list: readonly MarkerConflict[]) {
+  if (map.getSource("active-conflicts")) return;
+  map.addSource("active-conflicts", { type: "geojson", data: conflictMarkersToGeoJSON(list) });
+  // Beneath the hazard layers (which sit beneath the event clusters) so hazards and events stay on top and clickable.
+  const before = map.getStyle()?.layers?.find((l) => l.id.startsWith("hz-"))?.id ?? (map.getLayer("clusters") ? "clusters" : undefined);
+  map.addLayer({ id: "conflict-halo", type: "circle", source: "active-conflicts", maxzoom: 7, paint: { "circle-radius": ["interpolate", ["linear"], ["get", "score"], 30, 9, 70, 14, 100, 20], "circle-color": SEVERITY_MATCH, "circle-opacity": 0.14, "circle-stroke-color": SEVERITY_MATCH, "circle-stroke-opacity": 0.7, "circle-stroke-width": ["case", ["==", ["get", "recent"], 1], 2.5, 1] } }, before);
+  map.addLayer({ id: "conflict-core", type: "circle", source: "active-conflicts", maxzoom: 7, paint: { "circle-radius": 3.5, "circle-color": SEVERITY_MATCH, "circle-stroke-color": "#0B0E12", "circle-stroke-width": 1 } }, before);
+  map.addLayer({ id: "conflict-label", type: "symbol", source: "active-conflicts", minzoom: 2.5, maxzoom: 7, layout: { "text-field": ["get", "name"], "text-font": ["Noto Sans Medium"], "text-size": 11, "text-offset": [0, 1.6], "text-anchor": "top", "text-optional": true, "symbol-sort-key": ["-", 100, ["get", "score"]] }, paint: { "text-color": "#F3F5F7", "text-halo-color": "rgba(8,10,13,0.9)", "text-halo-width": 1.3 } }, before);
+}
+
 function addHazardLayers(map: MapLibreMap, initial: HazardSourceData) {
   if (map.getSource("hz-quakes")) return;
   for (const id of HAZARD_ICON_IDS) if (!map.hasImage(id)) map.addImage(id, createHazardIconImageData(id), { sdf: true });
@@ -530,6 +558,8 @@ export function WorldMap({
   onSelectTerritory = () => {},
   hazards = null,
   focus = null,
+  activeConflicts = [],
+  onSelectConflict = () => {},
   hazardLayers = [],
   onSelectHazard = () => {},
   onViewportChange = () => {},
@@ -547,6 +577,8 @@ export function WorldMap({
   const hazardLayersRef = useRef(hazardLayers);
   const onSelectHazardRef = useRef(onSelectHazard);
   const onViewportChangeRef = useRef(onViewportChange);
+  const conflictMarkersRef = useRef(activeConflicts);
+  const onSelectConflictRef = useRef(onSelectConflict);
   const appliedModeRef = useRef<MapBasemapMode | null>(null);
   // The basemap authority (lib/map/basemap.ts) decides the provider; this component only applies its style and
   // handles a runtime failure by falling back ONCE per provider (never an endless retry).
@@ -581,6 +613,8 @@ export function WorldMap({
     hazardLayersRef.current = hazardLayers;
     onSelectHazardRef.current = onSelectHazard;
     onViewportChangeRef.current = onViewportChange;
+    conflictMarkersRef.current = activeConflicts;
+    onSelectConflictRef.current = onSelectConflict;
   });
 
   const basemapModeRef = useRef(basemapMode);
@@ -618,6 +652,9 @@ export function WorldMap({
     const markerVis = viewModeRef.current === "markers" ? "visible" : "none";
     const heatVis = viewModeRef.current === "heatmap" ? "visible" : "none";
     ["clusters", "cluster-count", "unclustered-point-uncertainty", "unclustered-point", "unclustered-point-icon", "unclustered-report-count"].forEach((id) => {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", markerVis);
+    });
+    CONFLICT_MARKER_LAYERS.forEach((id) => {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", markerVis);
     });
     HEAT_LAYER_IDS.forEach((id) => {
@@ -712,6 +749,8 @@ export function WorldMap({
       applyTerritorialVisibility(map);
       addHazardLayers(map, hazardDataRef.current);
       applyHazardVisibility(map, hazardLayersRef.current);
+      addConflictMarkerLayers(map, conflictMarkersRef.current);
+      applyViewModeVisibility(map);
       publishBasemapState(map);
     });
 
@@ -755,6 +794,17 @@ export function WorldMap({
       const f = e.features?.[0];
       if (f?.geometry.type === "Point") map.easeTo({ center: f.geometry.coordinates as [number, number], zoom: map.getZoom() + 2 });
     });
+
+    for (const layer of ["conflict-halo", "conflict-core"]) {
+      map.on("click", layer, (e: MapLayerMouseEvent) => {
+        // Event markers stacked on a conflict marker keep priority.
+        if (map.queryRenderedFeatures(e.point, { layers: [...CONFLICT_MARKERS, ...HAZARD_CLICK_LAYERS].filter((l) => map.getLayer(l)) }).length > 0) return;
+        const slug = (e.features?.[0]?.properties as { slug?: string } | undefined)?.slug;
+        if (slug) onSelectConflictRef.current(slug);
+      });
+      map.on("mouseenter", layer, () => (map.getCanvas().style.cursor = "pointer"));
+      map.on("mouseleave", layer, () => (map.getCanvas().style.cursor = ""));
+    }
 
     map.on("click", "territory-fill", (e: MapLayerMouseEvent) => {
       // "Heatmap/event hotspots must remain clickable above territorial
@@ -891,8 +941,18 @@ export function WorldMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !focus) return;
-    map.jumpTo({ center: [focus.lng, focus.lat], zoom: focus.zoom }); // camera moves are valid before the style finishes loading
+    // Camera moves are valid before the style finishes loading. Animated only when asked to (Live View) and the
+    // user has not asked for reduced motion.
+    const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+    if (focus.animate && !reduce) map.flyTo({ center: [focus.lng, focus.lat], zoom: focus.zoom, duration: 1400, essential: false });
+    else map.jumpTo({ center: [focus.lng, focus.lat], zoom: focus.zoom });
   }, [focus]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const src = map?.getSource("active-conflicts") as GeoJSONSource | undefined;
+    src?.setData(conflictMarkersToGeoJSON(activeConflicts));
+  }, [activeConflicts]);
 
   // Hazard data and toggles: setData on the existing sources (never rebuilt), visibility per layer.
   const hazardData = useMemo(() => (hazards ? hazardsToSources(hazards.features) : EMPTY_HAZARD_SOURCES), [hazards]);

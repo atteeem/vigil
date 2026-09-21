@@ -128,6 +128,7 @@ test.describe.serial("RSS ingestion proof (BBC World)", () => {
     await page.goto("/world");
     await page.getByRole("radiogroup", { name: "Time" }).getByRole("radio", { name: "7D" }).click();
     await page.getByRole("radiogroup", { name: "Region" }).getByRole("radio", { name: "Europe" }).click();
+    await page.getByTestId("left-tab-events").click();
     await expect(page.getByRole("heading", { name: published.title })).toBeVisible({ timeout: 10_000 });
   });
 

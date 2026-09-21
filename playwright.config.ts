@@ -40,6 +40,7 @@ export default defineConfig({
       TEST_FIXTURES: "true",
       // The dev machine may have a MapTiler key in .env; tests run key-less so the bundled/PMTiles basemap paths are what is exercised.
       NEXT_PUBLIC_MAPTILER_KEY: "",
+      NEXT_PUBLIC_LIVE_VIEW_STEP_MS: "1500",
       // Optional RSSHub sidecar (docs/RSSHUB_INTEGRATION.md): in tests it points at the local RSS fixture route, so
       // `rsshub://feed-a` resolves to a real same-origin feed and exercises the normal RSSAdapter path.
       RSSHUB_BASE_URL: "http://localhost:3100/api/test-fixtures/rss",

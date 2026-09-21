@@ -29,6 +29,14 @@ import Link from "next/link";
 import { getCountryByCode } from "@/lib/reference/countries";
 import { WhatChangedPanel } from "@/components/brief/what-changed-panel";
 import type { BriefDevelopment } from "@/lib/brief/types";
+import { useCommandCenter } from "@/hooks/use-command-center";
+import { useLiveView, LIVE_VIEW_STEP_MS } from "@/hooks/use-live-view";
+import { StatusBar } from "@/components/world/status-bar";
+import { Ticker } from "@/components/world/ticker";
+import { PulsePanel } from "@/components/world/pulse-panel";
+import { WorldRail } from "@/components/world/world-rail";
+import { ConflictContextPanel, CountryContextPanel } from "@/components/world/context-panels";
+import type { TopEntity, WorldItem } from "@/lib/world/types";
 
 const WorldMap = dynamic(() => import("@/components/map/world-map").then((m) => m.WorldMap), {
   ssr: false,
@@ -58,7 +66,7 @@ export default function WorldPage() {
   }, []);
   // Notification deep links: /world?layers=aviation&hazard=<id>&focus=lat,lng,zoom&at=<iso>. Applied once on
   // load; the same map, layers, selection and timeline as everywhere else (no separate experience).
-  const [focus, setFocus] = useState<{ lat: number; lng: number; zoom: number } | null>(null);
+  const [focus, setFocus] = useState<{ lat: number; lng: number; zoom: number; animate?: boolean } | null>(null);
   const [deepLinkAt, setDeepLinkAt] = useState<Date | null>(null);
   const [pendingEventId, setPendingEventId] = useState<string | null>(null);
   const [fromCountry, setFromCountry] = useState<string | null>(null);
@@ -94,6 +102,14 @@ export default function WorldPage() {
   const basemapMode = useAppStore((s) => s.mapBasemapMode);
   const setBasemapMode = useAppStore((s) => s.setMapBasemapMode);
   const liveEvents = useLiveEvents();
+  // World Command Center: one aggregated read feeds the status bar, ticker, Pulse, right rail and conflict markers.
+  const cc = useCommandCenter();
+  const baseCountry = useAppStore((s) => s.baseCountryCode);
+  const [selectedConflictSlug, setSelectedConflictSlug] = useState<string | null>(null);
+  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [leftTab, setLeftTab] = useState<"pulse" | "events">("pulse");
+  const [drawer, setDrawer] = useState<null | "pulse" | "overview">(null);
 
   // Global Timeline / Historical Playback: `timeline.asOf` is null for
   // Live and a fixed past Date once a preset/custom timestamp is
@@ -124,6 +140,8 @@ export default function WorldPage() {
     if (timeline.isPlaying) timeline.pause();
     setSelectedTerritory(null);
     setSelectedHazardId(null);
+    setSelectedConflictSlug(null);
+    setSelectedCountry(null);
     setSelected(event);
   }
 
@@ -131,6 +149,8 @@ export default function WorldPage() {
     if (timeline.isPlaying) timeline.pause();
     setSelected(null);
     setSelectedHazardId(null);
+    setSelectedConflictSlug(null);
+    setSelectedCountry(null);
     setSelectedTerritory(properties);
   }
 
@@ -138,7 +158,32 @@ export default function WorldPage() {
     if (timeline.isPlaying) timeline.pause();
     setSelected(null);
     setSelectedTerritory(null);
+    setSelectedConflictSlug(null);
+    setSelectedCountry(null);
     setSelectedHazardId(id);
+  }
+
+  function selectConflict(slug: string, animate = false, recenter = true) {
+    if (timeline.isPlaying) timeline.pause();
+    setSelected(null);
+    setSelectedTerritory(null);
+    setSelectedHazardId(null);
+    setSelectedCountry(null);
+    setSelectedConflictSlug(slug);
+    const m = cc.data?.conflicts.find((c) => c.slug === slug);
+    if (m && recenter) setFocus({ lat: m.lat, lng: m.lng, zoom: 4.5, animate });
+  }
+
+  function selectCountry(code: string, animate = false) {
+    const c = getCountryByCode(code);
+    if (!c) return;
+    if (timeline.isPlaying) timeline.pause();
+    setSelected(null);
+    setSelectedTerritory(null);
+    setSelectedHazardId(null);
+    setSelectedConflictSlug(null);
+    setSelectedCountry(c.code);
+    setFocus({ lat: c.lat, lng: c.lng, zoom: 5, animate });
   }
 
   // Live: the bounded published-event window from the database (the same data
@@ -184,6 +229,42 @@ export default function WorldPage() {
     }
   }
 
+  // A Pulse / ticker / rail / Live View item: enables its layer, centres the SAME map and opens the matching card
+  // (hazard, event, or the conflict context). Highlights the row it came from.
+  function focusItem(i: WorldItem, animate = false) {
+    if (timeline.isPlaying) timeline.pause();
+    setHighlightId(i.id);
+    const layers = i.layers.filter((l): l is HazardLayer => (HAZARD_LAYERS as readonly string[]).includes(l));
+    if (layers.length) setHazardLayers((prev) => [...new Set([...prev, ...layers])]);
+    if (i.territory) setShowTerritorial(true);
+    if (i.lat != null && i.lng != null) setFocus({ lat: i.lat, lng: i.lng, zoom: i.zoom ?? (i.hazardId || i.eventId ? 6 : 5), animate });
+    if (i.hazardId) selectHazard(i.hazardId);
+    else if (i.eventId) {
+      const ev = allEvents.find((e) => e.id === i.eventId);
+      if (ev) selectEvent(ev);
+      else setPendingEventId(i.eventId);
+    } else if (i.conflictSlug) selectConflict(i.conflictSlug, animate, !(i.lat != null && i.lng != null));
+    else if (i.countryCode && !(i.lat != null && i.lng != null)) selectCountry(i.countryCode, animate);
+  }
+
+  // LIVE VIEW cycles the ticker queue; any manual interaction pauses it.
+  const liveQueue = useMemo(() => cc.data?.ticker ?? [], [cc.data]);
+  const live = useLiveView(liveQueue, (i) => focusItem(i, true), LIVE_VIEW_STEP_MS);
+  const manual = () => {
+    if (live.active && !live.paused) live.pause();
+  };
+  const onManualItem = (i: WorldItem) => {
+    manual();
+    focusItem(i);
+    setDrawer(null);
+  };
+  const onManualEntity = (e: TopEntity) => {
+    manual();
+    if (e.kind === "conflict") selectConflict(e.key);
+    else selectCountry(e.key);
+    setDrawer(null);
+  };
+
   // Heat surface inputs. Live: the curated conflicts (sustained base) narrowed
   // by the region filter. Historical: no curated conflicts — those carry only
   // their CURRENT state, which is not "known at T"; the surface then derives
@@ -218,30 +299,57 @@ export default function WorldPage() {
   }, [allEvents, typeFilter, region, timeRange, timeline.isHistorical]);
 
   return (
-    <main className="relative h-screen w-full overflow-hidden pt-16 sm:pt-0">
-      <div className="grid h-full grid-cols-1 sm:grid-cols-[320px_1fr_360px]">
-        {/* Desktop live feed */}
-        <aside className="hidden h-full flex-col overflow-y-auto border-r border-border bg-surface/60 p-4 pt-24 sm:flex">
-          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-ink-faint">
-            {timeline.isHistorical ? "Historical Event Feed" : "Live Event Feed"}
-          </h2>
-          <p className="mb-3 text-xs text-ink-faint">
-            {timeline.isHistorical && historicalLoading ? "Loading historical state…" : `${filteredEvents.length} events in range`}
-          </p>
-          <div className="space-y-3">
-            {filteredEvents.slice(0, 40).map((e) => (
-              <button key={e.id} onClick={() => selectEvent(e)} className="block w-full text-left">
-                <EventCard event={e} compact />
+    <main className="relative flex h-screen w-full flex-col overflow-hidden pt-16 sm:pt-[68px]">
+      <StatusBar
+        data={cc.data}
+        loading={cc.isPending}
+        error={cc.isError}
+        liveView={{ active: live.active, paused: live.paused, disabled: liveQueue.length === 0, onToggle: () => (live.active ? live.stop() : live.start()), onPauseResume: () => (live.paused ? live.resume() : live.pause()) }}
+      />
+      <Ticker items={cc.data?.ticker ?? []} loading={cc.isPending} error={cc.isError} onSelect={onManualItem} />
+      <div className="grid min-h-0 flex-1 grid-cols-1 sm:grid-cols-[1fr_300px] lg:grid-cols-[288px_1fr_320px] min-[1400px]:grid-cols-[320px_1fr_360px]">
+        {/* Desktop left column: Pulse (meaningful developments) and the raw event feed */}
+        <aside className="hidden min-h-0 flex-col overflow-hidden border-r border-border bg-surface/60 p-4 lg:flex" data-testid="left-column">
+          <div className="mb-3 flex gap-1" role="tablist" aria-label="Left panel">
+            {(["pulse", "events"] as const).map((t) => (
+              <button key={t} type="button" role="tab" aria-selected={leftTab === t} onClick={() => setLeftTab(t)} data-testid={`left-tab-${t}`} className={cn("rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide", leftTab === t ? "bg-ink text-bg" : "text-ink-faint hover:text-ink")}>
+                {t === "pulse" ? "Pulse" : "Events"}
               </button>
             ))}
-            {filteredEvents.length === 0 && (
-              <p className="mt-8 text-center text-xs text-ink-faint">No events match your filters.</p>
-            )}
           </div>
+          {leftTab === "pulse" && <PulsePanel items={cc.data?.pulse ?? []} loading={cc.isPending} error={cc.isError} selectedId={highlightId} hiddenClaims={cc.data?.meta.partyClaimsHidden ?? 0} onSelect={onManualItem} />}
+          {
+            // Always mounted (hidden while Pulse is shown) so the feed count stays readable to other views.
+            <div className={cn("min-h-0 flex-1 overflow-y-auto", leftTab === "pulse" && "hidden")}>
+              <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-ink-faint">
+                {timeline.isHistorical ? "Historical Event Feed" : "Live Event Feed"}
+              </h2>
+              <p className="mb-3 text-xs text-ink-faint">
+                {timeline.isHistorical && historicalLoading ? "Loading historical state…" : `${filteredEvents.length} events in range`}
+              </p>
+              <div className="space-y-3">
+                {filteredEvents.slice(0, 40).map((e) => (
+                  <button
+                    key={e.id}
+                    onClick={() => {
+                      manual();
+                      selectEvent(e);
+                    }}
+                    className="block w-full text-left"
+                  >
+                    <EventCard event={e} compact />
+                  </button>
+                ))}
+                {filteredEvents.length === 0 && (
+                  <p className="mt-8 text-center text-xs text-ink-faint">No events match your filters.</p>
+                )}
+              </div>
+            </div>
+          }
         </aside>
 
         {/* Map */}
-        <div className="relative h-full">
+        <div className="relative h-full min-h-0" onPointerDownCapture={manual} onWheelCapture={manual}>
           <WorldMap
             events={filteredEvents}
             viewMode={viewMode}
@@ -257,6 +365,11 @@ export default function WorldPage() {
             focus={focus}
             hazardLayers={hazardLayers}
             onSelectHazard={selectHazard}
+            activeConflicts={cc.data?.conflicts}
+            onSelectConflict={(slug) => {
+              manual();
+              selectConflict(slug);
+            }}
             onViewportChange={setViewport}
             className={cn(
               "absolute inset-0 h-full w-full",
@@ -267,7 +380,7 @@ export default function WorldPage() {
               timeline.isHistorical && "ring-2 ring-inset ring-accent/50",
             )}
           />
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 px-4 pt-4 sm:pt-20">
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 px-4 pt-4 sm:pt-3">
             <div className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-border bg-surface/80 p-3 backdrop-blur-xl">
               <TimelineControls
                 preset={timeline.preset}
@@ -321,7 +434,7 @@ export default function WorldPage() {
         </div>
 
         {/* Desktop selected-event/territory panel */}
-        <aside className="hidden h-full overflow-y-auto border-l border-border bg-surface/60 p-5 pt-24 sm:block">
+        <aside className="hidden min-h-0 overflow-y-auto border-l border-border bg-surface/60 p-5 sm:block" data-testid="right-rail">
           {selected ? (
             <>
               <button
@@ -352,13 +465,48 @@ export default function WorldPage() {
               </button>
               <HazardPanel id={selectedHazardId} asOf={timeline.asOf} />
             </>
+          ) : selectedConflictSlug ? (
+            <ConflictContextPanel slug={selectedConflictSlug} country={baseCountry} onClose={() => setSelectedConflictSlug(null)} onSelectItem={onManualItem} />
+          ) : selectedCountry ? (
+            <CountryContextPanel code={selectedCountry} onClose={() => setSelectedCountry(null)} onSelectConflict={(slug) => selectConflict(slug)} />
           ) : (
-            <p className="mt-8 text-center text-sm text-ink-faint">
-              Select an event on the map or feed to see details.
-            </p>
+            <WorldRail data={cc.data} loading={cc.isPending} error={cc.isError} onSelectItem={onManualItem} onSelectEntity={onManualEntity} />
           )}
         </aside>
       </div>
+
+      {/* Below lg the left column does not fit: Pulse and the overview open in one panel (bottom sheet on phones,
+          side drawer on tablets). The right rail stays on tablets; on phones context opens in a bottom sheet. */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-20 z-30 flex justify-center gap-2 sm:bottom-4 lg:hidden">
+        {(["pulse", "overview"] as const).map((k) => (
+          <button key={k} type="button" onClick={() => setDrawer(drawer === k ? null : k)} data-testid={`drawer-${k}`} aria-expanded={drawer === k} className="pointer-events-auto rounded-full border border-border bg-surface/90 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-ink backdrop-blur-xl">
+            {k === "pulse" ? "Pulse" : "Overview"}
+          </button>
+        ))}
+      </div>
+      {drawer && (
+        <div className="fixed inset-x-0 bottom-16 z-40 flex max-h-[62vh] flex-col rounded-t-2xl border border-border bg-surface p-4 shadow-2xl sm:inset-y-24 sm:bottom-auto sm:left-0 sm:right-auto sm:max-h-none sm:w-[340px] sm:rounded-none sm:rounded-r-2xl lg:hidden" data-testid="drawer-panel" role="dialog" aria-label={drawer === "pulse" ? "Pulse" : "Overview"}>
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">{drawer === "pulse" ? "Pulse" : "Overview"}</span>
+            <button type="button" onClick={() => setDrawer(null)} aria-label="Close panel" className="text-ink-faint hover:text-ink">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {drawer === "pulse" ? (
+              <PulsePanel items={cc.data?.pulse ?? []} loading={cc.isPending} error={cc.isError} selectedId={highlightId} hiddenClaims={cc.data?.meta.partyClaimsHidden ?? 0} onSelect={onManualItem} />
+            ) : (
+              <WorldRail data={cc.data} loading={cc.isPending} error={cc.isError} onSelectItem={onManualItem} onSelectEntity={onManualEntity} />
+            )}
+          </div>
+        </div>
+      )}
+      <BottomSheet open={!!selectedConflictSlug} onClose={() => setSelectedConflictSlug(null)} label="Conflict context">
+        {selectedConflictSlug && <ConflictContextPanel slug={selectedConflictSlug} country={baseCountry} onClose={() => setSelectedConflictSlug(null)} onSelectItem={onManualItem} />}
+      </BottomSheet>
+      <BottomSheet open={!!selectedCountry} onClose={() => setSelectedCountry(null)} label="Country context">
+        {selectedCountry && <CountryContextPanel code={selectedCountry} onClose={() => setSelectedCountry(null)} onSelectConflict={(slug) => selectConflict(slug)} />}
+      </BottomSheet>
 
       {/* Mobile bottom sheet */}
       <BottomSheet open={!!selected} onClose={() => setSelected(null)} label={selected?.title}>
