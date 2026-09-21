@@ -54,7 +54,18 @@ export interface BasemapResolution {
 export function readBasemapConfig(env?: Record<string, string | undefined>): BasemapConfig {
   const e = env ?? { NEXT_PUBLIC_BASEMAP_PMTILES_URL: process.env.NEXT_PUBLIC_BASEMAP_PMTILES_URL, NEXT_PUBLIC_MAPTILER_KEY: process.env.NEXT_PUBLIC_MAPTILER_KEY, NEXT_PUBLIC_GLYPHS_URL: process.env.NEXT_PUBLIC_GLYPHS_URL };
   const v = (s: string | undefined) => (s && s.trim() ? s.trim() : undefined);
-  return { pmtilesUrl: v(e.NEXT_PUBLIC_BASEMAP_PMTILES_URL), maptilerKey: v(e.NEXT_PUBLIC_MAPTILER_KEY), glyphsUrl: v(e.NEXT_PUBLIC_GLYPHS_URL) };
+  const base: BasemapConfig = { pmtilesUrl: v(e.NEXT_PUBLIC_BASEMAP_PMTILES_URL), maptilerKey: v(e.NEXT_PUBLIC_MAPTILER_KEY), glyphsUrl: v(e.NEXT_PUBLIC_GLYPHS_URL) };
+  // Development/test only (never in a production build): localStorage["vigil.basemap.config"] overrides the build-time
+  // values, so failure handling (a 404 archive, a bad file) can be exercised without rebuilding.
+  if (!env && process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
+    try {
+      const o = JSON.parse(window.localStorage.getItem("vigil.basemap.config") ?? "{}") as BasemapConfig;
+      return { pmtilesUrl: v(o.pmtilesUrl) ?? base.pmtilesUrl, maptilerKey: v(o.maptilerKey) ?? base.maptilerKey, glyphsUrl: v(o.glyphsUrl) ?? base.glyphsUrl };
+    } catch {
+      /* no override */
+    }
+  }
+  return base;
 }
 
 export const getMapTilerKey = (): string | undefined => readBasemapConfig().maptilerKey;
