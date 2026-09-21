@@ -643,8 +643,8 @@ export function WorldMap({
 
     // style.load fires on the initial style load AND after every
     // setStyle() call (basemap-mode switch), so this is the one place that
-    // (re)wires source/layers/interactions — it must stay idempotent-safe
-    // per addEventLayers' own getSource() guard.
+    // (re)creates sources and layers — it must stay idempotent-safe per
+    // addEventLayers' own getSource() guard. Interactions are NOT wired here (see below).
     map.on("style.load", () => {
       addEventLayers(map, eventsToGeoJSON(eventsRef.current), territorialFeaturesRef.current);
       applyHeatSurface(map);
@@ -653,78 +653,83 @@ export function WorldMap({
       applyTerritorialVisibility(map);
       addHazardLayers(map, hazardDataRef.current);
       applyHazardVisibility(map, hazardLayersRef.current);
+    });
 
-      // Hazard interactions. A conflict marker stacked on a hazard keeps priority (checked below);
-      // clusters zoom in rather than select.
-      const CONFLICT_MARKERS = ["clusters", "unclustered-point", "unclustered-point-icon"];
-      const selectHazard = (e: MapLayerMouseEvent) => {
-        if (map.queryRenderedFeatures(e.point, { layers: CONFLICT_MARKERS.filter((l) => map.getLayer(l)) }).length > 0) return;
-        const feature = e.features?.[0];
-        if (!feature) return;
-        const props = feature.properties as HazardFeatureProps;
-        if ((props.kind === "thermal_cluster" || props.kind === "energy_cluster") && feature.geometry.type === "Point") {
-          map.easeTo({ center: feature.geometry.coordinates as [number, number], zoom: Math.min(map.getZoom() + 2.5, 8) });
-          return;
-        }
-        // Point layers beat an area beneath them.
-        if (AREA_CLICK_LAYERS.includes(feature.layer.id) && map.queryRenderedFeatures(e.point, { layers: HAZARD_CLICK_LAYERS.filter((l) => !AREA_CLICK_LAYERS.includes(l) && map.getLayer(l)) }).length > 0) return;
-        onSelectHazardRef.current(props.id);
-      };
-      for (const layer of HAZARD_CLICK_LAYERS) {
-        map.on("click", layer, selectHazard);
-        map.on("mouseenter", layer, () => (map.getCanvas().style.cursor = "pointer"));
-        map.on("mouseleave", layer, () => (map.getCanvas().style.cursor = ""));
+    // Layer interactions are registered ONCE, here, not inside style.load. style.load fires again on every
+    // basemap switch (setStyle), and MapLibre's layer-delegated listeners are matched by layer id at event
+    // time (they simply see no features while a layer does not exist), so they survive setStyle. Registering
+    // them inside style.load stacked another full set of ~20 listeners per Intel/Street/Satellite switch:
+    // growing memory, and every click ran N handlers.
+    // Hazard interactions. A conflict marker stacked on a hazard keeps priority (checked below);
+    // clusters zoom in rather than select.
+    const CONFLICT_MARKERS = ["clusters", "unclustered-point", "unclustered-point-icon"];
+    const selectHazard = (e: MapLayerMouseEvent) => {
+      if (map.queryRenderedFeatures(e.point, { layers: CONFLICT_MARKERS.filter((l) => map.getLayer(l)) }).length > 0) return;
+      const feature = e.features?.[0];
+      if (!feature) return;
+      const props = feature.properties as HazardFeatureProps;
+      if ((props.kind === "thermal_cluster" || props.kind === "energy_cluster") && feature.geometry.type === "Point") {
+        map.easeTo({ center: feature.geometry.coordinates as [number, number], zoom: Math.min(map.getZoom() + 2.5, 8) });
+        return;
       }
-      map.on("click", "hz-thermal-cluster", selectHazard);
-      map.on("click", "hz-quake-cluster", (e: MapLayerMouseEvent) => {
-        const f = e.features?.[0];
-        if (f?.geometry.type === "Point") map.easeTo({ center: f.geometry.coordinates as [number, number], zoom: map.getZoom() + 2 });
-      });
+      // Point layers beat an area beneath them.
+      if (AREA_CLICK_LAYERS.includes(feature.layer.id) && map.queryRenderedFeatures(e.point, { layers: HAZARD_CLICK_LAYERS.filter((l) => !AREA_CLICK_LAYERS.includes(l) && map.getLayer(l)) }).length > 0) return;
+      onSelectHazardRef.current(props.id);
+    };
+    for (const layer of HAZARD_CLICK_LAYERS) {
+      map.on("click", layer, selectHazard);
+      map.on("mouseenter", layer, () => (map.getCanvas().style.cursor = "pointer"));
+      map.on("mouseleave", layer, () => (map.getCanvas().style.cursor = ""));
+    }
+    map.on("click", "hz-thermal-cluster", selectHazard);
+    map.on("click", "hz-quake-cluster", (e: MapLayerMouseEvent) => {
+      const f = e.features?.[0];
+      if (f?.geometry.type === "Point") map.easeTo({ center: f.geometry.coordinates as [number, number], zoom: map.getZoom() + 2 });
+    });
 
-      map.on("click", "territory-fill", (e: MapLayerMouseEvent) => {
-        // "Heatmap/event hotspots must remain clickable above territorial
-        // polygons in Both mode" (spec §8) — MapLibre fires each layer's
-        // own click handler independently by hit-testing, so a marker
-        // sitting on top of a territory polygon would otherwise trigger
-        // BOTH handlers for one click; querying the marker layers first
-        // and yielding to them keeps markers taking priority when stacked.
-        const markerHit = map.queryRenderedFeatures(e.point, {
-          layers: ["clusters", "unclustered-point", "unclustered-point-icon", ...HAZARD_CLICK_LAYERS.filter((l) => !AREA_CLICK_LAYERS.includes(l) && map.getLayer(l))],
-        });
-        if (markerHit.length > 0) return;
-        const feature = e.features?.[0];
-        if (!feature) return;
-        onSelectTerritoryRef.current(feature.properties as TerritoryFeatureProperties);
+    map.on("click", "territory-fill", (e: MapLayerMouseEvent) => {
+      // "Heatmap/event hotspots must remain clickable above territorial
+      // polygons in Both mode" (spec §8) — MapLibre fires each layer's
+      // own click handler independently by hit-testing, so a marker
+      // sitting on top of a territory polygon would otherwise trigger
+      // BOTH handlers for one click; querying the marker layers first
+      // and yielding to them keeps markers taking priority when stacked.
+      const markerHit = map.queryRenderedFeatures(e.point, {
+        layers: ["clusters", "unclustered-point", "unclustered-point-icon", ...HAZARD_CLICK_LAYERS.filter((l) => !AREA_CLICK_LAYERS.includes(l) && map.getLayer(l))],
       });
-      map.on("mouseenter", "territory-fill", () => {
+      if (markerHit.length > 0) return;
+      const feature = e.features?.[0];
+      if (!feature) return;
+      onSelectTerritoryRef.current(feature.properties as TerritoryFeatureProperties);
+    });
+    map.on("mouseenter", "territory-fill", () => {
+      map.getCanvas().style.cursor = "pointer";
+    });
+    map.on("mouseleave", "territory-fill", () => {
+      map.getCanvas().style.cursor = "";
+    });
+
+    map.on("click", "clusters", (e: MapLayerMouseEvent) => {
+      const features = map.queryRenderedFeatures(e.point, { layers: ["clusters"] });
+      const feature = features[0];
+      if (!feature || feature.geometry.type !== "Point") return;
+      map.easeTo({ center: feature.geometry.coordinates as [number, number], zoom: map.getZoom() + 2 });
+    });
+    const selectFromFeature = (e: MapLayerMouseEvent) => {
+      const feature = e.features?.[0];
+      if (!feature) return;
+      const props = feature.properties as EventFeatureProps;
+      const match = eventsRef.current.find((ev) => ev.id === props.id);
+      if (match) onSelectRef.current(match);
+    };
+    map.on("click", "unclustered-point", selectFromFeature);
+    map.on("click", "unclustered-point-icon", selectFromFeature);
+    ["clusters", "unclustered-point", "unclustered-point-icon"].forEach((layer) => {
+      map.on("mouseenter", layer, () => {
         map.getCanvas().style.cursor = "pointer";
       });
-      map.on("mouseleave", "territory-fill", () => {
+      map.on("mouseleave", layer, () => {
         map.getCanvas().style.cursor = "";
-      });
-
-      map.on("click", "clusters", (e: MapLayerMouseEvent) => {
-        const features = map.queryRenderedFeatures(e.point, { layers: ["clusters"] });
-        const feature = features[0];
-        if (!feature || feature.geometry.type !== "Point") return;
-        map.easeTo({ center: feature.geometry.coordinates as [number, number], zoom: map.getZoom() + 2 });
-      });
-      const selectFromFeature = (e: MapLayerMouseEvent) => {
-        const feature = e.features?.[0];
-        if (!feature) return;
-        const props = feature.properties as EventFeatureProps;
-        const match = eventsRef.current.find((ev) => ev.id === props.id);
-        if (match) onSelectRef.current(match);
-      };
-      map.on("click", "unclustered-point", selectFromFeature);
-      map.on("click", "unclustered-point-icon", selectFromFeature);
-      ["clusters", "unclustered-point", "unclustered-point-icon"].forEach((layer) => {
-        map.on("mouseenter", layer, () => {
-          map.getCanvas().style.cursor = "pointer";
-        });
-        map.on("mouseleave", layer, () => {
-          map.getCanvas().style.cursor = "";
-        });
       });
     });
 

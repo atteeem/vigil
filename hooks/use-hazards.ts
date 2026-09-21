@@ -24,6 +24,8 @@ export function useHazards(layers: readonly HazardLayer[], asOf: Date | null, vi
   const [data, setData] = useState<HazardCollection | null>(EMPTY);
   const [loading, setLoading] = useState(false);
   const cache = useRef(new Map<string, HazardCollection>());
+  // Signature of the last live payload: an unchanged poll must not replace state (that re-renders and calls setData on every source).
+  const liveSignature = useRef("");
   const layerKey = HAZARD_LAYERS.filter((l) => layers.includes(l)).join(",");
   const asOfTime = asOf ? asOf.getTime() : null;
   const prefetchTime = prefetchAsOf ? prefetchAsOf.getTime() : null;
@@ -49,7 +51,8 @@ export function useHazards(layers: readonly HazardLayer[], asOf: Date | null, vi
     const controller = new AbortController();
     const key = `${layerKey}|${vpKey}|${asOfTime ?? "live"}`;
 
-    async function load(useCache: boolean) {
+    async function load(useCache: boolean, isPoll = false) {
+      if (isPoll && typeof document !== "undefined" && document.visibilityState === "hidden") return; // hidden tabs do not poll
       const cached = useCache ? cache.current.get(key) : undefined;
       if (cached) {
         setData(cached);
@@ -61,7 +64,14 @@ export function useHazards(layers: readonly HazardLayer[], asOf: Date | null, vi
         if (!res.ok) return;
         const json = (await res.json()) as HazardCollection;
         if (asOfTime !== null) cache.current.set(key, json);
-        if (!cancelled) setData(json);
+        if (!cancelled) {
+          if (asOfTime === null) {
+            const sig = `${key}|${JSON.stringify(json.features)}`;
+            if (sig === liveSignature.current) return; // nothing changed since the last poll
+            liveSignature.current = sig;
+          }
+          setData(json);
+        }
       } catch {
         // Network hiccup or an intentional abort: keep the last known set.
       } finally {
@@ -70,12 +80,17 @@ export function useHazards(layers: readonly HazardLayer[], asOf: Date | null, vi
     }
 
     const timer = setTimeout(() => load(asOfTime !== null), 250); // debounce viewport churn
-    const poll = asOfTime === null ? setInterval(() => load(false), POLL_INTERVAL_MS) : null;
+    const poll = asOfTime === null ? setInterval(() => load(false, true), POLL_INTERVAL_MS) : null;
+    const onVisible = () => {
+      if (asOfTime === null && document.visibilityState === "visible") void load(false);
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
       controller.abort();
       clearTimeout(timer);
       if (poll) clearInterval(poll);
+      document.removeEventListener("visibilitychange", onVisible);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- urlFor is derived from the keyed inputs
   }, [layerKey, vpKey, asOfTime]);

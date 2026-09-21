@@ -16,8 +16,18 @@ export const MAP_BASEMAP_MODE_LABEL: Record<MapBasemapMode, string> = {
  * tiles, which is worse than no basemap at all. Event markers/clusters
  * never depend on this layer and always render regardless.
  */
+/** Glyph (font) PBFs for text layers. The key-less fallback style needs its own: without a `glyphs` URL every
+ * symbol layer with text (cluster counts, hotspot labels) silently draws nothing. The default is the Protomaps
+ * `basemaps-assets` host (Noto Sans, OFL); self-host the fonts and set NEXT_PUBLIC_GLYPHS_URL to move off it. */
+export const DEFAULT_GLYPHS_URL = "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf";
+export function getGlyphsUrl(): string {
+  const custom = process.env.NEXT_PUBLIC_GLYPHS_URL;
+  return custom && custom.includes("{fontstack}") && custom.includes("{range}") ? custom : DEFAULT_GLYPHS_URL;
+}
+
 export const FALLBACK_STYLE: StyleSpecification = {
   version: 8,
+  glyphs: getGlyphsUrl(),
   sources: {},
   layers: [
     {
