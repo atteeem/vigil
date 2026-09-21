@@ -600,8 +600,11 @@ test.describe("Editing tools", () => {
       await page.getByTestId("editor-draw").click();
       const corner = await px(page, cornerVertex[0]!, cornerVertex[1]!); // measured after the toolbar click: the page may have scrolled
       await page.mouse.click(corner.x + 4, corner.y + 3); // a few pixels off the corner
+      await expect(page.getByTestId("editor-hint")).toContainText("1 point placed");
       await clickAt(page, -30, -15);
+      await expect(page.getByTestId("editor-hint")).toContainText("2 points placed");
       await clickAt(page, -30, -5);
+      await expect(page.getByTestId("editor-hint")).toContainText("first point");
       await page.getByTestId("editor-finish").click();
     };
     await startSecond();
