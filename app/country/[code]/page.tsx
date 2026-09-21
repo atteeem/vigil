@@ -28,7 +28,7 @@ function Section({ id, title, children, aside, collapsed = false }: { id: string
   // Long intelligence sections collapse (native <details>): open by default for the primary ones.
   return (
     <details className="group mt-8" open={!collapsed} data-testid={`section-${id}`}>
-      <summary className="flex cursor-pointer list-none items-baseline justify-between gap-3 [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none flex-wrap items-baseline justify-between gap-x-3 gap-y-1 [&::-webkit-details-marker]:hidden">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-faint">
           {title}
           <span className="ml-2 text-ink-faint/60 group-open:hidden" aria-hidden>

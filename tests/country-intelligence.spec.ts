@@ -366,10 +366,10 @@ test.describe.serial("Country page UI", () => {
   test("Follow country uses the existing watch system with major-only defaults and lists what it monitors", async ({ page, request }) => {
     await openCountry(page, "/country/NA");
     await page.getByTestId("section-watch").scrollIntoViewIfNeeded();
-    await expect(page.getByTestId("watch-rules")).toContainText("Airport closure");
+    await expect(page.getByTestId("watch-rules")).toContainText("Airport closed");
     const button = page.getByTestId("section-watch").getByRole("button", { name: /follow/i }).first();
     await button.click();
-    await expect(page.getByTestId("watch-mode")).toHaveText("Major only", { timeout: 30_000 });
+    await expect(page.getByTestId("watch-mode")).toHaveText("Major developments only", { timeout: 30_000 });
     const id = await page.evaluate(() => localStorage.getItem("vigil-client-id"));
     const watches = (await request.get("/api/me/watches", { headers: { "x-vigil-client": id! } }).then((r) => r.json())) as { entityType: string; entityKey: string; mode: string; effectiveRules: Record<string, unknown> }[];
     const w = watches.find((x) => x.entityType === "country" && x.entityKey === "NA")!;
@@ -388,9 +388,8 @@ test.describe.serial("Country page UI", () => {
     await expect(link).toHaveAttribute("href", "/country/NA", { timeout: 90_000 });
     await link.click();
     await expect(page).toHaveURL(/\/country\/NA$/);
-    await page.getByTestId("section-map").locator("summary").click().catch(() => undefined);
     const open = page.getByTestId("open-in-world");
-    await expect(open).toHaveAttribute("href", /^\/world\?focus=-?\d+\.\d+,-?\d+\.\d+,[\d.]+&territory=1&country=NA$/);
+    await expect(open).toHaveAttribute("href", /^\/world\?focus=-?\d+\.\d+%2C-?\d+\.\d+%2C[\d.]+&territory=1&country=NA$/);
     await page.getByTestId("show-country-map").click();
     await page.getByTestId("country-map-layers").getByRole("button", { name: "Earthquakes" }).click();
     await expect(open).toHaveAttribute("href", /layers=earthquakes/);
