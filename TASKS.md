@@ -1242,3 +1242,9 @@ Full findings, licences and decisions: `docs/OPEN_SOURCE_AUDIT.md` (25 repositor
 - [x] Tests: `tests/territory-edit-tools.spec.ts` (pure), new "Editing tools" describe in `tests/territory-editor-ui.spec.ts`, `tests/map-architecture.spec.ts`, `tests/rsshub.spec.ts`.
 
 Logged (not done): outbound-URL allowlist/SSRF guard for admin-supplied feed URLs (Third-Eye `ssrf-guard.ts` is a model; not enabled because the test suite fetches localhost fixtures); latitude-adaptive longitude step for the 0.5° hotspot grid (cheap alternative to H3); lasso / scale / rotate in the territory editor; the shared `Provenance` value type across relationship tables (OpenCTI-inspired); PMTiles fallback basemap after a tile archive exists; the G6 relationship view; a read-only Vigil MCP server.
+
+Unrelated failures seen in the country / open-source-audit sweeps (not fixed; each reproduced on `c22fd06`, the commit before this work, or is the known Mobile admin click interception):
+- `world-map-heat.spec.ts` "Globe heat layer ... shared legend" (Desktop + Mobile): `data-heat-peak` is 8, expected >= 90 — fails identically on `c22fd06` in a fresh test DB, so not caused by the briefing, country or audit changes.
+- `classification.spec.ts` test 7 "Duplicate-candidate engine ... Kyiv event" (Desktop): the fixture's fixed publish date has aged out of the 45-day `/api/events` window (fails identically on `c22fd06`); needs a fixture dated relative to now.
+- `classification.spec.ts` 5 and 405, `event-corroboration.spec.ts` 3 (Mobile): admin table/form clicks intercepted by neighbouring elements at phone width (same family as the `admin.spec.ts` Mobile incoming-publish issue logged earlier).
+Spec hygiene fixed here: the briefings, watchlist and country specs now delete their conflicts' published events in `afterAll`; leftover extreme-severity events had pushed later specs' events out of the homepage "significant events" ranking.
