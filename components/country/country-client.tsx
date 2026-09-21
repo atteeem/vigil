@@ -1,5 +1,6 @@
 "use client";
 
+import { hasPoint } from "@/lib/types/event";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -39,7 +40,7 @@ export function CountryMap({ code, name, lat, lng, zoom, neighbourCodes }: { cod
   const { data: hazards } = useHazards(show ? layers : [], null, viewport);
 
   // Nearby context, bounded: events in this country, its neighbours or within ~1,500 km of its centre.
-  const nearbyEvents = useMemo(() => events.filter((e) => e.countryCode === code || neighbourCodes.includes(e.countryCode) || distanceKm({ lat, lng }, e) <= 1500).slice(0, 300), [events, code, neighbourCodes, lat, lng]);
+  const nearbyEvents = useMemo(() => events.filter((e) => e.countryCode === code || neighbourCodes.includes(e.countryCode) || (hasPoint(e) && distanceKm({ lat, lng }, e) <= 1500)).slice(0, 300), [events, code, neighbourCodes, lat, lng]);
   const heatConflicts = useMemo(() => (heat ? selectHeatConflicts(overview.data?.conflicts) : undefined), [heat, overview.data]);
   const nowIso = useMemo(() => new Date().toISOString(), [events]); // eslint-disable-line react-hooks/exhaustive-deps -- re-read the clock when new data arrives
 

@@ -78,6 +78,7 @@ test.describe.serial("RSS ingestion proof (BBC World)", () => {
     await expect(conflictSelect.locator("option", { hasText: "Russia–Ukraine War" })).toHaveCount(1);
     await conflictSelect.selectOption({ label: "Russia–Ukraine War" });
 
+    await card.getByLabel("Geographic scope").selectOption("point");
     await card.getByLabel("Latitude").fill("50.45");
     await card.getByLabel("Longitude").fill("30.52");
     await card.getByLabel("Country code").fill("UA");

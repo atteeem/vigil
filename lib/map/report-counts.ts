@@ -36,8 +36,9 @@ export function formatReportCount(count: number): string {
 
 export interface GeoReportable extends ReportCountable {
   id: string;
-  lat: number;
-  lng: number;
+  /** null: the report has no map point (country-level / unknown location) and is not bucketed. */
+  lat: number | null;
+  lng: number | null;
 }
 
 export interface ReportBucket {
@@ -67,6 +68,7 @@ export function aggregateReportBuckets(events: readonly GeoReportable[], zoom: n
   const cell = hotspotCellDegrees(zoom);
   const cells = new Map<string, { latSum: number; lngSum: number; reports: number; ids: string[] }>();
   for (const e of events) {
+    if (e.lat == null || e.lng == null) continue;
     const key = `${Math.floor(e.lat / cell)}:${Math.floor(e.lng / cell)}`;
     const weight = reportCountOf(e);
     const acc = cells.get(key) ?? { latSum: 0, lngSum: 0, reports: 0, ids: [] };

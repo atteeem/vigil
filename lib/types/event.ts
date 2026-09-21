@@ -51,13 +51,19 @@ export interface ConflictEvent {
   title: string;
   summary: string;
   eventType: EventType;
-  lat: number;
-  lng: number;
+  /** null for country-level, global and unknown-location reports: no point exists and none is invented. */
+  lat: number | null;
+  lng: number | null;
   // How precisely lat/lng locates the event: "exact" | "approximate" |
   // "area_level" | "unknown" (see lib/territory/location-precision.ts).
   // Optional/null for mock events and pre-precision rows — the map only
   // draws an uncertainty halo for an explicit non-exact value.
   locationPrecision?: string | null;
+  /** Hierarchical scope (global | country | region | city | point | unknown) and the named geography behind it. */
+  locationScope?: string | null;
+  city?: string | null;
+  adminRegion?: string | null;
+  locationName?: string | null;
   countryCode: string;
   region: string;
   conflictId: string | null;
@@ -88,3 +94,8 @@ export interface ConflictEvent {
   // needed before showing it.
   updateHistory?: EventUpdateHistoryEntry[];
 }
+
+/** An event that has a map point. Country-level, global and unknown-location reports do not (lat/lng are null)
+ * and are never drawn as point markers, clustered, or fed to the heat surface. */
+export type PointEvent = ConflictEvent & { lat: number; lng: number };
+export const hasPoint = (e: ConflictEvent): e is PointEvent => e.lat != null && e.lng != null && Number.isFinite(e.lat) && Number.isFinite(e.lng);

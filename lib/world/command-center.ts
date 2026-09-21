@@ -5,7 +5,7 @@ import { computeSeverityScore, effectiveSeverityLabel } from "@/lib/scoring/seve
 import type { ConflictStatusLike } from "@/lib/scoring/types";
 import { getCountryRecord } from "@/lib/countries/registry";
 import type { Conflict } from "@/lib/types";
-import { HIGH_TENSION_MIN_SCORE, LIVE_MAX_MINUTES, buildSignals, buildTicker, liveState, rankEntities, toWorldItem } from "./derive";
+import { HIGH_TENSION_MIN_SCORE, LIVE_MAX_MINUTES, buildSignals, dedupeItems, buildTicker, liveState, rankEntities, toWorldItem } from "./derive";
 import type { CommandCenter, MarkerConflict } from "./types";
 
 // One aggregation for /world: status counters, ticker, Pulse, What Changed, Top Entities, Global Signals and the
@@ -34,7 +34,7 @@ export async function getCommandCenter(opts: { includePartyClaims?: boolean } = 
   const active = conflicts.filter((c) => c.status === "active");
   const scored = active.map((c) => ({ c, score: conflictSeverityScore(c) }));
 
-  const items = brief24.developments.map(toWorldItem).sort((a, b) => b.occurredAt.localeCompare(a.occurredAt) || b.significance - a.significance || a.id.localeCompare(b.id));
+  const items = dedupeItems(brief24.developments.map(toWorldItem)).sort((a, b) => b.occurredAt.localeCompare(a.occurredAt) || b.significance - a.significance || a.id.localeCompare(b.id));
   const claimFree = items.filter((i) => !i.isPartyClaim);
   const latestBySlug = new Map<string, string>();
   const recentBySlug = new Set<string>();
@@ -58,7 +58,7 @@ export async function getCommandCenter(opts: { includePartyClaims?: boolean } = 
     },
     ticker: buildTicker(claimFree),
     pulse: items.slice(0, PULSE_MAX),
-    whatChanged: brief6.developments.filter((d) => !d.isPartyClaim).slice(0, WHAT_CHANGED_MAX).map(toWorldItem),
+    whatChanged: dedupeItems(brief6.developments.filter((d) => !d.isPartyClaim).map(toWorldItem)).slice(0, WHAT_CHANGED_MAX),
     topEntities: rankEntities(claimFree, now, (code) => getCountryRecord(code)?.name ?? null),
     globalSignals: buildSignals(claimFree),
     conflicts: markers,

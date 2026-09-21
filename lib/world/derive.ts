@@ -64,6 +64,19 @@ export function toWorldItem(d: BriefDevelopment): WorldItem {
 
 const normTitle = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
+/** Drops repeats of the same development (same id, or same type and normalised headline): several feeds and
+ * per-asset records can state one thing many times, and a list should say it once. Keeps the first of each. */
+export function dedupeItems(items: WorldItem[]): WorldItem[] {
+  const seen = new Set<string>();
+  return items.filter((i) => {
+    const key = `${i.developmentType}|${normTitle(i.headline)}|${i.countryCode ?? ""}`;
+    if (seen.has(i.id) || seen.has(key)) return false;
+    seen.add(i.id);
+    seen.add(key);
+    return true;
+  });
+}
+
 /**
  * Breaking-intelligence ticker and Live View queue: significant, non-party-claim developments, de-duplicated
  * (same id, same type + normalised headline, or same conflict + type + place), newest first. Minor RSS and

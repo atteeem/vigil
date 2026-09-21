@@ -1,3 +1,4 @@
+import { hasPoint, type PointEvent } from "@/lib/types/event";
 import type { Conflict, ConflictEvent } from "@/lib/types";
 import { computeSeverityScore, effectiveSeverityLabel } from "@/lib/scoring/severity";
 import { computeConfidenceScore } from "@/lib/scoring/confidence";
@@ -43,7 +44,7 @@ export function buildHeatInput({ conflicts = [], events: allEvents, nowIso, live
   // Only what is known at the reference time: in a historical view an event
   // dated after asOf is not part of that state — as an incident or as evidence
   // for a conflict's extent.
-  const events = live ? allEvents : allEvents.filter((e) => new Date(e.occurredAt).getTime() <= now);
+  const events = (live ? allEvents : allEvents.filter((e) => new Date(e.occurredAt).getTime() <= now)).filter(hasPoint);
   const incidents: HeatIncident[] = [];
   const confidenceOf = new Map<string, number>();
 
@@ -60,7 +61,7 @@ export function buildHeatInput({ conflicts = [], events: allEvents, nowIso, live
     incidents.push({ id: e.id, lat: e.lat, lng: e.lng, severityScore: severity.severityScore, confidence, ageHours: Math.round(ageHours), importance: e.importance, precision: e.locationPrecision ?? null });
   }
 
-  const byConflict = new Map<string, ConflictEvent[]>();
+  const byConflict = new Map<string, PointEvent[]>();
   for (const e of events) {
     if (!e.conflictId) continue;
     const list = byConflict.get(e.conflictId);

@@ -3,6 +3,9 @@ import type { RawIngestionItemDTO } from "@/lib/db/repositories/raw-ingestion-it
 import type { DraftSuggestionDTO } from "@/lib/types/db";
 import { detectEventType, suggestSeverityAndImportance } from "@/lib/ingestion/event-type-keywords";
 import { gazetteerPlaceNames, gazetteerLookup } from "@/lib/geocoding/gazetteer";
+import { resolveLocationScope, leadOf } from "@/lib/geocoding/location-scope";
+import { deriveSummary, deriveTitle, cleanText } from "@/lib/ingestion/text-summary";
+import { getCountryRecord } from "@/lib/countries/registry";
 import { findConflictByCountryCode } from "@/lib/db/repositories/conflicts";
 import { findDuplicateCandidates } from "@/lib/ingestion/duplicates";
 
@@ -19,32 +22,27 @@ import { findDuplicateCandidates } from "@/lib/ingestion/duplicates";
  * (`source.autoProcessing`) — the review screen then shows source data
  * only, no suggestion section.
  */
-export async function extractDraft(item: RawIngestionItemDTO, source: Source): Promise<DraftSuggestionDTO | null> {
+export async function extractDraft(item: RawIngestionItemDTO, source: Source, opts: { skipDuplicates?: boolean } = {}): Promise<DraftSuggestionDTO | null> {
   if (!source.autoProcessing) return null;
 
-  const title = item.originalTitle ?? "";
-  const text = `${title} ${item.originalText ?? ""}`;
+  const titleResult = deriveTitle(item.originalTitle, item.originalText);
+  const title = titleResult.title;
+  const text = `${title} ${cleanText(item.originalText)}`;
   const eventType = detectEventType(text);
   const { severity, importance } = suggestSeverityAndImportance(text);
 
-  const lowerText = text.toLowerCase();
-  let matchedPlace: string | null = null;
-  for (const name of gazetteerPlaceNames()) {
-    if (lowerText.includes(name)) {
-      matchedPlace = name;
-      break;
-    }
-  }
-
-  const candidates = matchedPlace ? gazetteerLookup(matchedPlace) : [];
-  const resolved = candidates.length === 1 ? candidates[0]! : null;
-  const locationSource: DraftSuggestionDTO["locationSource"] =
-    candidates.length === 0 ? "none" : candidates.length === 1 ? "resolved" : "ambiguous";
+  // Hierarchical location (city > region > country > unknown) from the headline and the opening text only.
+  // Ambiguous gazetteer names are surfaced as candidates for the reviewer, never auto-picked.
+  const loc = resolveLocationScope(title, cleanText(item.originalText));
+  const lowerLead = leadOf(title, cleanText(item.originalText)).toLowerCase();
+  const ambiguousName = gazetteerPlaceNames().find((n) => gazetteerLookup(n).length > 1 && lowerLead.includes(n));
+  const candidates = ambiguousName ? gazetteerLookup(ambiguousName) : loc.scope === "city" ? gazetteerLookup(loc.city!.toLowerCase()) : [];
+  const locationSource: DraftSuggestionDTO["locationSource"] = loc.scope === "city" ? "resolved" : ambiguousName && loc.scope !== "region" ? "ambiguous" : "none";
 
   let conflictId: string | null = null;
   let conflictName: string | null = null;
-  if (resolved?.countryCode) {
-    const conflict = await findConflictByCountryCode(resolved.countryCode);
+  if (loc.countryCode) {
+    const conflict = await findConflictByCountryCode(loc.countryCode);
     if (conflict) {
       conflictId = conflict.id;
       conflictName = conflict.name;
@@ -52,39 +50,36 @@ export async function extractDraft(item: RawIngestionItemDTO, source: Source): P
   }
 
   const occurredAt = item.publishedAt ?? item.receivedAt;
-  const duplicates = resolved
-    ? await findDuplicateCandidates({
-        title,
-        eventType,
-        latitude: resolved.lat,
-        longitude: resolved.lng,
-        countryCode: resolved.countryCode ?? null,
-        region: resolved.region ?? null,
-        conflictId,
-        occurredAt,
-      })
-    : [];
+  const duplicates =
+    !opts.skipDuplicates && loc.latitude != null && loc.longitude != null
+      ? await findDuplicateCandidates({ title, eventType, latitude: loc.latitude, longitude: loc.longitude, countryCode: loc.countryCode, region: null, conflictId, occurredAt })
+      : [];
+  const summary = await deriveSummary(title, item.originalText);
+  const macroRegion = loc.countryCode ? (getCountryRecord(loc.countryCode)?.region ?? null) : null;
 
   return {
     eventType,
-    countryCode: resolved?.countryCode ?? null,
-    region: resolved?.region ?? null,
-    locationName: matchedPlace ? toTitleCase(matchedPlace) : null,
-    latitude: resolved?.lat ?? null,
-    longitude: resolved?.lng ?? null,
+    countryCode: loc.countryCode,
+    countryName: loc.countryName,
+    region: macroRegion,
+    adminRegion: loc.adminRegion,
+    city: loc.city,
+    locationName: loc.city ?? loc.adminRegion ?? loc.countryName,
+    latitude: loc.latitude,
+    longitude: loc.longitude,
     conflictId,
     conflictName,
-    title: title || "Untitled report",
-    // A starting point, not a finished summary — the review UI keeps this
-    // editable and visually marked as a suggestion; publishing with an
-    // unedited copy of source text is a human choice this system doesn't
-    // prevent, but doesn't default to being safe to leave unedited either.
-    summary: item.originalText || title,
+    title,
+    titleSource: titleResult.source,
+    summary: summary.summary,
+    summarySource: summary.source,
     verificationStatus: "reported",
     importance,
     severity,
     locationSource,
-    locationPrecision: resolved ? "approximate" : "unknown",
+    locationPrecision: loc.precision,
+    locationScope: loc.scope,
+    locationEvidence: [loc.evidence, ...loc.notes].join(" "),
     locationCandidates: candidates,
     duplicates,
   };

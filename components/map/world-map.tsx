@@ -35,6 +35,7 @@ import { createHazardIconImageData, HAZARD_ICON_IDS } from "@/lib/map/hazard-ico
 import { EMPTY_HAZARD_SOURCES, hazardsToSources, type HazardSourceData } from "@/lib/map/hazards-to-geojson";
 import type { HazardViewport } from "@/hooks/use-hazards";
 import type { MarkerConflict } from "@/lib/world/types";
+import { hasPoint } from "@/lib/types/event";
 
 // Simplified colored-dot markers ("medium zoom") give way to full
 // category icons ("high zoom") at this threshold — see Map Requirements.md
@@ -288,9 +289,9 @@ function addEventLayers(
     id: "unclustered-point-uncertainty",
     type: "circle",
     source: "events",
-    filter: ["all", ["!", ["has", "point_count"]], ["in", ["get", "precision"], ["literal", ["approximate", "area_level", "unknown"]]]],
+    filter: ["all", ["!", ["has", "point_count"]], ["in", ["get", "precision"], ["literal", ["approximate", "city", "region", "area_level", "unknown"]]]],
     paint: {
-      "circle-radius": ["match", ["get", "precision"], "approximate", 16, "area_level", 30, "unknown", 24, 0],
+      "circle-radius": ["match", ["get", "precision"], "approximate", 16, "city", 16, "region", 34, "area_level", 30, "unknown", 24, 0],
       "circle-color": SEVERITY_COLOR_MATCH,
       "circle-opacity": 0.12,
       "circle-blur": 0.5,
@@ -519,7 +520,7 @@ function refreshReportHeatLabels(map: MapLibreMap, events: ConflictEvent[]) {
   const source = map.getSource("report-heat-labels") as GeoJSONSource | undefined;
   if (!source) return;
   const buckets = aggregateReportBuckets(
-    events.map((e) => ({ id: e.id, lat: e.lat, lng: e.lng, sources: e.sources, sourceCount: e.sourceCount })),
+    events.filter(hasPoint).map((e) => ({ id: e.id, lat: e.lat, lng: e.lng, sources: e.sources, sourceCount: e.sourceCount })),
     map.getZoom(),
   );
   source.setData({

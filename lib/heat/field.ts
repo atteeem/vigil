@@ -233,7 +233,7 @@ export function computeHeatField(input: HeatInput): HeatField {
     const recency = Math.pow(0.5, inc.ageHours / HEAT_MODEL.incidentHalfLifeHours);
     const amp = Math.max(0, clamp(inc.severityScore, 0, 100) - HEAT_MODEL.baseline) * recency;
     if (amp < 0.5) continue;
-    const scope = inc.precision === "area_level" ? 2 : inc.precision === "approximate" ? 1.4 : 1;
+    const scope = inc.precision === "area_level" || inc.precision === "region" ? 2 : inc.precision === "approximate" || inc.precision === "city" ? 1.4 : 1;
     const radiusKm = Math.min(HEAT_MODEL.incidentMaxKm * scope, (HEAT_MODEL.incidentBaseKm + HEAT_MODEL.incidentPerPointKm * clamp(inc.importance, 0, 100)) * scope);
     const reach = radiusKm * 3;
     const centreRow = Math.floor((90 - inc.lat) / cell);

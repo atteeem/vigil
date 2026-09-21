@@ -466,10 +466,20 @@ model Event {
   // dressed up as news.
   origin             String    @default("conflict_news")
   locationName       String?   @map("location_name")
-  latitude           Float
-  longitude          Float
+  // Nullable: a country-level, global or unknown-location report has NO point (never a fake marker). A stored
+  // coordinate is the RENDER point for the known geography (locationScope / locationPrecision say how much we know).
+  latitude           Float?
+  longitude          Float?
   countryCode        String?   @map("country_code")
+  // The macro region used by the map filters ("Europe", "Middle East"...). NOT an administrative region.
   region             String?
+  // Hierarchical geographic scope: global | country | region | city | point | unknown (lib/types/db.ts).
+  locationScope      String?   @map("location_scope")
+  // Administrative region (oblast / province / state) and city named by the evidence; separate from `region`.
+  adminRegion        String?   @map("admin_region")
+  city               String?
+  // The text that justified the location assignment (what the source said), kept with the record.
+  locationEvidence   String?   @map("location_evidence")
   conflictId         String?   @map("conflict_id")
   conflict           Conflict? @relation(fields: [conflictId], references: [id])
   occurredAt         DateTime  @map("occurred_at")

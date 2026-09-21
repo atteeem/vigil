@@ -5,7 +5,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, X, GitMerge, Pencil, ExternalLink, Sparkles, Eye, RefreshCw, AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { LocationPicker } from "@/components/admin/location-picker";
+import { LocationScopeFields } from "@/components/admin/location-scope-fields";
+import { BulkPublishDialog } from "@/components/admin/bulk-publish-dialog";
+import { locationDraftError } from "@/lib/geocoding/scope-rules";
 import { EVENT_TYPES, SEVERITY_LEVELS, REGIONS } from "@/lib/types";
 import { EVENT_TYPE_LABEL, getEventTypeLabel } from "@/components/events/event-type-icon";
 import { EXTRACTED_FACT_FIELD_LABEL } from "@/lib/ingestion/field-labels";
@@ -25,6 +27,7 @@ import {
   type IncomingSort,
   type ExtractedFactField,
   type ExtractedFactsResponseDTO,
+  type LocationScope,
 } from "@/lib/types/db";
 import { timeAgo } from "@/lib/utils";
 import type { ConflictEvent } from "@/lib/types";
@@ -97,6 +100,10 @@ interface PublishDraft {
   latitude: string;
   longitude: string;
   locationPrecision: string;
+  locationScope: LocationScope;
+  city: string;
+  adminRegion: string;
+  locationEvidence: string;
   countryCode: string;
   region: string;
   occurredAt: string;
@@ -116,6 +123,10 @@ function draftFromItem(item: RawIngestionItemWithSourceDTO): PublishDraft {
     latitude: "",
     longitude: "",
     locationPrecision: "unknown",
+    locationScope: "unknown",
+    city: "",
+    adminRegion: "",
+    locationEvidence: "",
     countryCode: "",
     region: "",
     occurredAt: new Date(occurred).toISOString().slice(0, 16),
@@ -136,6 +147,10 @@ function draftFromSuggestion(item: RawIngestionItemWithSourceDTO, s: DraftSugges
     latitude: s.latitude !== null ? String(s.latitude) : "",
     longitude: s.longitude !== null ? String(s.longitude) : "",
     locationPrecision: s.locationPrecision ?? "unknown",
+    locationScope: s.locationScope,
+    city: s.city ?? "",
+    adminRegion: s.adminRegion ?? "",
+    locationEvidence: s.locationEvidence,
     countryCode: s.countryCode ?? "",
     region: s.region ?? "",
     occurredAt: new Date(occurred).toISOString().slice(0, 16),
@@ -143,6 +158,30 @@ function draftFromSuggestion(item: RawIngestionItemWithSourceDTO, s: DraftSugges
     importance: String(s.importance),
     verificationStatus: s.verificationStatus,
     conflictId: s.conflictId ?? "",
+  };
+}
+
+function buildPublishBody(draft: PublishDraft) {
+  const point = draft.latitude.trim() !== "" && draft.longitude.trim() !== "";
+  return {
+    title: draft.title,
+    summary: draft.summary,
+    eventType: draft.eventType,
+    locationName: draft.locationName || undefined,
+    locationScope: draft.locationScope,
+    city: draft.city || undefined,
+    adminRegion: draft.adminRegion || undefined,
+    latitude: point ? Number(draft.latitude) : null,
+    longitude: point ? Number(draft.longitude) : null,
+    locationPrecision: draft.locationPrecision,
+    locationEvidence: draft.locationEvidence || undefined,
+    countryCode: draft.countryCode || undefined,
+    region: draft.region || undefined,
+    occurredAt: new Date(draft.occurredAt).toISOString(),
+    severity: draft.severity,
+    importance: Number(draft.importance),
+    verificationStatus: draft.verificationStatus,
+    conflictId: draft.conflictId || null,
   };
 }
 
@@ -179,6 +218,10 @@ export default function AdminIncomingPage() {
   const [extractingFacts, setExtractingFacts] = useState<string | null>(null);
   const [editingFactId, setEditingFactId] = useState<string | null>(null);
   const [factEdits, setFactEdits] = useState<Record<string, string>>({});
+  const [publishing, setPublishing] = useState<Record<string, boolean>>({});
+  const [publishErrors, setPublishErrors] = useState<Record<string, string | undefined>>({});
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulk, setBulk] = useState<null | { ids?: string[] }>(null);
 
   const refresh = () =>
     queryClient.invalidateQueries({ predicate: (q) => q.queryKey[0] === "admin" || q.queryKey[0] === "events" });
@@ -281,38 +324,53 @@ export default function AdminIncomingPage() {
     refresh();
   }
 
-  async function publish(item: RawIngestionItemWithSourceDTO) {
-    const draft = getDraft(item);
-    if (!draft.title || !draft.summary || !draft.latitude || !draft.longitude) {
-      alert("Title, summary, latitude, and longitude are required to publish.");
-      return;
-    }
+  /** Validates the draft against its geographic scope, then publishes through the one publish route. Returns an error
+   * message (shown inline on the report) or null on success. */
+  async function submitPublish(item: RawIngestionItemWithSourceDTO, draft: PublishDraft): Promise<string | null> {
+    if (!draft.title.trim() || !draft.summary.trim()) return "A title and a summary are required to publish.";
+    const locationError = locationDraftError(draft);
+    if (locationError) return locationError;
     const res = await fetch(`/api/admin/incoming/${item.id}/publish`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: draft.title,
-        summary: draft.summary,
-        eventType: draft.eventType,
-        locationName: draft.locationName || undefined,
-        latitude: Number(draft.latitude),
-        longitude: Number(draft.longitude),
-        locationPrecision: draft.locationPrecision,
-        countryCode: draft.countryCode || undefined,
-        region: draft.region || undefined,
-        occurredAt: new Date(draft.occurredAt).toISOString(),
-        severity: draft.severity,
-        importance: Number(draft.importance),
-        verificationStatus: draft.verificationStatus,
-        conflictId: draft.conflictId || null,
-      }),
+      body: JSON.stringify(buildPublishBody(draft)),
     });
-    if (!res.ok) {
-      const err = await res.json();
-      alert(err.error ?? "Publish failed");
+    if (!res.ok) return ((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Publish failed";
+    return null;
+  }
+
+  // Review form's Publish: the draft the reviewer has been editing.
+  async function publish(item: RawIngestionItemWithSourceDTO) {
+    setPublishErrors((p) => ({ ...p, [item.id]: undefined }));
+    const error = await submitPublish(item, getDraft(item));
+    if (error) {
+      setPublishErrors((p) => ({ ...p, [item.id]: error }));
       return;
     }
     refresh();
+  }
+
+  // Quick Publish next to Review: the same automatic draft the review form would open with (source headline, neutral
+  // summary, hierarchical location), through the same validation and publish route.
+  async function quickPublish(item: RawIngestionItemWithSourceDTO) {
+    setPublishing((p) => ({ ...p, [item.id]: true }));
+    setPublishErrors((p) => ({ ...p, [item.id]: undefined }));
+    try {
+      let draft = drafts[item.id];
+      if (!draft) {
+        const res = await fetch(`/api/admin/incoming/${item.id}/draft`);
+        const { draft: suggestion }: { draft: DraftSuggestionDTO | null } = await res.json();
+        if (suggestion) {
+          setSuggestions((prev) => ({ ...prev, [item.id]: suggestion }));
+          draft = draftFromSuggestion(item, suggestion);
+        } else draft = draftFromItem(item); // automated processing is off: publish from source data only
+      }
+      const error = await submitPublish(item, draft);
+      if (error) setPublishErrors((p) => ({ ...p, [item.id]: error }));
+      else refresh();
+    } finally {
+      setPublishing((p) => ({ ...p, [item.id]: false }));
+    }
   }
 
   async function reject(id: string) {
@@ -342,9 +400,29 @@ export default function AdminIncomingPage() {
   return (
     <div>
       <h1 className="mb-4 text-lg font-semibold text-ink">Incoming Reports</h1>
-      <p className="mb-4 text-xs text-ink-faint">
-        {items.length} item{items.length === 1 ? "" : "s"} matching filters. Nothing here auto-publishes.
-      </p>
+      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="incoming-actions">
+        <p className="text-sm text-ink-dim" data-testid="incoming-count">
+          <strong className="text-ink" data-testid="incoming-count-number">{loading ? "…" : items.length}</strong> item{items.length === 1 ? "" : "s"} matching filters
+          <span className="text-xs text-ink-faint"> · nothing here auto-publishes</span>
+        </p>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <label className="inline-flex items-center gap-1.5 text-xs text-ink-faint">
+            <input
+              type="checkbox"
+              data-testid="select-all-visible"
+              checked={items.length > 0 && items.every((i) => selectedIds.has(i.id))}
+              onChange={(e) => setSelectedIds(e.target.checked ? new Set(items.map((i) => i.id)) : new Set())}
+            />
+            Select all visible
+          </label>
+          <Button size="sm" variant="outline" disabled={selectedIds.size === 0} onClick={() => setBulk({ ids: [...selectedIds] })} data-testid="publish-selected">
+            Publish selected ({selectedIds.size})
+          </Button>
+          <Button size="sm" variant="primary" disabled={loading || items.length === 0} onClick={() => setBulk({})} data-testid="publish-filtered">
+            <Check className="h-3.5 w-3.5" /> Publish filtered ({loading ? "…" : items.length})
+          </Button>
+        </div>
+      </div>
 
       <Card className="mb-4 flex flex-wrap items-end gap-3 p-3" data-testid="incoming-filters">
         <label className="text-xs text-ink-faint">
@@ -493,7 +571,24 @@ export default function AdminIncomingPage() {
           return (
             <Card key={item.id} className="p-4" data-testid={`incoming-item-${item.id}`}>
               {/* ---------- SOURCE DATA (always shown, never auto-generated) ---------- */}
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                {item.processingStatus === "pending" && (
+                  <input
+                    type="checkbox"
+                    className="mt-1 shrink-0"
+                    aria-label={`Select ${item.originalTitle ?? "report"}`}
+                    data-testid={`select-${item.id}`}
+                    checked={selectedIds.has(item.id)}
+                    onChange={(e) =>
+                      setSelectedIds((prev) => {
+                        const next = new Set(prev);
+                        if (e.target.checked) next.add(item.id);
+                        else next.delete(item.id);
+                        return next;
+                      })
+                    }
+                  />
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-ink-faint">
                     <span className="rounded bg-white/5 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-ink-faint">
@@ -558,16 +653,29 @@ export default function AdminIncomingPage() {
                     </a>
                   )}
                 </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <Button size="icon" variant="ghost" onClick={() => setEditing((p) => ({ ...p, [item.id]: !isEditing }))} aria-label="Edit">
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={() => reject(item.id)} aria-label="Reject">
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button size="sm" variant="accent" onClick={() => toggleReview(item)}>
-                    {expanded ? "Close" : "Review"}
-                  </Button>
+                <div className="flex shrink-0 flex-col items-end gap-1" data-testid={`row-actions-${item.id}`}>
+                  <div className="flex items-center gap-1.5">
+                    <Button size="icon" variant="ghost" onClick={() => setEditing((p) => ({ ...p, [item.id]: !isEditing }))} aria-label="Edit">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => reject(item.id)} aria-label="Reject">
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="sm" variant="accent" onClick={() => toggleReview(item)}>
+                      {expanded ? "Close" : "Review"}
+                    </Button>
+                    {/* Hidden while the review form is open: the form has its own Publish (one Publish per card). */}
+                    {!expanded && item.processingStatus === "pending" && (
+                      <Button size="sm" variant="primary" onClick={() => quickPublish(item)} disabled={publishing[item.id]} data-testid={`quick-publish-${item.id}`}>
+                        <Check className="h-3.5 w-3.5" /> {publishing[item.id] ? "Publishing…" : "Publish"}
+                      </Button>
+                    )}
+                  </div>
+                  {publishErrors[item.id] && !expanded && (
+                    <p role="alert" className="max-w-xs text-right text-xs text-high" data-testid={`publish-error-${item.id}`}>
+                      {publishErrors[item.id]}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -589,11 +697,11 @@ export default function AdminIncomingPage() {
                         <span>Event type: {EVENT_TYPE_LABEL[suggestion.eventType as keyof typeof EVENT_TYPE_LABEL] ?? suggestion.eventType}</span>
                         <span>
                           Location:{" "}
-                          {suggestion.locationSource === "ambiguous"
-                            ? `${suggestion.locationName ?? "?"} (ambiguous)`
-                            : suggestion.locationSource === "resolved"
-                              ? suggestion.locationName
-                              : "not detected"}
+                          {suggestion.locationScope === "unknown"
+                            ? suggestion.locationSource === "ambiguous"
+                              ? `${suggestion.locationName ?? "?"} (ambiguous)`
+                              : "not detected"
+                            : `${suggestion.locationName ?? suggestion.countryName} (${suggestion.locationScope})`}
                         </span>
                         <span>Conflict: {suggestion.conflictName ?? "none detected"}</span>
                         <span>Verification: {suggestion.verificationStatus}</span>
@@ -807,7 +915,7 @@ export default function AdminIncomingPage() {
                       </select>
                     </label>
                     <label className="sm:col-span-2 text-xs text-ink-faint">
-                      Summary (independently written — never republish source text verbatim)
+                      Summary (neutral; taken from the source excerpt unless edited)
                       <textarea
                         rows={2}
                         className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
@@ -841,84 +949,7 @@ export default function AdminIncomingPage() {
                       />
                     </label>
 
-                    <div className="sm:col-span-2">
-                      <p className="mb-1 text-xs text-ink-faint">Location</p>
-                      <LocationPicker
-                        value={{
-                          lat: draft.latitude,
-                          lng: draft.longitude,
-                          locationName: draft.locationName,
-                          countryCode: draft.countryCode,
-                          region: draft.region,
-                        }}
-                        ambiguousCandidates={
-                          suggestion?.locationSource === "ambiguous" ? suggestion.locationCandidates : undefined
-                        }
-                        onChange={(patch) =>
-                          setDraft(item.id, {
-                            ...(patch.lat !== undefined ? { latitude: patch.lat } : {}),
-                            ...(patch.lng !== undefined ? { longitude: patch.lng } : {}),
-                            // A place-search pick is a settlement centroid, not the reported spot.
-                            ...(patch.lat !== undefined && patch.lng !== undefined ? { locationPrecision: "approximate" } : {}),
-                            ...(patch.locationName !== undefined ? { locationName: patch.locationName } : {}),
-                            ...(patch.countryCode !== undefined ? { countryCode: patch.countryCode } : {}),
-                            ...(patch.region !== undefined ? { region: patch.region } : {}),
-                          })
-                        }
-                      />
-                      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                        <label className="text-xs text-ink-faint">
-                          Latitude
-                          <input
-                            className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
-                            value={draft.latitude}
-                            onChange={(e) => setDraft(item.id, { latitude: e.target.value })}
-                            placeholder="required"
-                          />
-                        </label>
-                        <label className="text-xs text-ink-faint">
-                          Longitude
-                          <input
-                            className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
-                            value={draft.longitude}
-                            onChange={(e) => setDraft(item.id, { longitude: e.target.value })}
-                            placeholder="required"
-                          />
-                        </label>
-                        <label className="text-xs text-ink-faint">
-                          Location precision
-                          <select
-                            className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
-                            value={draft.locationPrecision}
-                            onChange={(e) => setDraft(item.id, { locationPrecision: e.target.value })}
-                            data-testid="location-precision-select"
-                          >
-                            <option value="exact">Exact</option>
-                            <option value="approximate">Approximate</option>
-                            <option value="area_level">Area-level</option>
-                            <option value="unknown">Unknown</option>
-                          </select>
-                        </label>
-                        <label className="text-xs text-ink-faint">
-                          Country code
-                          <input
-                            className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
-                            value={draft.countryCode}
-                            onChange={(e) => setDraft(item.id, { countryCode: e.target.value.toUpperCase() })}
-                            placeholder="e.g. UA"
-                          />
-                        </label>
-                        <label className="text-xs text-ink-faint">
-                          Region
-                          <input
-                            className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink"
-                            value={draft.region}
-                            onChange={(e) => setDraft(item.id, { region: e.target.value })}
-                            placeholder="Europe / Middle East / …"
-                          />
-                        </label>
-                      </div>
-                    </div>
+                    <LocationScopeFields draft={draft} onChange={(patch) => setDraft(item.id, patch)} suggestion={suggestion} />
 
                     <label className="text-xs text-ink-faint">
                       Severity
@@ -1039,6 +1070,11 @@ export default function AdminIncomingPage() {
                     <Button size="sm" variant="primary" onClick={() => publish(item)}>
                       <Check className="h-3.5 w-3.5" /> Publish
                     </Button>
+                    {publishErrors[item.id] && (
+                      <p role="alert" className="text-xs text-high" data-testid={`review-publish-error-${item.id}`}>
+                        {publishErrors[item.id]}
+                      </p>
+                    )}
 
                     <select
                       className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-ink"
@@ -1062,6 +1098,18 @@ export default function AdminIncomingPage() {
           );
         })}
       </div>
+
+      {bulk && (
+        <BulkPublishDialog
+          filters={incomingQuery}
+          ids={bulk.ids}
+          onClose={() => setBulk(null)}
+          onDone={() => {
+            setSelectedIds(new Set());
+            refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

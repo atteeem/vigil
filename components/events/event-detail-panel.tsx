@@ -21,6 +21,9 @@ import { describeHistoryEntry } from "@/lib/data/event-history-description";
 const PRECISION_LABEL: Record<string, string> = {
   exact: "Exact location",
   approximate: "Approximate location",
+  city: "Location precision: City (approximate, not the incident point)",
+  region: "Location precision: Region (the region, not the incident point)",
+  country: "Location precision: Country (no map point)",
   area_level: "Area-level location (no precise point)",
   unknown: "Location unknown",
 };
@@ -94,7 +97,9 @@ export function EventDetailPanel({
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-dim">
         <span className="flex items-center gap-1" data-testid="event-location">
           <MapPin className="h-3 w-3" /> {country ? <Link href={`/country/${country.code}`} className="hover:text-ink" data-testid="event-country-link">{`${country.flag} ${country.name}`}</Link> : event.region}
-          {precision && <span className="text-ink-faint"> · {PRECISION_LABEL[precision] ?? precision}</span>}
+          {(event.city || event.adminRegion) && <span className="text-ink-dim"> · {[event.city, event.adminRegion].filter(Boolean).join(", ")}</span>}
+          {precision && <span className="text-ink-faint" data-testid="event-precision"> · {PRECISION_LABEL[precision] ?? precision}</span>}
+          {event.locationScope === "country" && <span className="text-ink-faint" data-testid="event-scope-note"> · country-level report, no map point</span>}
         </span>
         <span data-testid="event-occurred">{formatAbsoluteTime(event.occurredAt, effectiveTimezone)}</span>
         <RelativeTime iso={event.occurredAt} />

@@ -210,7 +210,18 @@ export interface DraftSuggestionDTO {
   locationSource: "resolved" | "ambiguous" | "none";
   /** Precision of latitude/longitude: a gazetteer match is a settlement
    * centroid ("approximate"); no match/ambiguous leaves it "unknown". */
-  locationPrecision?: "exact" | "approximate" | "area_level" | "unknown";
+  locationPrecision?: LocationPrecision;
+  /** Hierarchical scope and the geography behind it (see lib/geocoding/location-scope.ts). */
+  locationScope: LocationScope;
+  city: string | null;
+  /** Administrative region (oblast / province / state); `region` above is the macro region ("Europe"). */
+  adminRegion: string | null;
+  countryName: string | null;
+  /** What justified the location assignment. */
+  locationEvidence: string;
+  /** Where the title / summary came from: the source's own headline and text, or a derived fallback. */
+  titleSource: "source_title" | "text_excerpt" | "none";
+  summarySource: "source_excerpt" | "title_only" | "ai";
   locationCandidates: LocationCandidateDTO[];
   duplicates: DuplicateCandidateDTO[];
 }
@@ -538,8 +549,16 @@ export interface MilitaryUnitEventLinkDTO {
 // ACLED's own 3-tier geo_precision codebook (the standard IISS's Myanmar
 // Conflict Map is itself built on) plus an explicit "unknown" for sources
 // that report no precision at all.
-export const LOCATION_PRECISIONS = ["exact", "approximate", "area_level", "unknown"] as const;
+// "city" / "region" / "country" describe WHAT IS KNOWN about a report's place (a centroid is only a render point);
+// "area_level" is the older, unspecific area value kept for existing records and structured feeds.
+export const LOCATION_PRECISIONS = ["exact", "approximate", "city", "region", "country", "area_level", "unknown"] as const;
 export type LocationPrecision = (typeof LOCATION_PRECISIONS)[number];
+
+/** Hierarchical geographic scope of a report/event: how far its place is known. Coordinates are optional for every
+ * scope except "point"; a "global" or "unknown" report never has a point. */
+export const LOCATION_SCOPES = ["global", "country", "region", "city", "point", "unknown"] as const;
+export type LocationScope = (typeof LOCATION_SCOPES)[number];
+export const LOCATION_SCOPE_LABEL: Record<LocationScope, string> = { global: "Global", country: "Country", region: "Region", city: "City", point: "Exact point", unknown: "Unknown" };
 
 // spec §3 "Areas of Operation must NOT be treated as Territorial Control"
 // — see prisma/schema.prisma's AreaOfOperation model comment for the full

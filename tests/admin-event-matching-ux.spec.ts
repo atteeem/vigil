@@ -100,6 +100,7 @@ test.describe.serial("Admin event-matching UX", () => {
     await page.goto("/admin/incoming");
     const card = page.getByTestId(`incoming-item-${candidateItem.id}`);
     await card.getByRole("button", { name: "Review" }).click();
+    await card.getByLabel("Geographic scope").selectOption("point");
     await card.getByLabel("Latitude").fill("50.451");
     await card.getByLabel("Longitude").fill("30.521");
     await card.getByRole("button", { name: "Re-check" }).click();
@@ -133,6 +134,7 @@ test.describe.serial("Admin event-matching UX", () => {
     await page.goto("/admin/incoming");
     const card = page.getByTestId(`incoming-item-${candidateItem.id}`);
     await card.getByRole("button", { name: "Review" }).click();
+    await card.getByLabel("Geographic scope").selectOption("point");
     await card.getByLabel("Latitude").fill("50.451");
     await card.getByLabel("Longitude").fill("30.521");
     await card.getByRole("button", { name: "Re-check" }).click();
@@ -186,6 +188,7 @@ test.describe.serial("Admin event-matching UX", () => {
     // as proof their own no-auto-publish behavior holds. Publishing it verbatim here
     // would collide with those title-based checks for the rest of this DB's lifetime.
     await card.getByLabel("Title").fill("Local bakery wins national award (admin event-matching UX test)");
+    await card.getByLabel("Geographic scope").selectOption("point");
     await card.getByLabel("Latitude").fill("51.0");
     await card.getByLabel("Longitude").fill("10.0");
 

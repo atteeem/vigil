@@ -121,13 +121,29 @@ function landPath(projection: HeatProjection, w: number, h: number): Path2D {
     const polygons = f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.coordinates;
     for (const polygon of polygons) {
       for (const ring of polygon) {
-        ring.forEach((pt, i) => {
-          const x = projectX(pt[0]!, w);
-          const y = projectY(projection, pt[1]!, h);
-          if (i === 0) path.moveTo(x, y);
-          else path.lineTo(x, y);
+        // The topology cuts landmasses at the antimeridian, so a ring can step from lng ~180 straight to lng ~-180
+        // (Chukotka, Wrangel Island, Fiji, Antarctica). Drawn as-is that step is a line across the whole map and its
+        // fill leaves horizontal strips (on the globe: grey rings around the poles). Unwrap the ring into one
+        // continuous run and draw it a world-width left and right as well, so the part beyond the seam lands on
+        // the other edge of the texture instead of being stretched across it.
+        let offset = 0;
+        let prev = ring[0]![0]!;
+        const xs = ring.map((pt) => {
+          const lng = pt[0]!;
+          if (lng - prev > 180) offset -= 360;
+          else if (lng - prev < -180) offset += 360;
+          prev = lng;
+          return projectX(lng + offset, w);
         });
-        path.closePath();
+        for (const dx of [-w, 0, w]) {
+          ring.forEach((pt, i) => {
+            const x = xs[i]! + dx;
+            const y = projectY(projection, pt[1]!, h);
+            if (i === 0) path.moveTo(x, y);
+            else path.lineTo(x, y);
+          });
+          path.closePath();
+        }
       }
     }
   }

@@ -1,3 +1,4 @@
+import { hasPoint } from "@/lib/types/event";
 import type { ConflictEvent, Severity } from "@/lib/types";
 import { maxSeverity } from "@/lib/utils/severity";
 import { formatReportCount, reportCountOf } from "@/lib/map/report-counts";
@@ -33,7 +34,7 @@ export interface EventCluster {
  * partition. */
 export function clusterEvents(events: ConflictEvent[], radiusDegrees: number): EventCluster[] {
   const clusters: EventCluster[] = [];
-  for (const e of events) {
+  for (const e of events.filter(hasPoint)) {
     const existing = clusters.find(
       (c) => Math.abs(c.lat - e.lat) <= radiusDegrees && Math.abs(c.lng - e.lng) <= radiusDegrees,
     );

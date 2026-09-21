@@ -81,6 +81,7 @@ test.describe("Admin Incoming Reports (/admin/incoming)", () => {
     await expect(card).toContainText(title);
 
     await card.getByRole("button", { name: "Review" }).click();
+    await card.getByLabel("Geographic scope").selectOption("point");
     await card.getByLabel("Latitude").fill("48.8566");
     await card.getByLabel("Longitude").fill("2.3522");
     await card.getByRole("button", { name: "Publish" }).click();

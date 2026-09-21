@@ -19,8 +19,9 @@ export interface ActivityEvent {
   at: number;
   severity: string;
   importance: number;
-  lat: number;
-  lng: number;
+  /** null for country-level / unknown-location events: they count as activity but occupy no map cell. */
+  lat: number | null;
+  lng: number | null;
   killed: number | null;
   /** Independent source groups (never a raw report count). */
   independent: number;
@@ -79,8 +80,8 @@ export function assessEscalation(i: EscalationInput): EscalationAssessment {
   }
 
   // 3. Geographic spread: fighting in places with no incident in the baseline.
-  const baseCells = new Set(base.map((e) => cell(e.lat, e.lng)));
-  const newCells = new Set(win.map((e) => cell(e.lat, e.lng)).filter((c) => !baseCells.has(c)));
+  const baseCells = new Set(base.flatMap((e) => (e.lat == null || e.lng == null ? [] : [cell(e.lat, e.lng)])));
+  const newCells = new Set(win.flatMap((e) => (e.lat == null || e.lng == null ? [] : [cell(e.lat, e.lng)])).filter((c) => !baseCells.has(c)));
   if (base.length >= 3 && newCells.size > 0) add("new_geography", Math.min(15, 7 * newCells.size), `incidents in ${newCells.size} area${newCells.size === 1 ? "" : "s"} with none in the previous 7 days`);
 
   // 4. High-importance incidents.
@@ -183,8 +184,8 @@ export function assessHotspot(i: HotspotInput): HotspotAssessment | null {
   }
   score += sev;
 
-  const baseCells = new Set(base.map((e) => cell(e.lat, e.lng)));
-  const newCells = new Set(win.map((e) => cell(e.lat, e.lng)).filter((c) => !baseCells.has(c)));
+  const baseCells = new Set(base.flatMap((e) => (e.lat == null || e.lng == null ? [] : [cell(e.lat, e.lng)])));
+  const newCells = new Set(win.flatMap((e) => (e.lat == null || e.lng == null ? [] : [cell(e.lat, e.lng)])).filter((c) => !baseCells.has(c)));
   const spread = win.length >= 2 ? clamp(8 * newCells.size, 0, 20) : 0;
   if (spread > 0) reasons.push(`+ geographic spread: ${newCells.size} new area${newCells.size === 1 ? "" : "s"} with incidents`);
   score += spread;
@@ -210,8 +211,8 @@ export function assessHotspot(i: HotspotInput): HotspotAssessment | null {
   const supported = win.length ? win.filter((e) => e.independent >= 1).length / win.length : 0;
   const confidence = clamp(0.2 + 0.4 * Math.min(1, win.length / 5) + 0.35 * supported, 0.05, 0.95);
   const label2 = total >= 60 && (sev > 0 || spread > 0) ? "Rapid escalation" : sev >= 5 || freq >= 20 ? "Increased conflict activity" : "Emerging activity";
-  const lat = mean(win.map((e) => e.lat));
-  const lng = mean(win.map((e) => e.lng));
+  const lat = mean(win.flatMap((e) => (e.lat == null ? [] : [e.lat])));
+  const lng = mean(win.flatMap((e) => (e.lng == null ? [] : [e.lng])));
   return {
     key: i.key,
     label: i.label,

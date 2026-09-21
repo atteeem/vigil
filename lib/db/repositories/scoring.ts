@@ -46,7 +46,7 @@ function computeConflictSeverityInput(conflict: Conflict, events: Event[]) {
   let spreadKm = 0;
   if (events.length > 1 && conflict.lat != null && conflict.lng != null) {
     spreadKm = events.reduce(
-      (max, e) => Math.max(max, distanceKm({ lat: conflict.lat!, lng: conflict.lng! }, { lat: e.latitude, lng: e.longitude })),
+      (max, e) => (e.latitude == null || e.longitude == null ? max : Math.max(max, distanceKm({ lat: conflict.lat!, lng: conflict.lng! }, { lat: e.latitude, lng: e.longitude }))),
       0,
     );
   }
@@ -136,7 +136,8 @@ export async function scoreEvent(eventId: string, userCountryCode?: string | nul
         userCountryCode,
         conflictCountryCodes: event.countryCode ? [event.countryCode] : [],
         userCountryPoint: userCountry,
-        conflictPoint: { lat: event.latitude, lng: event.longitude },
+        // A country-level / unknown-location event has no point: fall back to the user country (distance 0 is not implied).
+        conflictPoint: event.latitude != null && event.longitude != null ? { lat: event.latitude, lng: event.longitude } : (event.countryCode ? getCountryByCode(event.countryCode) : undefined) ?? userCountry,
         sameRegion: event.region ? userCountry.region === event.region : false,
       });
     }

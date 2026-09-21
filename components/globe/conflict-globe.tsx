@@ -156,6 +156,15 @@ export function ConflictGlobe({
 
   const isMobile = size.width < 640;
 
+  // Debug/test handle to the three.js scene (same pattern as window.__vigilMap on the flat map).
+  useEffect(() => {
+    if (!ready || !globeRef.current) return;
+    (window as unknown as { __vigilGlobe?: unknown }).__vigilGlobe = globeRef.current;
+    return () => {
+      delete (window as unknown as { __vigilGlobe?: unknown }).__vigilGlobe;
+    };
+  }, [ready]);
+
   // Continuous conflict-intensity surface. The SAME field the flat map paints
   // (hooks/use-heat-field), rasterized equirectangularly and wrapped on a
   // sphere just above the land fill (0.006) and below the borders (0.0065):

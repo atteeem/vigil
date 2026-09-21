@@ -1,5 +1,6 @@
 import type { FeatureCollection, Point } from "geojson";
 import type { ConflictEvent } from "@/lib/types";
+import { hasPoint } from "@/lib/types/event";
 import { reportCountOf } from "@/lib/map/report-counts";
 
 export interface EventFeatureProps {
@@ -20,7 +21,8 @@ export function eventsToGeoJSON(
 ): FeatureCollection<Point, EventFeatureProps> {
   return {
     type: "FeatureCollection",
-    features: events.map((e) => ({
+    // Only events with a point are markers; country-level / unknown-location reports have none.
+    features: events.filter(hasPoint).map((e) => ({
       type: "Feature",
       id: e.id,
       geometry: { type: "Point", coordinates: [e.lng, e.lat] },

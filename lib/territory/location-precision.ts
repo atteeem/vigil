@@ -13,6 +13,9 @@ export function toLocationPrecision(value: string | null | undefined): LocationP
 export const PRECISION_LABEL: Record<LocationPrecision, string> = {
   exact: "Exact",
   approximate: "Approximate",
+  city: "City",
+  region: "Region",
+  country: "Country",
   area_level: "Area-level",
   unknown: "Unknown",
 };

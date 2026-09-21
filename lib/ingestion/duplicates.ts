@@ -118,7 +118,7 @@ export async function findDuplicateCandidates(query: DuplicateQuery): Promise<Du
 
   for (const event of events) {
     const dKm =
-      query.latitude !== null && query.longitude !== null
+      query.latitude !== null && query.longitude !== null && event.latitude !== null && event.longitude !== null
         ? distanceKm(query.latitude, query.longitude, event.latitude, event.longitude)
         : null;
     const minutesApart = Math.abs(query.occurredAt.getTime() - event.occurredAt.getTime()) / 60_000;
