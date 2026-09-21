@@ -2,6 +2,7 @@ import type { GlobalEvent } from "@prisma/client";
 import { deriveConflictChange, deriveEscalation, deriveExpired, deriveFromClaim, deriveFromEvent, deriveFromGlobalEvent, deriveFromGlobalRow, deriveFromTerritorialChange } from "./developments";
 import { processDevelopments, pruneAlertRecords, type ProcessResult } from "./engine";
 import type { Development } from "./decide";
+import { bumpBriefRevision } from "@/lib/brief/revision";
 
 // Call sites: existing write paths tell the alert service "this changed". None of them create events or
 // a parallel pipeline, and none of them can fail the write they hang off (alerts are best-effort).
@@ -9,7 +10,11 @@ import type { Development } from "./decide";
 async function run(label: string, derive: () => Promise<Development[]>): Promise<void> {
   try {
     const devs = await derive();
-    if (devs.length > 0) await processDevelopments(devs, { commit: true });
+    // A material development (never a repeat of something already announced) invalidates cached briefs.
+    if (devs.length > 0) {
+      bumpBriefRevision();
+      await processDevelopments(devs, { commit: true });
+    }
   } catch (err) {
     console.error(`[alerts] ${label} failed:`, err);
   }

@@ -52,6 +52,9 @@ export default async function CountryPage({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Link href={`/brief/country/${country.code}`} className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-ink-dim hover:text-ink" data-testid="country-brief-link">
+            Country brief
+          </Link>
           <FollowButton entityType="country" entityKey={country.code} label={country.name} />
           <SetBaseCountryButton code={country.code} />
         </div>

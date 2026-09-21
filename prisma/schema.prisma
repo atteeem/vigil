@@ -1394,3 +1394,47 @@ model AlertRecord {
   @@index([fingerprint])
   @@map("alert_records")
 }
+
+// ---------------------------------------------------------------------------------------------
+// Global Intelligence Briefings. Briefings are computed from existing canonical state; the only new
+// persistence is (1) a compact ledger of state TRANSITIONS (old -> new) written by the same state
+// ledger the alert service already uses, so "what changed between T0 and T1" can be answered for
+// statuses that otherwise only keep their current value, and (2) optional generated-brief snapshots.
+// ---------------------------------------------------------------------------------------------
+model StateTransition {
+  id        String   @id @default(cuid())
+  kind      String
+  key       String
+  alertType String   @map("alert_type")
+  fromState String?  @map("from_state")
+  toState   String   @map("to_state")
+  fromValue Float?   @map("from_value")
+  toValue   Float?   @map("to_value")
+  // Whether the alert service judged the change worth announcing (the brief applies its own rules too).
+  material  Boolean  @default(false)
+  data      String?
+  at        DateTime @default(now())
+
+  @@index([at])
+  @@index([kind, key, at])
+  @@map("state_transitions")
+}
+
+// A generated brief kept as it was: the included development ids plus a compact summary (titles, texts,
+// links, evidence references), so it stays understandable when the underlying events later change.
+model BriefSnapshot {
+  id             String   @id @default(cuid())
+  scopeKey       String   @map("scope_key")
+  windowKey      String   @map("window_key")
+  fromAt         DateTime @map("from_at")
+  toAt           DateTime @map("to_at")
+  generatedAt    DateTime @default(now()) @map("generated_at")
+  revision       String
+  // Owner of a personalised (watchlist) brief; null for public scopes.
+  watcherId      String?  @map("watcher_id")
+  developmentIds String   @map("development_ids")
+  summary        String
+
+  @@index([scopeKey, generatedAt])
+  @@map("brief_snapshots")
+}

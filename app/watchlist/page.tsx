@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { NotificationItem } from "@/components/notifications/notification-center";
+import { BriefPanel } from "@/components/brief/brief-view";
 import { useAppStore } from "@/hooks/use-app-store";
 import { useNotificationFeed, useWatcherMutations, useWatcherSettings, useWatches, type NotificationDTO, type WatchDTO } from "@/hooks/use-watcher";
 import { CATEGORIES, CATEGORY_LABEL, ENTITY_TYPE_LABEL, MODE_LABEL, PRIORITIES, WATCH_MODES, type RuleDef, type WatchEntityType, type WatchMode, type WatchRules } from "@/lib/alerts/types";
@@ -210,6 +211,7 @@ export default function WatchlistPage() {
   const { data: feed } = useNotificationFeed();
   const { notify } = useWatcherMutations();
   const [open, setOpen] = useState<string | null>(null);
+  const [showBrief, setShowBrief] = useState(false);
   const toggle = (n: NotificationDTO) => {
     setOpen(open === n.id ? null : n.id);
     if (open !== n.id && !n.readAt) notify.mutate({ action: "read", ids: [n.id] });
@@ -245,6 +247,18 @@ export default function WatchlistPage() {
                   </div>
                 );
               })
+            )}
+          </section>
+
+          <section data-testid="watchlist-brief-section">
+            <button type="button" onClick={() => setShowBrief((v) => !v)} className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-ink-dim hover:text-ink" data-testid="brief-my-watchlist" aria-expanded={showBrief}>
+              {showBrief ? "Hide watchlist brief" : "Brief my watchlist"}
+            </button>
+            {showBrief && (
+              <div className="mt-3" data-testid="watchlist-brief">
+                <p className="mb-2 text-xs text-ink-faint">Material developments affecting what you follow, merged by development (not one line per notification).</p>
+                <BriefPanel scope={{ watchlist: true }} initialWindow="24h" compact allowSave={false} />
+              </div>
             )}
           </section>
 

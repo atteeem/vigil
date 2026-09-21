@@ -35,6 +35,26 @@ export interface StepArgs {
   baselineOnly?: boolean;
 }
 
+export interface TransitionInput {
+  kind: string;
+  key: string;
+  alertType: string;
+  fromState: string | null;
+  toState: string;
+  fromValue?: number | null;
+  toValue?: number | null;
+  material: boolean;
+  data?: Record<string, unknown> | null;
+  at?: Date;
+}
+export async function recordTransition(t: TransitionInput): Promise<void> {
+  try {
+    await prisma.stateTransition.create({ data: { kind: t.kind, key: t.key, alertType: t.alertType, fromState: t.fromState, toState: t.toState, fromValue: t.fromValue ?? null, toValue: t.toValue ?? null, material: t.material, data: t.data ? JSON.stringify(t.data) : null, ...(t.at ? { at: t.at } : {}) } });
+  } catch (err) {
+    console.error("[alerts] transition record failed:", err);
+  }
+}
+
 export async function stepLedger(a: StepArgs): Promise<StepResult> {
   const row = await prisma.alertState.findUnique({ where: { kind_key_alertType: { kind: a.kind, key: a.key, alertType: a.alertType } } });
   const data = a.data ? JSON.stringify(a.data) : null;
@@ -51,5 +71,8 @@ export async function stepLedger(a: StepArgs): Promise<StepResult> {
     // A non-material difference is recorded silently so the next comparison is against what was last seen.
     await prisma.alertState.update({ where: { id: row.id }, data: { state: a.state, value: a.value ?? null, data, version } });
   }
+  // Briefings need old -> new history for windows ("what changed between T0 and T1"): every real state
+  // change is also appended to the transition ledger (no other side effects, never blocks the write).
+  if (a.commit && differs) await recordTransition({ kind: a.kind, key: a.key, alertType: a.alertType, fromState: prev.state, toState: a.state, fromValue: prev.value, toValue: a.value ?? null, material: changed, data: a.data ?? null });
   return { isNew: false, changed, prev, version };
 }

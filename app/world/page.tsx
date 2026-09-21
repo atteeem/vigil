@@ -25,6 +25,8 @@ import type { TerritoryFeatureProperties } from "@/lib/types/territorial-control
 import { HAZARD_LAYERS, type HazardLayer } from "@/lib/hazards/types";
 import { useHazards, type HazardViewport } from "@/hooks/use-hazards";
 import { HazardPanel } from "@/components/hazards/hazard-panel";
+import { WhatChangedPanel } from "@/components/brief/what-changed-panel";
+import type { BriefDevelopment } from "@/lib/brief/types";
 
 const WorldMap = dynamic(() => import("@/components/map/world-map").then((m) => m.WorldMap), {
   ssr: false,
@@ -56,6 +58,7 @@ export default function WorldPage() {
   // load; the same map, layers, selection and timeline as everywhere else (no separate experience).
   const [focus, setFocus] = useState<{ lat: number; lng: number; zoom: number } | null>(null);
   const [deepLinkAt, setDeepLinkAt] = useState<Date | null>(null);
+  const [pendingEventId, setPendingEventId] = useState<string | null>(null);
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     const layers = (p.get("layers") ?? "").split(",").filter((l): l is HazardLayer => (HAZARD_LAYERS as readonly string[]).includes(l));
@@ -66,6 +69,10 @@ export default function WorldPage() {
     if (f.length === 3 && f.every(Number.isFinite)) setFocus({ lat: f[0]!, lng: f[1]!, zoom: f[2]! });
     const at = p.get("at");
     if (at && !Number.isNaN(new Date(at).getTime())) setDeepLinkAt(new Date(at));
+    // Briefing links: a conflict event to select, and/or Territorial Control switched on.
+    const ev = p.get("event");
+    if (ev) setPendingEventId(ev);
+    if (p.get("territory") === "1") setShowTerritorial(true);
   }, []);
 
   const toggleHazardLayer = useCallback((layer: HazardLayer) => {
@@ -137,6 +144,40 @@ export default function WorldPage() {
     () => (timeline.isHistorical ? historicalEvents : liveEvents),
     [timeline.isHistorical, historicalEvents, liveEvents],
   );
+
+  useEffect(() => {
+    if (!pendingEventId) return;
+    const ev = allEvents.find((e) => e.id === pendingEventId);
+    if (!ev) return;
+    /* eslint-disable react-hooks/set-state-in-effect -- one-time selection once the linked event has loaded */
+    setPendingEventId(null);
+    setSelectedTerritory(null);
+    setSelectedHazardId(null);
+    setSelected(ev);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [pendingEventId, allEvents]);
+
+  // "What changed": a brief item enables its layer, selects the record, centres the SAME map and, when
+  // viewing a past moment, moves the timeline to when it happened.
+  function openDevelopment(d: BriefDevelopment) {
+    const t = d.mapTarget;
+    if (!t) {
+      window.location.href = d.deepLink;
+      return;
+    }
+    if (timeline.isPlaying) timeline.pause();
+    const layers = t.layers.filter((l): l is HazardLayer => (HAZARD_LAYERS as readonly string[]).includes(l));
+    if (layers.length) setHazardLayers((prev) => [...new Set([...prev, ...layers])]);
+    if (t.territory) setShowTerritorial(true);
+    if (t.lat != null && t.lng != null) setFocus({ lat: t.lat, lng: t.lng, zoom: t.zoom ?? 6 });
+    if (timeline.isHistorical && t.at) timeline.selectCustomTimestamp(new Date(t.at));
+    if (t.hazardId) selectHazard(t.hazardId);
+    else if (t.eventId) {
+      const ev = allEvents.find((e) => e.id === t.eventId);
+      if (ev) selectEvent(ev);
+      else setPendingEventId(t.eventId);
+    }
+  }
 
   // Heat surface inputs. Live: the curated conflicts (sustained base) narrowed
   // by the region filter. Historical: no curated conflicts — those carry only
@@ -260,6 +301,7 @@ export default function WorldPage() {
                 hazardHealth={hazards?.meta.health}
               />
             </div>
+            <WhatChangedPanel timeRange={timeRange} asOf={timeline.asOf} onSelect={openDevelopment} />
             {showTerritorial && (
               <div className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-border bg-surface/80 p-3 backdrop-blur-xl">
                 <TerritoryLegend featureCollection={territorialFeatures} />

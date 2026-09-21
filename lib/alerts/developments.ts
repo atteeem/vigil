@@ -4,7 +4,7 @@ import { sourceTrust, summarizeEvidence } from "@/lib/sources/trust";
 import { scoreConflict } from "@/lib/db/repositories/scoring";
 import { listConflictingClaims } from "@/lib/public/claims";
 import { conflictGeographyOf } from "@/lib/registry/geography";
-import { stepLedger } from "./ledger";
+import { recordTransition, stepLedger } from "./ledger";
 import { GDACS_AS_CAP, type Candidate, type Development, type Facts } from "./decide";
 import type { AlertType } from "./types";
 
@@ -187,6 +187,9 @@ export async function deriveConflictChange(conflictId: string, opts: DeriveOptio
     const names = [...added.filter((a) => a.startsWith("name:")).map((a) => ({ name: a.slice(5) })), ...units];
     out.push({ ...base, alertType: "new_actor", ruleType: "new_actor", ledgerKind: "conflict", ledgerKey: conflict.id, state: `actors:${actorIds.join(",")}`, version: (known.version ?? 1) + 1, significance: 55, title: `New actor in ${conflict.shortName ?? conflict.name}: ${names.map((n) => n.name).join(", ")}`, summary: "A new actor is now recorded as involved in this conflict.", snapshot: { kind: "conflict", conflictId: conflict.id, slug: conflict.slug, addedActors: names.map((n) => n.name), at: new Date().toISOString() }, changeNote: null });
   }
+  if (opts.commit && known && added.length > 0) {
+    await recordTransition({ kind: "conflict", key: conflict.id, alertType: "new_actor", fromState: known.state, toState: `actors:${actorIds.join(",")}`, material: true, data: { added } });
+  }
   if (opts.commit && (!known || added.length > 0 || knownIds.size !== actorIds.length)) {
     await prisma.alertState.upsert({ where: { kind_key_alertType: { kind: "conflict", key: conflict.id, alertType: "new_actor" } }, update: { state: `actors:${actorIds.join(",")}`, data: JSON.stringify(actorIds), version: added.length > 0 && known ? known.version + 1 : (known?.version ?? 1) }, create: { kind: "conflict", key: conflict.id, alertType: "new_actor", state: `actors:${actorIds.join(",")}`, data: JSON.stringify(actorIds), version: 1 } });
   }
@@ -283,7 +286,7 @@ const mapLinks = (r: Pick<GlobalEvent, "id" | "layer" | "lat" | "lng">, at?: Dat
   return { deepLink: base, snapshotLink: at ? `${base}&at=${encodeURIComponent(at.toISOString())}` : null };
 };
 
-async function globalCandidates(r: GlobalEvent, m: Record<string, unknown>): Promise<Candidate[]> {
+export async function globalCandidates(r: GlobalEvent, m: Record<string, unknown>): Promise<Candidate[]> {
   const list: Candidate[] = [...cand("layer", r.layer, 0.4), ...cand("country", r.countryCode, 0.6)];
   if (r.entityKey) list.push({ type: "watchkey", key: `${r.category}:${r.entityKey}`, specificity: 1 });
   if (r.category === "airport_status") list.push(...cand("airport", r.entityKey, 1));

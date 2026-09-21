@@ -20,6 +20,7 @@ import { getCountryByCode } from "@/lib/reference/countries";
 import { computeImpact } from "@/lib/data/impact";
 import { SOURCE_TIER_LABEL } from "@/lib/registry/source-tiers";
 import { STALE_SOURCE_HOURS } from "@/lib/public/stale";
+import { BriefPanel } from "@/components/brief/brief-view";
 import { formatSigned, cn } from "@/lib/utils";
 
 const WorldMap = dynamic(() => import("@/components/map/world-map").then((m) => m.WorldMap), {
@@ -96,6 +97,11 @@ export function ConflictDetailClient({ detail }: { detail: PublicConflictDetail 
         <CountrySelector />
       </div>
       {conflict.summary && <p className="mt-4 max-w-3xl text-sm leading-relaxed text-ink-dim">{conflict.summary}</p>}
+
+      {/* Brief: what changed in a selected period, from recorded events and reviewed evidence */}
+      <Section title="Brief" testId="section-brief">
+        <BriefPanel scope={{ conflict: conflict.slug }} initialWindow="24h" compact allowSave={false} />
+      </Section>
 
       {/* Geography */}
       <Section title="Geography" testId="section-geography">

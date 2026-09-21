@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { NotificationBell } from "@/components/notifications/notification-center";
-import { Search, UserRound } from "lucide-react";
+import { ListChecks, Search, UserRound } from "lucide-react";
 import { BrandMark } from "./brand-mark";
 import { LiveIndicator } from "./live-indicator";
 import { useAppStore } from "@/hooks/use-app-store";
@@ -23,6 +23,13 @@ export function MobileTopBar() {
         >
           <Search className="h-4 w-4" />
         </button>
+        <Link
+          href="/brief"
+          aria-label="Brief"
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface/60 text-ink-dim backdrop-blur-xl"
+        >
+          <ListChecks className="h-4 w-4" />
+        </Link>
         <NotificationBell />
         <Link
           href="/profile"

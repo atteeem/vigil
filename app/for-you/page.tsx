@@ -14,9 +14,12 @@ import { useNowMs } from "@/hooks/use-now";
 import { usePublicOverview } from "@/hooks/use-public-overview";
 import { EmptyState, FreshnessStamp, LoadingLine } from "@/components/public/data-states";
 import { STALE_SOURCE_HOURS } from "@/lib/public/stale";
+import { BriefPanel } from "@/components/brief/brief-view";
+import { useWatches } from "@/hooks/use-watcher";
 
 export default function ForYouPage() {
   const baseCountryCode = useAppStore((s) => s.baseCountryCode);
+  const { data: watches } = useWatches();
   const country = getCountryByCode(baseCountryCode);
   // Real, DB-backed conflicts (the same set the homepage uses). Relevance comes only from the
   // explicitly selected country, through the centralized impact engine.
@@ -84,6 +87,14 @@ export default function ForYouPage() {
           />
         ))}
       </div>
+
+      <section className="mt-10" data-testid="for-you-brief">
+        <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-ink-faint">Your brief</h2>
+        <p className="mb-3 text-xs text-ink-faint">
+          What materially changed for {country.name} (your selected country, through the impact model){(watches?.length ?? 0) > 0 ? ` and the ${watches!.length} thing${watches!.length === 1 ? "" : "s"} you follow` : ""}. Nothing is inferred beyond what you selected or followed.
+        </p>
+        <BriefPanel scope={{ country: country.code, watchlist: (watches?.length ?? 0) > 0 }} initialWindow="24h" compact allowSave={false} />
+      </section>
 
       <h2 className="mb-3 mt-10 text-sm font-semibold uppercase tracking-wide text-ink-faint">
         Top Conflicts Affecting You

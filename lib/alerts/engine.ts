@@ -207,5 +207,7 @@ export async function processDevelopments(devs: Development[], opts: ProcessOpti
 
 const RECORD_RETENTION_DAYS = 30;
 export async function pruneAlertRecords(now: Date = new Date()): Promise<number> {
+  // Transitions feed briefings (up to 7-day windows plus a 7-day baseline); kept well beyond that.
+  await prisma.stateTransition.deleteMany({ where: { at: { lt: new Date(now.getTime() - 120 * 86_400_000) } } });
   return (await prisma.alertRecord.deleteMany({ where: { createdAt: { lt: new Date(now.getTime() - RECORD_RETENTION_DAYS * 86_400_000) } } })).count;
 }
