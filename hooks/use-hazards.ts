@@ -55,6 +55,7 @@ export function useHazards(layers: readonly HazardLayer[], asOf: Date | null, vi
       if (isPoll && typeof document !== "undefined" && document.visibilityState === "hidden") return; // hidden tabs do not poll
       const cached = useCache ? cache.current.get(key) : undefined;
       if (cached) {
+        liveSignature.current = "";
         setData(cached);
         return;
       }
@@ -65,7 +66,9 @@ export function useHazards(layers: readonly HazardLayer[], asOf: Date | null, vi
         const json = (await res.json()) as HazardCollection;
         if (asOfTime !== null) cache.current.set(key, json);
         if (!cancelled) {
-          if (asOfTime === null) {
+          if (asOfTime !== null) {
+            liveSignature.current = ""; // the displayed data is historical now: the next live load must replace it
+          } else {
             const sig = `${key}|${JSON.stringify(json.features)}`;
             if (sig === liveSignature.current) return; // nothing changed since the last poll
             liveSignature.current = sig;
