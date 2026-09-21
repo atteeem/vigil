@@ -601,9 +601,9 @@ test.describe("Editing tools", () => {
       const corner = await px(page, cornerVertex[0]!, cornerVertex[1]!); // measured after the toolbar click: the page may have scrolled
       await page.mouse.click(corner.x + 4, corner.y + 3); // a few pixels off the corner
       await expect(page.getByTestId("editor-hint")).toContainText("1 point placed");
-      await clickAt(page, -30, -15);
+      await clickAt(page, -36, -15); // the camera is fitted to the 10-degree square: keep every click on screen
       await expect(page.getByTestId("editor-hint")).toContainText("2 points placed");
-      await clickAt(page, -30, -5);
+      await clickAt(page, -36, -11);
       await expect(page.getByTestId("editor-hint")).toContainText("first point");
       await page.getByTestId("editor-finish").click();
     };
