@@ -596,9 +596,9 @@ test.describe("Editing tools", () => {
     await drawPolygon(page, [[-50, -25], [-40, -25], [-40, -15], [-50, -15]]);
     const first = (await geometryInText(page))!;
     const cornerVertex = (first.coordinates as number[][][])[0]![2]!; // the clicked top-right corner, exactly as stored
-    const corner = await px(page, cornerVertex[0]!, cornerVertex[1]!);
     const startSecond = async () => {
       await page.getByTestId("editor-draw").click();
+      const corner = await px(page, cornerVertex[0]!, cornerVertex[1]!); // measured after the toolbar click: the page may have scrolled
       await page.mouse.click(corner.x + 4, corner.y + 3); // a few pixels off the corner
       await clickAt(page, -30, -15);
       await clickAt(page, -30, -5);
