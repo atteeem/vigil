@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Map as MapLibreMap, config as maplibreConfig, type GeoJSONSource, type MapMouseEvent } from "maplibre-gl";
 import { Eraser, MousePointer2, PenTool, Trash2, Undo2, Redo2, Check, X, Minus, Scissors, Combine, Magnet, Spline } from "lucide-react";
-import { getMapStyle, getMapTilerKey } from "@/lib/map/style";
+import { getBasemapStyle } from "@/lib/map/basemap";
+import { registerBasemapProtocols } from "@/lib/map/register-protocols";
 import { createContestedPatternImageData } from "@/lib/map/territorial-pattern";
 import {
   bboxOf,
@@ -188,9 +189,10 @@ export function TerritoryEditorMap({ value, onChange, color, status, overlays = 
   // ---- map setup (once) -----------------------------------------------------
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
+    registerBasemapProtocols();
     const map = new MapLibreMap({
       container: containerRef.current,
-      style: getMapStyle("intel", getMapTilerKey()),
+      style: getBasemapStyle("intel"),
       center: [20, 25],
       zoom: 1.5,
       attributionControl: { compact: true },

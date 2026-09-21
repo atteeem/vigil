@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Map as MapLibreMap,
   NavigationControl,
@@ -13,7 +13,12 @@ import {
 } from "maplibre-gl";
 import type { Conflict, ConflictEvent } from "@/lib/types";
 import { EVENT_TYPES } from "@/lib/types";
-import { getMapStyle, getMapTilerKey, type MapBasemapMode } from "@/lib/map/style";
+import type { MapBasemapMode } from "@/lib/map/style";
+import { readBasemapConfig, resolveBasemap, safeReason, type BasemapProviderId, type BasemapResolution } from "@/lib/map/basemap";
+import { probeArchive } from "@/lib/map/pmtiles-protocol";
+import { glyphStats } from "@/lib/map/glyph-protocol";
+import { registerBasemapProtocols } from "@/lib/map/register-protocols";
+import { recordBasemapState } from "@/lib/map/basemap-state";
 import { eventsToGeoJSON, type EventFeatureProps } from "@/lib/map/events-to-geojson";
 import { useHeatField } from "@/hooks/use-heat-field";
 import { renderHeatCanvas, MERCATOR_MAX_LAT } from "@/lib/heat/render";
@@ -543,8 +548,14 @@ export function WorldMap({
   const onSelectHazardRef = useRef(onSelectHazard);
   const onViewportChangeRef = useRef(onViewportChange);
   const appliedModeRef = useRef<MapBasemapMode | null>(null);
-  const apiKey = getMapTilerKey();
-  const [missingKeyNotice, setMissingKeyNotice] = useState(false);
+  // The basemap authority (lib/map/basemap.ts) decides the provider; this component only applies its style and
+  // handles a runtime failure by falling back ONCE per provider (never an endless retry).
+  const basemapConfig = useMemo(() => readBasemapConfig(), []);
+  const failedRef = useRef<Partial<Record<BasemapProviderId, string>>>({});
+  const resolutionRef = useRef<BasemapResolution | null>(null);
+  const styleReadyRef = useRef(false);
+  const basemapErrorsRef = useRef(0);
+  const [basemapNotice, setBasemapNotice] = useState<string | null>(null);
   const heatUrlRef = useRef<string | null>(null);
   // Reference time for the heat surface: the caller's (timeline asOf) or the real clock when the data last changed.
   const clockIso = useMemo(() => new Date().toISOString(), [events]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -572,6 +583,37 @@ export function WorldMap({
     onViewportChangeRef.current = onViewportChange;
   });
 
+  const basemapModeRef = useRef(basemapMode);
+  useLayoutEffect(() => {
+    basemapModeRef.current = basemapMode;
+  });
+
+  /** Resolves the style for the current mode, honouring providers that already failed. */
+  const styleForMode = (mode: MapBasemapMode) => {
+    const r = resolveBasemap(mode, basemapConfig, failedRef.current);
+    resolutionRef.current = r;
+    return r.provider.style;
+  };
+
+  const publishBasemapState = (map: MapLibreMap | null) => {
+    const r = resolutionRef.current;
+    if (!r) return;
+    recordBasemapState({ at: new Date().toISOString(), mode: r.mode, provider: r.provider.id, fallback: r.fallback, reason: r.reason ? safeReason(r.reason) : null, failed: failedRef.current, mapLoaded: map?.isStyleLoaded() === true, glyphs: glyphStats() });
+    const expected = r.mode === "satellite" && r.provider.id !== "external-satellite";
+    setBasemapNotice(r.fallback && r.reason ? (expected ? `Satellite imagery needs an external provider (NEXT_PUBLIC_MAPTILER_KEY). Showing the Vigil basemap instead.` : `Basemap fallback: ${safeReason(r.reason)}`) : null);
+  };
+
+  /** A provider failed: remember why, resolve the next one and switch to it (once). */
+  const failProvider = (map: MapLibreMap, why: string) => {
+    const current = resolutionRef.current?.provider.id;
+    if (!current || failedRef.current[current]) return;
+    failedRef.current = { ...failedRef.current, [current]: safeReason(why) };
+    console.warn(`[basemap] ${current} unavailable (${safeReason(why)}); falling back`);
+    styleReadyRef.current = false;
+    map.setStyle(styleForMode(basemapModeRef.current));
+    publishBasemapState(map);
+  };
+
   const applyViewModeVisibility = (map: MapLibreMap) => {
     const markerVis = viewModeRef.current === "markers" ? "visible" : "none";
     const heatVis = viewModeRef.current === "heatmap" ? "visible" : "none";
@@ -581,6 +623,11 @@ export function WorldMap({
     HEAT_LAYER_IDS.forEach((id) => {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", heatVis);
     });
+    // The heat mode draws its own borders (heat-borders) from the same topology; the basemap's are hidden there so
+    // no border is ever traced twice.
+    for (const layer of map.getStyle().layers ?? []) {
+      if ((layer.metadata as Record<string, unknown> | undefined)?.["vigil:role"] === "basemap-border") map.setLayoutProperty(layer.id, "visibility", viewModeRef.current === "heatmap" ? "none" : "visible");
+    }
   };
 
   // Independent of applyViewModeVisibility — territorial control is its
@@ -597,9 +644,10 @@ export function WorldMap({
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
+    registerBasemapProtocols(); // pmtiles:// and vigil-glyphs:// (each registered once per page)
     const map = new MapLibreMap({
       container: containerRef.current,
-      style: getMapStyle(basemapMode, apiKey),
+      style: styleForMode(basemapMode),
       center: [20, 25],
       zoom: 1.6,
       minZoom: 1,
@@ -637,7 +685,16 @@ export function WorldMap({
     // layers (clusters/points/heatmap) are unaffected either way.
     map.on("error", (e) => {
       const sourceId = (e as { sourceId?: string }).sourceId;
-      if (sourceId === "vigil-basemap") return;
+      const provider = resolutionRef.current?.provider;
+      const message = e.error?.message ?? "map error";
+      if (provider && (sourceId === provider.sourceId || (!styleReadyRef.current && provider.kind === "external"))) {
+        // The basemap's own source/style failed. Three tile errors (or any error before the style is ready) mean
+        // the provider is unusable: fall back once. Overlay layers are unaffected either way.
+        basemapErrorsRef.current++;
+        if (!styleReadyRef.current || basemapErrorsRef.current >= 3) failProvider(map, message);
+        return;
+      }
+      if (/glyph/i.test(message)) return; // counted by the glyph protocol; shown on /admin/basemap
       console.error("MapLibre error:", e.error);
     });
 
@@ -646,6 +703,8 @@ export function WorldMap({
     // (re)creates sources and layers — it must stay idempotent-safe per
     // addEventLayers' own getSource() guard. Interactions are NOT wired here (see below).
     map.on("style.load", () => {
+      styleReadyRef.current = true;
+      basemapErrorsRef.current = 0;
       addEventLayers(map, eventsToGeoJSON(eventsRef.current), territorialFeaturesRef.current);
       applyHeatSurface(map);
       refreshReportHeatLabels(map, eventsRef.current);
@@ -653,7 +712,17 @@ export function WorldMap({
       applyTerritorialVisibility(map);
       addHazardLayers(map, hazardDataRef.current);
       applyHazardVisibility(map, hazardLayersRef.current);
+      publishBasemapState(map);
     });
+
+    // A configured PMTiles archive is probed once (a 404, a non-archive file or a server without Range support is
+    // a deterministic failure): fall back immediately instead of waiting for tile errors.
+    const activePmtiles = resolutionRef.current?.provider.kind === "pmtiles" ? basemapConfig.pmtilesUrl : undefined;
+    if (activePmtiles) {
+      void probeArchive(activePmtiles).then((probe) => {
+        if (!probe.ok && mapRef.current === map) failProvider(map, probe.reason ?? "archive unavailable");
+      });
+    }
 
     // Layer interactions are registered ONCE, here, not inside style.load. style.load fires again on every
     // basemap switch (setStyle), and MapLibre's layer-delegated listeners are matched by layer id at event
@@ -749,12 +818,16 @@ export function WorldMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    setMissingKeyNotice(basemapMode !== "intel" && !apiKey);
     // Skip the render that mounts the map — its initial style already
     // matches basemapMode via the constructor above.
-    if (appliedModeRef.current === basemapMode) return;
+    if (appliedModeRef.current === basemapMode) {
+      publishBasemapState(map);
+      return;
+    }
     appliedModeRef.current = basemapMode;
-    map.setStyle(getMapStyle(basemapMode, apiKey));
+    styleReadyRef.current = false;
+    map.setStyle(styleForMode(basemapMode));
+    publishBasemapState(map);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [basemapMode]);
 
@@ -839,10 +912,9 @@ export function WorldMap({
     <div className={className} style={{ position: "relative" }} data-heat-signature={heatField?.signature} data-heat-peak={heatField ? Math.round(heatField.peak) : undefined} data-hazard-layers={hazardLayerKey} data-hazard-count={hazards ? hazards.features.length : 0}>
       <div ref={containerRef} className="h-full w-full" role="application" aria-label="Operational conflict map" />
       {viewMode === "heatmap" && <HeatLegend className="absolute bottom-20 left-3 z-10 sm:bottom-7" />}
-      {missingKeyNotice && (
-        <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-xs rounded-lg border border-border bg-surface/90 px-3 py-2 text-xs text-ink-faint backdrop-blur">
-          Street/Satellite need a MapTiler key. Add <code className="text-ink-dim">NEXT_PUBLIC_MAPTILER_KEY</code> to{" "}
-          <code className="text-ink-dim">.env.local</code> — showing the Intel fallback basemap for now.
+      {basemapNotice && (
+        <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-xs rounded-lg border border-border bg-surface/90 px-3 py-2 text-xs text-ink-faint backdrop-blur" data-testid="basemap-notice">
+          {basemapNotice}
         </div>
       )}
     </div>

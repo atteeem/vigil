@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { Map as MapLibreMap, config as maplibreConfig } from "maplibre-gl";
-import { getMapStyle } from "@/lib/map/style";
+import { getBasemapStyle } from "@/lib/map/basemap";
+import { registerBasemapProtocols } from "@/lib/map/register-protocols";
 import type { TerritorialGeometry } from "@/lib/types/territorial-control";
 
 if (typeof window !== "undefined") {
@@ -44,9 +45,10 @@ export function TerritoryGeometryPreview({ geometry }: { geometry: TerritorialGe
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
+    registerBasemapProtocols();
     const map = new MapLibreMap({
       container: containerRef.current,
-      style: getMapStyle("intel", undefined),
+      style: getBasemapStyle("intel"),
       center: [20, 25],
       zoom: 1,
       attributionControl: false,

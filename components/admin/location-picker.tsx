@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { Map as MapLibreMap, Marker, config as maplibreConfig } from "maplibre-gl";
 import { Search, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { FALLBACK_STYLE } from "@/lib/map/style";
+import { getBasemapStyle } from "@/lib/map/basemap";
+import { registerBasemapProtocols } from "@/lib/map/register-protocols";
 import type { LocationCandidateDTO } from "@/lib/types/db";
 
 if (typeof window !== "undefined") {
@@ -48,9 +49,10 @@ export function LocationPicker({
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
+    registerBasemapProtocols();
     const map = new MapLibreMap({
       container: containerRef.current,
-      style: FALLBACK_STYLE,
+      style: getBasemapStyle("intel"),
       center: [20, 25],
       zoom: 1,
       attributionControl: false,

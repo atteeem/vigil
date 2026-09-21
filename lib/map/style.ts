@@ -10,11 +10,9 @@ export const MAP_BASEMAP_MODE_LABEL: Record<MapBasemapMode, string> = {
 };
 
 /**
- * No-key fallback: a solid dark background only. CARTO's free anonymous
- * `dark_all` raster tiles (used here previously) now require an API key of
- * their own — without one they render visible "API KEY REQUIRED" watermark
- * tiles, which is worse than no basemap at all. Event markers/clusters
- * never depend on this layer and always render regardless.
+ * The MINIMAL style (last resort in the fallback chain): a solid dark background only. The bundled geography
+ * (lib/map/vigil-style.ts) sits above this in the chain and is what a key-less install normally shows.
+ * Event markers/clusters never depend on the basemap and always render regardless.
  */
 /** Glyph (font) PBFs for text layers. The key-less fallback style needs its own: without a `glyphs` URL every
  * symbol layer with text (cluster counts, hotspot labels) silently draws nothing. The default is the Protomaps
@@ -40,33 +38,5 @@ export const FALLBACK_STYLE: StyleSpecification = {
   ],
 };
 
-// MapTiler-hosted style IDs per Vigil map mode. See Decisions.md in the
-// Obsidian vault (D:\GLOBAL CONFLICT CLAUDE\Decisions.md) — MapTiler is the
-// approved basemap provider for the map upgrade (supersedes the CARTO-only
-// approach TASKS.md originally documented).
-const MAPTILER_STYLE_ID: Record<MapBasemapMode, string> = {
-  // Dark vector style — reads as the existing Vigil "Intel" aesthetic
-  // (dark ground, muted labels) while giving real per-zoom label hierarchy
-  // and street/building detail instead of a fixed-detail raster tile.
-  intel: "dataviz-dark",
-  street: "streets-v2",
-  // "hybrid" = satellite imagery + labels/borders/major roads, as opposed
-  // to MapTiler's bare "satellite" style which has no labels at all.
-  satellite: "hybrid",
-};
-
-/**
- * Resolves the MapLibre style for a given Vigil map mode. Returns a MapTiler
- * style URL when an API key is configured; otherwise falls back to the
- * offline-safe dark style for every mode (Street/Satellite just won't look
- * distinct from Intel until a key is added — never a broken/blank map).
- */
-export function getMapStyle(mode: MapBasemapMode, apiKey: string | undefined): StyleSpecification | string {
-  if (!apiKey) return FALLBACK_STYLE;
-  return `https://api.maptiler.com/maps/${MAPTILER_STYLE_ID[mode]}/style.json?key=${apiKey}`;
-}
-
-export function getMapTilerKey(): string | undefined {
-  const key = process.env.NEXT_PUBLIC_MAPTILER_KEY;
-  return key && key.length > 0 ? key : undefined;
-}
+// Provider selection, PMTiles, MapTiler and the fallback order live in lib/map/basemap.ts (the one basemap
+// authority). This module only holds the shared mode vocabulary, the minimal style and glyph configuration.
