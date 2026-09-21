@@ -240,7 +240,7 @@ test.describe.serial("Country intelligence API and aggregation", () => {
     expect(bw.actors.stateForces.map((x) => x.id)).toContain(unit.id);
     expect(bw.actors.nonStateArmed.map((x) => x.id)).toContain(militia.id);
     expect(bw.actors.international.map((x) => x.id)).toContain(foreign.id);
-    expect(bw.actors.stateForces.find((x) => x.id === unit.id)!.href).toBe(`/unit/${unit.id}`);
+    expect(bw.actors.stateForces.find((x) => x.id === unit.id)!.href).toBe(`/actor/${unit.id}`); // state organisations use the actor page
     expect(bw.territory.available).toBe(true);
     expect(bw.territory.conflicts.find((t) => t.slug === war.slug)!.changes[0]!.description).toBe("CI took Northville");
     expect(bw.developments.some((d) => d.developmentType === "territory_changed")).toBe(true);
@@ -303,7 +303,8 @@ test.describe.serial("Country page UI", () => {
     await expect(page.getByTestId("exposure-reason").first()).toBeVisible();
     await expect(page.getByTestId("developments-list").getByTestId("development-card").filter({ hasText: "CI Namibia strike" })).toBeVisible();
     await expect(page.getByTestId("freshness-conflict_events")).toContainText("Latest conflict event");
-    await expect(page.getByTestId("exposure-insufficient-trade")).toBeVisible(); // no evidence: no number
+    await expect(page.getByTestId("exposure-basis-security")).toContainText("Computed"); // every dimension states its basis
+    await expect(page.getByTestId("exposure-basis-energy")).toContainText(/Estimated|No monitored conflict/);
     await expect(page.getByTestId("section-transport")).toHaveCount(0); // nothing to say: no filler section
     await expect(page.getByTestId("section-maritime")).toHaveCount(0); // landlocked
     await expect(page.getByTestId("section-brief")).toBeVisible();
