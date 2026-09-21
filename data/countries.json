@@ -1,0 +1,4129 @@
+{
+ "meta": {
+  "generatedBy": "scripts/build-country-registry.mjs",
+  "identity": "ISO 3166-1 (static table)",
+  "borders": "Natural Earth 110m (world-atlas) shared arcs + curated pairs + micro-state pairs",
+  "centroids": "scoring reference values, then Natural Earth label points, then geometry centroid",
+  "populationNote": "population is recorded only where a sourced value already existed; otherwise null"
+ },
+ "countries": [
+  {
+   "code": "AF",
+   "alpha3": "AFG",
+   "name": "Afghanistan",
+   "region": "Asia",
+   "subregion": "Southern Asia",
+   "capital": "Kabul",
+   "aliases": [],
+   "lat": 34.16,
+   "lng": 66.5,
+   "population": null,
+   "flag": "🇦🇫",
+   "landlocked": true,
+   "zoom": 5,
+   "borders": [
+    "CN",
+    "IR",
+    "PK",
+    "TJ",
+    "TM",
+    "UZ"
+   ]
+  },
+  {
+   "code": "AL",
+   "alpha3": "ALB",
+   "name": "Albania",
+   "region": "Europe",
+   "subregion": "Southern Europe",
+   "capital": "Tirana",
+   "aliases": [],
+   "lat": 40.65,
+   "lng": 20.11,
+   "population": null,
+   "flag": "🇦🇱",
+   "landlocked": false,
+   "zoom": 7,
+   "borders": [
+    "GR",
+    "ME",
+    "MK",
+    "XK"
+   ]
+  },
+  {
+   "code": "DZ",
+   "alpha3": "DZA",
+   "name": "Algeria",
+   "region": "Africa",
+   "subregion": "Northern Africa",
+   "capital": "Algiers",
+   "aliases": [],
+   "lat": 27.4,
+   "lng": 2.81,
+   "population": null,
+   "flag": "🇩🇿",
+   "landlocked": false,
+   "zoom": 4.5,
+   "borders": [
+    "LY",
+    "MA",
+    "ML",
+    "MR",
+    "NE",
+    "TN"
+   ]
+  },
+  {
+   "code": "AD",
+   "alpha3": "AND",
+   "name": "Andorra",
+   "region": "Europe",
+   "subregion": "Southern Europe",
+   "capital": "Andorra la Vella",
+   "aliases": [],
+   "lat": 42.55,
+   "lng": 1.58,
+   "population": null,
+   "flag": "🇦🇩",
+   "landlocked": true,
+   "zoom": 8,
+   "borders": [
+    "ES",
+    "FR"
+   ]
+  },
+  {
+   "code": "AO",
+   "alpha3": "AGO",
+   "name": "Angola",
+   "region": "Africa",
+   "subregion": "Middle Africa",
+   "capital": "Luanda",
+   "aliases": [],
+   "lat": -12.18,
+   "lng": 17.98,
+   "population": null,
+   "flag": "🇦🇴",
+   "landlocked": false,
+   "zoom": 5,
+   "borders": [
+    "CD",
+    "CG",
+    "NA",
+    "ZM"
+   ]
+  },
+  {
+   "code": "AG",
+   "alpha3": "ATG",
+   "name": "Antigua and Barbuda",
+   "region": "Americas",
+   "subregion": "Caribbean",
+   "capital": "Saint John's",
+   "aliases": [],
+   "lat": 17.06,
+   "lng": -61.8,
+   "population": null,
+   "flag": "🇦🇬",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "AR",
+   "alpha3": "ARG",
+   "name": "Argentina",
+   "region": "Americas",
+   "subregion": "South America",
+   "capital": "Buenos Aires",
+   "aliases": [],
+   "lat": -33.5,
+   "lng": -64.17,
+   "population": null,
+   "flag": "🇦🇷",
+   "landlocked": false,
+   "zoom": 3.5,
+   "borders": [
+    "BO",
+    "BR",
+    "CL",
+    "PY",
+    "UY"
+   ]
+  },
+  {
+   "code": "AM",
+   "alpha3": "ARM",
+   "name": "Armenia",
+   "region": "Asia",
+   "subregion": "Western Asia",
+   "capital": "Yerevan",
+   "aliases": [],
+   "lat": 40.46,
+   "lng": 44.8,
+   "population": null,
+   "flag": "🇦🇲",
+   "landlocked": true,
+   "zoom": 7,
+   "borders": [
+    "AZ",
+    "GE",
+    "IR",
+    "TR"
+   ]
+  },
+  {
+   "code": "AU",
+   "alpha3": "AUS",
+   "name": "Australia",
+   "region": "Oceania",
+   "subregion": "Australia and New Zealand",
+   "capital": "Canberra",
+   "aliases": [],
+   "lat": -24.13,
+   "lng": 134.05,
+   "population": null,
+   "flag": "🇦🇺",
+   "landlocked": false,
+   "zoom": 3.5,
+   "borders": []
+  },
+  {
+   "code": "AT",
+   "alpha3": "AUT",
+   "name": "Austria",
+   "region": "Europe",
+   "subregion": "Western Europe",
+   "capital": "Vienna",
+   "aliases": [
+    "Österreich"
+   ],
+   "lat": 47.52,
+   "lng": 14.13,
+   "population": null,
+   "flag": "🇦🇹",
+   "landlocked": true,
+   "zoom": 6,
+   "borders": [
+    "CH",
+    "CZ",
+    "DE",
+    "HU",
+    "IT",
+    "LI",
+    "SI",
+    "SK"
+   ]
+  },
+  {
+   "code": "AZ",
+   "alpha3": "AZE",
+   "name": "Azerbaijan",
+   "region": "Asia",
+   "subregion": "Western Asia",
+   "capital": "Baku",
+   "aliases": [],
+   "lat": 40.4,
+   "lng": 47.21,
+   "population": null,
+   "flag": "🇦🇿",
+   "landlocked": true,
+   "zoom": 6.5,
+   "borders": [
+    "AM",
+    "GE",
+    "IR",
+    "RU",
+    "TR"
+   ]
+  },
+  {
+   "code": "BS",
+   "alpha3": "BHS",
+   "name": "Bahamas",
+   "region": "Americas",
+   "subregion": "Caribbean",
+   "capital": "Nassau",
+   "aliases": [
+    "The Bahamas"
+   ],
+   "lat": 26.4,
+   "lng": -77.15,
+   "population": null,
+   "flag": "🇧🇸",
+   "landlocked": false,
+   "zoom": 7,
+   "borders": []
+  },
+  {
+   "code": "BH",
+   "alpha3": "BHR",
+   "name": "Bahrain",
+   "region": "Middle East",
+   "subregion": "Western Asia",
+   "capital": "Manama",
+   "aliases": [],
+   "lat": 26.03,
+   "lng": 50.55,
+   "population": null,
+   "flag": "🇧🇭",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "BD",
+   "alpha3": "BGD",
+   "name": "Bangladesh",
+   "region": "Asia",
+   "subregion": "Southern Asia",
+   "capital": "Dhaka",
+   "aliases": [],
+   "lat": 24.21,
+   "lng": 89.68,
+   "population": null,
+   "flag": "🇧🇩",
+   "landlocked": false,
+   "zoom": 6.5,
+   "borders": [
+    "IN",
+    "MM"
+   ]
+  },
+  {
+   "code": "BB",
+   "alpha3": "BRB",
+   "name": "Barbados",
+   "region": "Americas",
+   "subregion": "Caribbean",
+   "capital": "Bridgetown",
+   "aliases": [],
+   "lat": 13.19,
+   "lng": -59.54,
+   "population": null,
+   "flag": "🇧🇧",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "BY",
+   "alpha3": "BLR",
+   "name": "Belarus",
+   "region": "Europe",
+   "subregion": "Eastern Europe",
+   "capital": "Minsk",
+   "aliases": [
+    "Belarus",
+    "Byelorussia"
+   ],
+   "lat": 53.82,
+   "lng": 28.42,
+   "population": null,
+   "flag": "🇧🇾",
+   "landlocked": true,
+   "zoom": 5.5,
+   "borders": [
+    "LT",
+    "LV",
+    "PL",
+    "RU",
+    "UA"
+   ]
+  },
+  {
+   "code": "BE",
+   "alpha3": "BEL",
+   "name": "Belgium",
+   "region": "Europe",
+   "subregion": "Western Europe",
+   "capital": "Brussels",
+   "aliases": [
+    "België",
+    "Belgique"
+   ],
+   "lat": 50.79,
+   "lng": 4.8,
+   "population": null,
+   "flag": "🇧🇪",
+   "landlocked": false,
+   "zoom": 7,
+   "borders": [
+    "DE",
+    "FR",
+    "LU",
+    "NL"
+   ]
+  },
+  {
+   "code": "BZ",
+   "alpha3": "BLZ",
+   "name": "Belize",
+   "region": "Americas",
+   "subregion": "Central America",
+   "capital": "Belmopan",
+   "aliases": [],
+   "lat": 17.2,
+   "lng": -88.71,
+   "population": null,
+   "flag": "🇧🇿",
+   "landlocked": false,
+   "zoom": 7.5,
+   "borders": [
+    "GT",
+    "MX"
+   ]
+  },
+  {
+   "code": "BJ",
+   "alpha3": "BEN",
+   "name": "Benin",
+   "region": "Africa",
+   "subregion": "Western Africa",
+   "capital": "Porto-Novo",
+   "aliases": [],
+   "lat": 10.32,
+   "lng": 2.35,
+   "population": null,
+   "flag": "🇧🇯",
+   "landlocked": false,
+   "zoom": 6,
+   "borders": [
+    "BF",
+    "NE",
+    "NG",
+    "TG"
+   ]
+  },
+  {
+   "code": "BT",
+   "alpha3": "BTN",
+   "name": "Bhutan",
+   "region": "Asia",
+   "subregion": "Southern Asia",
+   "capital": "Thimphu",
+   "aliases": [],
+   "lat": 27.54,
+   "lng": 90.04,
+   "population": null,
+   "flag": "🇧🇹",
+   "landlocked": true,
+   "zoom": 7,
+   "borders": [
+    "CN",
+    "IN"
+   ]
+  },
+  {
+   "code": "BO",
+   "alpha3": "BOL",
+   "name": "Bolivia",
+   "region": "Americas",
+   "subregion": "South America",
+   "capital": "Sucre",
+   "aliases": [],
+   "lat": -16.67,
+   "lng": -64.59,
+   "population": null,
+   "flag": "🇧🇴",
+   "landlocked": true,
+   "zoom": 5,
+   "borders": [
+    "AR",
+    "BR",
+    "CL",
+    "PE",
+    "PY"
+   ]
+  },
+  {
+   "code": "BA",
+   "alpha3": "BIH",
+   "name": "Bosnia and Herzegovina",
+   "region": "Europe",
+   "subregion": "Southern Europe",
+   "capital": "Sarajevo",
+   "aliases": [],
+   "lat": 44.09,
+   "lng": 18.07,
+   "population": null,
+   "flag": "🇧🇦",
+   "landlocked": false,
+   "zoom": 7,
+   "borders": [
+    "HR",
+    "ME",
+    "RS"
+   ]
+  },
+  {
+   "code": "BW",
+   "alpha3": "BWA",
+   "name": "Botswana",
+   "region": "Africa",
+   "subregion": "Southern Africa",
+   "capital": "Gaborone",
+   "aliases": [],
+   "lat": -22.1,
+   "lng": 24.18,
+   "population": null,
+   "flag": "🇧🇼",
+   "landlocked": true,
+   "zoom": 5.5,
+   "borders": [
+    "NA",
+    "ZA",
+    "ZM",
+    "ZW"
+   ]
+  },
+  {
+   "code": "BR",
+   "alpha3": "BRA",
+   "name": "Brazil",
+   "region": "Americas",
+   "subregion": "South America",
+   "capital": "Brasília",
+   "aliases": [
+    "Brasil"
+   ],
+   "lat": -12.1,
+   "lng": -49.56,
+   "population": null,
+   "flag": "🇧🇷",
+   "landlocked": false,
+   "zoom": 3.5,
+   "borders": [
+    "AR",
+    "BO",
+    "CO",
+    "FR",
+    "GY",
+    "PE",
+    "PY",
+    "SR",
+    "UY",
+    "VE"
+   ]
+  },
+  {
+   "code": "BN",
+   "alpha3": "BRN",
+   "name": "Brunei",
+   "region": "Asia",
+   "subregion": "South-eastern Asia",
+   "capital": "Bandar Seri Begawan",
+   "aliases": [],
+   "lat": 4.45,
+   "lng": 114.55,
+   "population": null,
+   "flag": "🇧🇳",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": [
+    "MY"
+   ]
+  },
+  {
+   "code": "BG",
+   "alpha3": "BGR",
+   "name": "Bulgaria",
+   "region": "Europe",
+   "subregion": "Eastern Europe",
+   "capital": "Sofia",
+   "aliases": [
+    "Bălgarija"
+   ],
+   "lat": 42.51,
+   "lng": 25.16,
+   "population": null,
+   "flag": "🇧🇬",
+   "landlocked": false,
+   "zoom": 6,
+   "borders": [
+    "GR",
+    "MK",
+    "RO",
+    "RS",
+    "TR"
+   ]
+  },
+  {
+   "code": "BF",
+   "alpha3": "BFA",
+   "name": "Burkina Faso",
+   "region": "Africa",
+   "subregion": "Western Africa",
+   "capital": "Ouagadougou",
+   "aliases": [],
+   "lat": 12.67,
+   "lng": -1.36,
+   "population": null,
+   "flag": "🇧🇫",
+   "landlocked": true,
+   "zoom": 6,
+   "borders": [
+    "BJ",
+    "CI",
+    "GH",
+    "ML",
+    "NE",
+    "TG"
+   ]
+  },
+  {
+   "code": "BI",
+   "alpha3": "BDI",
+   "name": "Burundi",
+   "region": "Africa",
+   "subregion": "Eastern Africa",
+   "capital": "Gitega",
+   "aliases": [],
+   "lat": -3.33,
+   "lng": 29.92,
+   "population": null,
+   "flag": "🇧🇮",
+   "landlocked": true,
+   "zoom": 7.5,
+   "borders": [
+    "CD",
+    "RW",
+    "TZ"
+   ]
+  },
+  {
+   "code": "CV",
+   "alpha3": "CPV",
+   "name": "Cabo Verde",
+   "region": "Africa",
+   "subregion": "Western Africa",
+   "capital": "Praia",
+   "aliases": [
+    "Cape Verde"
+   ],
+   "lat": 16,
+   "lng": -24.01,
+   "population": null,
+   "flag": "🇨🇻",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "KH",
+   "alpha3": "KHM",
+   "name": "Cambodia",
+   "region": "Asia",
+   "subregion": "South-eastern Asia",
+   "capital": "Phnom Penh",
+   "aliases": [
+    "Kampuchea"
+   ],
+   "lat": 12.65,
+   "lng": 104.5,
+   "population": null,
+   "flag": "🇰🇭",
+   "landlocked": false,
+   "zoom": 6.5,
+   "borders": [
+    "LA",
+    "TH",
+    "VN"
+   ]
+  },
+  {
+   "code": "CM",
+   "alpha3": "CMR",
+   "name": "Cameroon",
+   "region": "Africa",
+   "subregion": "Middle Africa",
+   "capital": "Yaoundé",
+   "aliases": [],
+   "lat": 4.59,
+   "lng": 12.47,
+   "population": null,
+   "flag": "🇨🇲",
+   "landlocked": false,
+   "zoom": 5.5,
+   "borders": [
+    "CF",
+    "CG",
+    "GA",
+    "GQ",
+    "NE",
+    "NG",
+    "TD"
+   ]
+  },
+  {
+   "code": "CA",
+   "alpha3": "CAN",
+   "name": "Canada",
+   "region": "Americas",
+   "subregion": "Northern America",
+   "capital": "Ottawa",
+   "aliases": [
+    "Canada"
+   ],
+   "lat": 60.32,
+   "lng": -101.91,
+   "population": null,
+   "flag": "🇨🇦",
+   "landlocked": false,
+   "zoom": 2.5,
+   "borders": [
+    "US"
+   ]
+  },
+  {
+   "code": "CF",
+   "alpha3": "CAF",
+   "name": "Central African Republic",
+   "region": "Africa",
+   "subregion": "Middle Africa",
+   "capital": "Bangui",
+   "aliases": [],
+   "lat": 6.99,
+   "lng": 20.91,
+   "population": null,
+   "flag": "🇨🇫",
+   "landlocked": true,
+   "zoom": 5,
+   "borders": [
+    "CD",
+    "CG",
+    "CM",
+    "SD",
+    "SS",
+    "TD"
+   ]
+  },
+  {
+   "code": "TD",
+   "alpha3": "TCD",
+   "name": "Chad",
+   "region": "Africa",
+   "subregion": "Middle Africa",
+   "capital": "N'Djamena",
+   "aliases": [],
+   "lat": 15.14,
+   "lng": 18.65,
+   "population": null,
+   "flag": "🇹🇩",
+   "landlocked": true,
+   "zoom": 5,
+   "borders": [
+    "CF",
+    "CM",
+    "LY",
+    "NE",
+    "NG",
+    "SD"
+   ]
+  },
+  {
+   "code": "CL",
+   "alpha3": "CHL",
+   "name": "Chile",
+   "region": "Americas",
+   "subregion": "South America",
+   "capital": "Santiago",
+   "aliases": [],
+   "lat": -38.15,
+   "lng": -72.32,
+   "population": null,
+   "flag": "🇨🇱",
+   "landlocked": false,
+   "zoom": 3.5,
+   "borders": [
+    "AR",
+    "BO",
+    "PE"
+   ]
+  },
+  {
+   "code": "CN",
+   "alpha3": "CHN",
+   "name": "China",
+   "region": "Asia",
+   "subregion": "Eastern Asia",
+   "capital": "Beijing",
+   "aliases": [
+    "PRC",
+    "People's Republic of China",
+    "Zhongguo"
+   ],
+   "lat": 35.8617,
+   "lng": 104.1954,
+   "population": 1410700000,
+   "flag": "🇨🇳",
+   "landlocked": false,
+   "zoom": 3,
+   "borders": [
+    "AF",
+    "BT",
+    "IN",
+    "KG",
+    "KP",
+    "KZ",
+    "LA",
+    "MM",
+    "MN",
+    "NP",
+    "PK",
+    "RU",
+    "TJ",
+    "VN"
+   ]
+  },
+  {
+   "code": "CO",
+   "alpha3": "COL",
+   "name": "Colombia",
+   "region": "Americas",
+   "subregion": "South America",
+   "capital": "Bogotá",
+   "aliases": [],
+   "lat": 3.37,
+   "lng": -73.17,
+   "population": null,
+   "flag": "🇨🇴",
+   "landlocked": false,
+   "zoom": 4.5,
+   "borders": [
+    "BR",
+    "EC",
+    "PA",
+    "PE",
+    "VE"
+   ]
+  },
+  {
+   "code": "KM",
+   "alpha3": "COM",
+   "name": "Comoros",
+   "region": "Africa",
+   "subregion": "Eastern Africa",
+   "capital": "Moroni",
+   "aliases": [],
+   "lat": -11.65,
+   "lng": 43.33,
+   "population": null,
+   "flag": "🇰🇲",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "CR",
+   "alpha3": "CRI",
+   "name": "Costa Rica",
+   "region": "Americas",
+   "subregion": "Central America",
+   "capital": "San José",
+   "aliases": [],
+   "lat": 10.07,
+   "lng": -84.08,
+   "population": null,
+   "flag": "🇨🇷",
+   "landlocked": false,
+   "zoom": 7,
+   "borders": [
+    "NI",
+    "PA"
+   ]
+  },
+  {
+   "code": "CI",
+   "alpha3": "CIV",
+   "name": "Côte d'Ivoire",
+   "region": "Africa",
+   "subregion": "Western Africa",
+   "capital": "Yamoussoukro",
+   "aliases": [
+    "Ivory Coast",
+    "Cote d'Ivoire"
+   ],
+   "lat": 7.49,
+   "lng": -5.57,
+   "population": null,
+   "flag": "🇨🇮",
+   "landlocked": false,
+   "zoom": 6,
+   "borders": [
+    "BF",
+    "GH",
+    "GN",
+    "LR",
+    "ML"
+   ]
+  },
+  {
+   "code": "HR",
+   "alpha3": "HRV",
+   "name": "Croatia",
+   "region": "Europe",
+   "subregion": "Southern Europe",
+   "capital": "Zagreb",
+   "aliases": [
+    "Hrvatska"
+   ],
+   "lat": 45.81,
+   "lng": 16.37,
+   "population": null,
+   "flag": "🇭🇷",
+   "landlocked": false,
+   "zoom": 6.5,
+   "borders": [
+    "BA",
+    "HU",
+    "ME",
+    "RS",
+    "SI"
+   ]
+  },
+  {
+   "code": "CU",
+   "alpha3": "CUB",
+   "name": "Cuba",
+   "region": "Americas",
+   "subregion": "Caribbean",
+   "capital": "Havana",
+   "aliases": [],
+   "lat": 21.33,
+   "lng": -77.98,
+   "population": null,
+   "flag": "🇨🇺",
+   "landlocked": false,
+   "zoom": 5.5,
+   "borders": []
+  },
+  {
+   "code": "CY",
+   "alpha3": "CYP",
+   "name": "Cyprus",
+   "region": "Europe",
+   "subregion": "Western Asia",
+   "capital": "Nicosia",
+   "aliases": [],
+   "lat": 34.91,
+   "lng": 33.08,
+   "population": null,
+   "flag": "🇨🇾",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "CZ",
+   "alpha3": "CZE",
+   "name": "Czechia",
+   "region": "Europe",
+   "subregion": "Eastern Europe",
+   "capital": "Prague",
+   "aliases": [
+    "Czech Republic",
+    "Česko"
+   ],
+   "lat": 49.88,
+   "lng": 15.38,
+   "population": null,
+   "flag": "🇨🇿",
+   "landlocked": true,
+   "zoom": 6,
+   "borders": [
+    "AT",
+    "DE",
+    "PL",
+    "SK"
+   ]
+  },
+  {
+   "code": "DK",
+   "alpha3": "DNK",
+   "name": "Denmark",
+   "region": "Europe",
+   "subregion": "Northern Europe",
+   "capital": "Copenhagen",
+   "aliases": [
+    "Danmark"
+   ],
+   "lat": 55.97,
+   "lng": 9.02,
+   "population": null,
+   "flag": "🇩🇰",
+   "landlocked": false,
+   "zoom": 6.5,
+   "borders": [
+    "DE"
+   ]
+  },
+  {
+   "code": "DJ",
+   "alpha3": "DJI",
+   "name": "Djibouti",
+   "region": "Africa",
+   "subregion": "Eastern Africa",
+   "capital": "Djibouti",
+   "aliases": [],
+   "lat": 11.98,
+   "lng": 42.5,
+   "population": null,
+   "flag": "🇩🇯",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": [
+    "ER",
+    "ET",
+    "SO"
+   ]
+  },
+  {
+   "code": "DM",
+   "alpha3": "DMA",
+   "name": "Dominica",
+   "region": "Americas",
+   "subregion": "Caribbean",
+   "capital": "Roseau",
+   "aliases": [],
+   "lat": 15.42,
+   "lng": -61.35,
+   "population": null,
+   "flag": "🇩🇲",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "DO",
+   "alpha3": "DOM",
+   "name": "Dominican Republic",
+   "region": "Americas",
+   "subregion": "Caribbean",
+   "capital": "Santo Domingo",
+   "aliases": [],
+   "lat": 19.1,
+   "lng": -70.65,
+   "population": null,
+   "flag": "🇩🇴",
+   "landlocked": false,
+   "zoom": 7,
+   "borders": [
+    "HT"
+   ]
+  },
+  {
+   "code": "CD",
+   "alpha3": "COD",
+   "name": "DR Congo",
+   "region": "Africa",
+   "subregion": "Middle Africa",
+   "capital": "Kinshasa",
+   "aliases": [
+    "Democratic Republic of the Congo",
+    "DRC",
+    "Congo-Kinshasa",
+    "Congo Kinshasa"
+   ],
+   "lat": -4.0383,
+   "lng": 21.7587,
+   "population": 105000000,
+   "flag": "🇨🇩",
+   "landlocked": false,
+   "zoom": 4.5,
+   "borders": [
+    "AO",
+    "BI",
+    "CF",
+    "CG",
+    "RW",
+    "SS",
+    "TZ",
+    "UG",
+    "ZM"
+   ]
+  },
+  {
+   "code": "EC",
+   "alpha3": "ECU",
+   "name": "Ecuador",
+   "region": "Americas",
+   "subregion": "South America",
+   "capital": "Quito",
+   "aliases": [],
+   "lat": -1.26,
+   "lng": -78.19,
+   "population": null,
+   "flag": "🇪🇨",
+   "landlocked": false,
+   "zoom": 6,
+   "borders": [
+    "CO",
+    "PE"
+   ]
+  },
+  {
+   "code": "EG",
+   "alpha3": "EGY",
+   "name": "Egypt",
+   "region": "Africa",
+   "subregion": "Northern Africa",
+   "capital": "Cairo",
+   "aliases": [
+    "Misr"
+   ],
+   "lat": 26.8206,
+   "lng": 30.8025,
+   "population": 115300000,
+   "flag": "🇪🇬",
+   "landlocked": false,
+   "zoom": 5,
+   "borders": [
+    "IL",
+    "LY",
+    "PS",
+    "SD"
+   ]
+  },
+  {
+   "code": "SV",
+   "alpha3": "SLV",
+   "name": "El Salvador",
+   "region": "Americas",
+   "subregion": "Central America",
+   "capital": "San Salvador",
+   "aliases": [],
+   "lat": 13.69,
+   "lng": -88.89,
+   "population": null,
+   "flag": "🇸🇻",
+   "landlocked": false,
+   "zoom": 7.5,
+   "borders": [
+    "GT",
+    "HN"
+   ]
+  },
+  {
+   "code": "GQ",
+   "alpha3": "GNQ",
+   "name": "Equatorial Guinea",
+   "region": "Africa",
+   "subregion": "Middle Africa",
+   "capital": "Malabo",
+   "aliases": [],
+   "lat": 2.33,
+   "lng": 8.99,
+   "population": null,
+   "flag": "🇬🇶",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": [
+    "CM",
+    "GA"
+   ]
+  },
+  {
+   "code": "ER",
+   "alpha3": "ERI",
+   "name": "Eritrea",
+   "region": "Africa",
+   "subregion": "Eastern Africa",
+   "capital": "Asmara",
+   "aliases": [],
+   "lat": 15.79,
+   "lng": 38.29,
+   "population": null,
+   "flag": "🇪🇷",
+   "landlocked": false,
+   "zoom": 6,
+   "borders": [
+    "DJ",
+    "ET",
+    "SD"
+   ]
+  },
+  {
+   "code": "EE",
+   "alpha3": "EST",
+   "name": "Estonia",
+   "region": "Europe",
+   "subregion": "Northern Europe",
+   "capital": "Tallinn",
+   "aliases": [
+    "Eesti"
+   ],
+   "lat": 58.72,
+   "lng": 25.87,
+   "population": null,
+   "flag": "🇪🇪",
+   "landlocked": false,
+   "zoom": 6.5,
+   "borders": [
+    "LV",
+    "RU"
+   ]
+  },
+  {
+   "code": "SZ",
+   "alpha3": "SWZ",
+   "name": "Eswatini",
+   "region": "Africa",
+   "subregion": "Southern Africa",
+   "capital": "Mbabane",
+   "aliases": [
+    "Swaziland"
+   ],
+   "lat": -26.53,
+   "lng": 31.47,
+   "population": null,
+   "flag": "🇸🇿",
+   "landlocked": true,
+   "zoom": 8,
+   "borders": [
+    "MZ",
+    "ZA"
+   ]
+  },
+  {
+   "code": "ET",
+   "alpha3": "ETH",
+   "name": "Ethiopia",
+   "region": "Africa",
+   "subregion": "Eastern Africa",
+   "capital": "Addis Ababa",
+   "aliases": [],
+   "lat": 8.03,
+   "lng": 39.09,
+   "population": null,
+   "flag": "🇪🇹",
+   "landlocked": true,
+   "zoom": 5,
+   "borders": [
+    "DJ",
+    "ER",
+    "KE",
+    "SD",
+    "SO",
+    "SS"
+   ]
+  },
+  {
+   "code": "FJ",
+   "alpha3": "FJI",
+   "name": "Fiji",
+   "region": "Oceania",
+   "subregion": "Melanesia",
+   "capital": "Suva",
+   "aliases": [],
+   "lat": -17.83,
+   "lng": 177.98,
+   "population": null,
+   "flag": "🇫🇯",
+   "landlocked": false,
+   "zoom": 2.5,
+   "borders": []
+  },
+  {
+   "code": "FI",
+   "alpha3": "FIN",
+   "name": "Finland",
+   "region": "Europe",
+   "subregion": "Northern Europe",
+   "capital": "Helsinki",
+   "aliases": [
+    "Suomi",
+    "Finlandia"
+   ],
+   "lat": 61.9241,
+   "lng": 25.7482,
+   "population": 5600000,
+   "flag": "🇫🇮",
+   "landlocked": false,
+   "zoom": 5.5,
+   "borders": [
+    "NO",
+    "RU",
+    "SE"
+   ]
+  },
+  {
+   "code": "FR",
+   "alpha3": "FRA",
+   "name": "France",
+   "region": "Europe",
+   "subregion": "Western Europe",
+   "capital": "Paris",
+   "aliases": [
+    "République française"
+   ],
+   "lat": 46.7,
+   "lng": 2.55,
+   "population": null,
+   "flag": "🇫🇷",
+   "landlocked": false,
+   "zoom": 3,
+   "borders": [
+    "AD",
+    "BE",
+    "BR",
+    "CH",
+    "DE",
+    "ES",
+    "IT",
+    "LU",
+    "MC",
+    "SR"
+   ]
+  },
+  {
+   "code": "GA",
+   "alpha3": "GAB",
+   "name": "Gabon",
+   "region": "Africa",
+   "subregion": "Middle Africa",
+   "capital": "Libreville",
+   "aliases": [],
+   "lat": -0.44,
+   "lng": 11.84,
+   "population": null,
+   "flag": "🇬🇦",
+   "landlocked": false,
+   "zoom": 6,
+   "borders": [
+    "CG",
+    "CM",
+    "GQ"
+   ]
+  },
+  {
+   "code": "GM",
+   "alpha3": "GMB",
+   "name": "Gambia",
+   "region": "Africa",
+   "subregion": "Western Africa",
+   "capital": "Banjul",
+   "aliases": [
+    "The Gambia"
+   ],
+   "lat": 13.64,
+   "lng": -15,
+   "population": null,
+   "flag": "🇬🇲",
+   "landlocked": false,
+   "zoom": 7,
+   "borders": [
+    "SN"
+   ]
+  },
+  {
+   "code": "GE",
+   "alpha3": "GEO",
+   "name": "Georgia",
+   "region": "Asia",
+   "subregion": "Western Asia",
+   "capital": "Tbilisi",
+   "aliases": [],
+   "lat": 41.87,
+   "lng": 43.74,
+   "population": null,
+   "flag": "🇬🇪",
+   "landlocked": false,
+   "zoom": 6,
+   "borders": [
+    "AM",
+    "AZ",
+    "RU",
+    "TR"
+   ]
+  },
+  {
+   "code": "DE",
+   "alpha3": "DEU",
+   "name": "Germany",
+   "region": "Europe",
+   "subregion": "Western Europe",
+   "capital": "Berlin",
+   "aliases": [
+    "Deutschland"
+   ],
+   "lat": 51.1657,
+   "lng": 10.4515,
+   "population": 84500000,
+   "flag": "🇩🇪",
+   "landlocked": false,
+   "zoom": 5.5,
+   "borders": [
+    "AT",
+    "BE",
+    "CH",
+    "CZ",
+    "DK",
+    "FR",
+    "LU",
+    "NL",
+    "PL"
+   ]
+  },
+  {
+   "code": "GH",
+   "alpha3": "GHA",
+   "name": "Ghana",
+   "region": "Africa",
+   "subregion": "Western Africa",
+   "capital": "Accra",
+   "aliases": [],
+   "lat": 7.72,
+   "lng": -1.04,
+   "population": null,
+   "flag": "🇬🇭",
+   "landlocked": false,
+   "zoom": 6,
+   "borders": [
+    "BF",
+    "CI",
+    "TG"
+   ]
+  },
+  {
+   "code": "GR",
+   "alpha3": "GRC",
+   "name": "Greece",
+   "region": "Europe",
+   "subregion": "Southern Europe",
+   "capital": "Athens",
+   "aliases": [
+    "Hellas",
+    "Ellada"
+   ],
+   "lat": 39.49,
+   "lng": 21.73,
+   "population": null,
+   "flag": "🇬🇷",
+   "landlocked": false,
+   "zoom": 6,
+   "borders": [
+    "AL",
+    "BG",
+    "MK",
+    "TR"
+   ]
+  },
+  {
+   "code": "GD",
+   "alpha3": "GRD",
+   "name": "Grenada",
+   "region": "Americas",
+   "subregion": "Caribbean",
+   "capital": "Saint George's",
+   "aliases": [],
+   "lat": 12.12,
+   "lng": -61.68,
+   "population": null,
+   "flag": "🇬🇩",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "GT",
+   "alpha3": "GTM",
+   "name": "Guatemala",
+   "region": "Americas",
+   "subregion": "Central America",
+   "capital": "Guatemala City",
+   "aliases": [],
+   "lat": 14.98,
+   "lng": -90.5,
+   "population": null,
+   "flag": "🇬🇹",
+   "landlocked": false,
+   "zoom": 7,
+   "borders": [
+    "BZ",
+    "HN",
+    "MX",
+    "SV"
+   ]
+  },
+  {
+   "code": "GN",
+   "alpha3": "GIN",
+   "name": "Guinea",
+   "region": "Africa",
+   "subregion": "Western Africa",
+   "capital": "Conakry",
+   "aliases": [],
+   "lat": 10.62,
+   "lng": -10.02,
+   "population": null,
+   "flag": "🇬🇳",
+   "landlocked": false,
+   "zoom": 6,
+   "borders": [
+    "CI",
+    "GW",
+    "LR",
+    "ML",
+    "SL",
+    "SN"
+   ]
+  },
+  {
+   "code": "GW",
+   "alpha3": "GNB",
+   "name": "Guinea-Bissau",
+   "region": "Africa",
+   "subregion": "Western Africa",
+   "capital": "Bissau",
+   "aliases": [],
+   "lat": 12.16,
+   "lng": -14.52,
+   "population": null,
+   "flag": "🇬🇼",
+   "landlocked": false,
+   "zoom": 7,
+   "borders": [
+    "GN",
+    "SN"
+   ]
+  },
+  {
+   "code": "GY",
+   "alpha3": "GUY",
+   "name": "Guyana",
+   "region": "Americas",
+   "subregion": "South America",
+   "capital": "Georgetown",
+   "aliases": [],
+   "lat": 5.12,
+   "lng": -58.94,
+   "population": null,
+   "flag": "🇬🇾",
+   "landlocked": false,
+   "zoom": 6,
+   "borders": [
+    "BR",
+    "SR",
+    "VE"
+   ]
+  },
+  {
+   "code": "HT",
+   "alpha3": "HTI",
+   "name": "Haiti",
+   "region": "Americas",
+   "subregion": "Caribbean",
+   "capital": "Port-au-Prince",
+   "aliases": [],
+   "lat": 19.26,
+   "lng": -72.22,
+   "population": null,
+   "flag": "🇭🇹",
+   "landlocked": false,
+   "zoom": 7.5,
+   "borders": [
+    "DO"
+   ]
+  },
+  {
+   "code": "HN",
+   "alpha3": "HND",
+   "name": "Honduras",
+   "region": "Americas",
+   "subregion": "Central America",
+   "capital": "Tegucigalpa",
+   "aliases": [],
+   "lat": 14.79,
+   "lng": -86.89,
+   "population": null,
+   "flag": "🇭🇳",
+   "landlocked": false,
+   "zoom": 6,
+   "borders": [
+    "GT",
+    "NI",
+    "SV"
+   ]
+  },
+  {
+   "code": "HU",
+   "alpha3": "HUN",
+   "name": "Hungary",
+   "region": "Europe",
+   "subregion": "Eastern Europe",
+   "capital": "Budapest",
+   "aliases": [
+    "Magyarország"
+   ],
+   "lat": 47.09,
+   "lng": 19.45,
+   "population": null,
+   "flag": "🇭🇺",
+   "landlocked": true,
+   "zoom": 6,
+   "borders": [
+    "AT",
+    "HR",
+    "RO",
+    "RS",
+    "SI",
+    "SK",
+    "UA"
+   ]
+  },
+  {
+   "code": "IS",
+   "alpha3": "ISL",
+   "name": "Iceland",
+   "region": "Europe",
+   "subregion": "Northern Europe",
+   "capital": "Reykjavík",
+   "aliases": [
+    "Ísland"
+   ],
+   "lat": 64.78,
+   "lng": -18.67,
+   "population": null,
+   "flag": "🇮🇸",
+   "landlocked": false,
+   "zoom": 5.5,
+   "borders": []
+  },
+  {
+   "code": "IN",
+   "alpha3": "IND",
+   "name": "India",
+   "region": "Asia",
+   "subregion": "Southern Asia",
+   "capital": "New Delhi",
+   "aliases": [],
+   "lat": 20.5937,
+   "lng": 78.9629,
+   "population": 1441700000,
+   "flag": "🇮🇳",
+   "landlocked": false,
+   "zoom": 4,
+   "borders": [
+    "BD",
+    "BT",
+    "CN",
+    "MM",
+    "NP",
+    "PK"
+   ]
+  },
+  {
+   "code": "ID",
+   "alpha3": "IDN",
+   "name": "Indonesia",
+   "region": "Asia",
+   "subregion": "South-eastern Asia",
+   "capital": "Jakarta",
+   "aliases": [],
+   "lat": -0.95,
+   "lng": 101.89,
+   "population": null,
+   "flag": "🇮🇩",
+   "landlocked": false,
+   "zoom": 3.5,
+   "borders": [
+    "MY",
+    "PG",
+    "TL"
+   ]
+  },
+  {
+   "code": "IR",
+   "alpha3": "IRN",
+   "name": "Iran",
+   "region": "Middle East",
+   "subregion": "Southern Asia",
+   "capital": "Tehran",
+   "aliases": [
+    "Islamic Republic of Iran",
+    "Persia"
+   ],
+   "lat": 32.4279,
+   "lng": 53.688,
+   "population": 89200000,
+   "flag": "🇮🇷",
+   "landlocked": false,
+   "zoom": 4.5,
+   "borders": [
+    "AF",
+    "AM",
+    "AZ",
+    "IQ",
+    "PK",
+    "TM",
+    "TR"
+   ]
+  },
+  {
+   "code": "IQ",
+   "alpha3": "IRQ",
+   "name": "Iraq",
+   "region": "Middle East",
+   "subregion": "Western Asia",
+   "capital": "Baghdad",
+   "aliases": [],
+   "lat": 33.09,
+   "lng": 43.26,
+   "population": null,
+   "flag": "🇮🇶",
+   "landlocked": false,
+   "zoom": 5.5,
+   "borders": [
+    "IR",
+    "JO",
+    "KW",
+    "SA",
+    "SY",
+    "TR"
+   ]
+  },
+  {
+   "code": "IE",
+   "alpha3": "IRL",
+   "name": "Ireland",
+   "region": "Europe",
+   "subregion": "Northern Europe",
+   "capital": "Dublin",
+   "aliases": [
+    "Éire"
+   ],
+   "lat": 53.08,
+   "lng": -7.8,
+   "population": null,
+   "flag": "🇮🇪",
+   "landlocked": false,
+   "zoom": 7,
+   "borders": [
+    "GB"
+   ]
+  },
+  {
+   "code": "IL",
+   "alpha3": "ISR",
+   "name": "Israel",
+   "region": "Middle East",
+   "subregion": "Western Asia",
+   "capital": "Jerusalem",
+   "aliases": [
+    "Yisrael"
+   ],
+   "lat": 31.0461,
+   "lng": 34.8516,
+   "population": 9800000,
+   "flag": "🇮🇱",
+   "landlocked": false,
+   "zoom": 7,
+   "borders": [
+    "EG",
+    "JO",
+    "LB",
+    "PS",
+    "SY"
+   ]
+  },
+  {
+   "code": "IT",
+   "alpha3": "ITA",
+   "name": "Italy",
+   "region": "Europe",
+   "subregion": "Southern Europe",
+   "capital": "Rome",
+   "aliases": [
+    "Italia"
+   ],
+   "lat": 44.73,
+   "lng": 11.08,
+   "population": null,
+   "flag": "🇮🇹",
+   "landlocked": false,
+   "zoom": 5,
+   "borders": [
+    "AT",
+    "CH",
+    "FR",
+    "SI",
+    "SM",
+    "VA"
+   ]
+  },
+  {
+   "code": "JM",
+   "alpha3": "JAM",
+   "name": "Jamaica",
+   "region": "Americas",
+   "subregion": "Caribbean",
+   "capital": "Kingston",
+   "aliases": [],
+   "lat": 18.14,
+   "lng": -77.32,
+   "population": null,
+   "flag": "🇯🇲",
+   "landlocked": false,
+   "zoom": 7.5,
+   "borders": []
+  },
+  {
+   "code": "JP",
+   "alpha3": "JPN",
+   "name": "Japan",
+   "region": "Asia",
+   "subregion": "Eastern Asia",
+   "capital": "Tokyo",
+   "aliases": [
+    "Nippon",
+    "Nihon"
+   ],
+   "lat": 36.2048,
+   "lng": 138.2529,
+   "population": 123800000,
+   "flag": "🇯🇵",
+   "landlocked": false,
+   "zoom": 5,
+   "borders": []
+  },
+  {
+   "code": "JO",
+   "alpha3": "JOR",
+   "name": "Jordan",
+   "region": "Middle East",
+   "subregion": "Western Asia",
+   "capital": "Amman",
+   "aliases": [],
+   "lat": 30.81,
+   "lng": 36.38,
+   "population": null,
+   "flag": "🇯🇴",
+   "landlocked": false,
+   "zoom": 6.5,
+   "borders": [
+    "IL",
+    "IQ",
+    "PS",
+    "SA",
+    "SY"
+   ]
+  },
+  {
+   "code": "KZ",
+   "alpha3": "KAZ",
+   "name": "Kazakhstan",
+   "region": "Asia",
+   "subregion": "Central Asia",
+   "capital": "Astana",
+   "aliases": [],
+   "lat": 49.05,
+   "lng": 68.69,
+   "population": null,
+   "flag": "🇰🇿",
+   "landlocked": true,
+   "zoom": 3.5,
+   "borders": [
+    "CN",
+    "KG",
+    "RU",
+    "TM",
+    "UZ"
+   ]
+  },
+  {
+   "code": "KE",
+   "alpha3": "KEN",
+   "name": "Kenya",
+   "region": "Africa",
+   "subregion": "Eastern Africa",
+   "capital": "Nairobi",
+   "aliases": [],
+   "lat": 0.55,
+   "lng": 37.91,
+   "population": null,
+   "flag": "🇰🇪",
+   "landlocked": false,
+   "zoom": 5.5,
+   "borders": [
+    "ET",
+    "SO",
+    "SS",
+    "TZ",
+    "UG"
+   ]
+  },
+  {
+   "code": "KI",
+   "alpha3": "KIR",
+   "name": "Kiribati",
+   "region": "Oceania",
+   "subregion": "Micronesia",
+   "capital": "Tarawa",
+   "aliases": [],
+   "lat": 1.87,
+   "lng": -157.4,
+   "population": null,
+   "flag": "🇰🇮",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "XK",
+   "alpha3": "XKX",
+   "name": "Kosovo",
+   "region": "Europe",
+   "subregion": "Southern Europe",
+   "capital": "Pristina",
+   "aliases": [],
+   "lat": 42.59,
+   "lng": 20.86,
+   "population": null,
+   "flag": "🇽🇰",
+   "landlocked": true,
+   "zoom": 8,
+   "borders": [
+    "AL",
+    "ME",
+    "MK",
+    "RS"
+   ]
+  },
+  {
+   "code": "KW",
+   "alpha3": "KWT",
+   "name": "Kuwait",
+   "region": "Middle East",
+   "subregion": "Western Asia",
+   "capital": "Kuwait City",
+   "aliases": [],
+   "lat": 29.41,
+   "lng": 47.31,
+   "population": null,
+   "flag": "🇰🇼",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": [
+    "IQ",
+    "SA"
+   ]
+  },
+  {
+   "code": "KG",
+   "alpha3": "KGZ",
+   "name": "Kyrgyzstan",
+   "region": "Asia",
+   "subregion": "Central Asia",
+   "capital": "Bishkek",
+   "aliases": [],
+   "lat": 41.67,
+   "lng": 74.53,
+   "population": null,
+   "flag": "🇰🇬",
+   "landlocked": true,
+   "zoom": 5.5,
+   "borders": [
+    "CN",
+    "KZ",
+    "TJ",
+    "UZ"
+   ]
+  },
+  {
+   "code": "LA",
+   "alpha3": "LAO",
+   "name": "Laos",
+   "region": "Asia",
+   "subregion": "South-eastern Asia",
+   "capital": "Vientiane",
+   "aliases": [
+    "Lao PDR"
+   ],
+   "lat": 19.43,
+   "lng": 102.53,
+   "population": null,
+   "flag": "🇱🇦",
+   "landlocked": true,
+   "zoom": 5.5,
+   "borders": [
+    "CN",
+    "KH",
+    "MM",
+    "TH",
+    "VN"
+   ]
+  },
+  {
+   "code": "LV",
+   "alpha3": "LVA",
+   "name": "Latvia",
+   "region": "Europe",
+   "subregion": "Northern Europe",
+   "capital": "Riga",
+   "aliases": [
+    "Latvija"
+   ],
+   "lat": 57.07,
+   "lng": 25.46,
+   "population": null,
+   "flag": "🇱🇻",
+   "landlocked": false,
+   "zoom": 6,
+   "borders": [
+    "BY",
+    "EE",
+    "LT",
+    "RU"
+   ]
+  },
+  {
+   "code": "LB",
+   "alpha3": "LBN",
+   "name": "Lebanon",
+   "region": "Middle East",
+   "subregion": "Western Asia",
+   "capital": "Beirut",
+   "aliases": [],
+   "lat": 33.8547,
+   "lng": 35.8623,
+   "population": 5500000,
+   "flag": "🇱🇧",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": [
+    "IL",
+    "SY"
+   ]
+  },
+  {
+   "code": "LS",
+   "alpha3": "LSO",
+   "name": "Lesotho",
+   "region": "Africa",
+   "subregion": "Southern Africa",
+   "capital": "Maseru",
+   "aliases": [],
+   "lat": -29.48,
+   "lng": 28.25,
+   "population": null,
+   "flag": "🇱🇸",
+   "landlocked": true,
+   "zoom": 7.5,
+   "borders": [
+    "ZA"
+   ]
+  },
+  {
+   "code": "LR",
+   "alpha3": "LBR",
+   "name": "Liberia",
+   "region": "Africa",
+   "subregion": "Western Africa",
+   "capital": "Monrovia",
+   "aliases": [],
+   "lat": 6.45,
+   "lng": -9.46,
+   "population": null,
+   "flag": "🇱🇷",
+   "landlocked": false,
+   "zoom": 6.5,
+   "borders": [
+    "CI",
+    "GN",
+    "SL"
+   ]
+  },
+  {
+   "code": "LY",
+   "alpha3": "LBY",
+   "name": "Libya",
+   "region": "Africa",
+   "subregion": "Northern Africa",
+   "capital": "Tripoli",
+   "aliases": [],
+   "lat": 26.64,
+   "lng": 18.01,
+   "population": null,
+   "flag": "🇱🇾",
+   "landlocked": false,
+   "zoom": 5,
+   "borders": [
+    "DZ",
+    "EG",
+    "NE",
+    "SD",
+    "TD",
+    "TN"
+   ]
+  },
+  {
+   "code": "LI",
+   "alpha3": "LIE",
+   "name": "Liechtenstein",
+   "region": "Europe",
+   "subregion": "Western Europe",
+   "capital": "Vaduz",
+   "aliases": [],
+   "lat": 47.14,
+   "lng": 9.55,
+   "population": null,
+   "flag": "🇱🇮",
+   "landlocked": true,
+   "zoom": 8,
+   "borders": [
+    "AT",
+    "CH"
+   ]
+  },
+  {
+   "code": "LT",
+   "alpha3": "LTU",
+   "name": "Lithuania",
+   "region": "Europe",
+   "subregion": "Northern Europe",
+   "capital": "Vilnius",
+   "aliases": [
+    "Lietuva"
+   ],
+   "lat": 55.1,
+   "lng": 24.09,
+   "population": null,
+   "flag": "🇱🇹",
+   "landlocked": false,
+   "zoom": 6.5,
+   "borders": [
+    "BY",
+    "LV",
+    "PL",
+    "RU"
+   ]
+  },
+  {
+   "code": "LU",
+   "alpha3": "LUX",
+   "name": "Luxembourg",
+   "region": "Europe",
+   "subregion": "Western Europe",
+   "capital": "Luxembourg",
+   "aliases": [],
+   "lat": 49.73,
+   "lng": 6.08,
+   "population": null,
+   "flag": "🇱🇺",
+   "landlocked": true,
+   "zoom": 8,
+   "borders": [
+    "BE",
+    "DE",
+    "FR"
+   ]
+  },
+  {
+   "code": "MG",
+   "alpha3": "MDG",
+   "name": "Madagascar",
+   "region": "Africa",
+   "subregion": "Eastern Africa",
+   "capital": "Antananarivo",
+   "aliases": [],
+   "lat": -18.63,
+   "lng": 46.7,
+   "population": null,
+   "flag": "🇲🇬",
+   "landlocked": false,
+   "zoom": 5,
+   "borders": []
+  },
+  {
+   "code": "MW",
+   "alpha3": "MWI",
+   "name": "Malawi",
+   "region": "Africa",
+   "subregion": "Eastern Africa",
+   "capital": "Lilongwe",
+   "aliases": [],
+   "lat": -13.39,
+   "lng": 33.61,
+   "population": null,
+   "flag": "🇲🇼",
+   "landlocked": true,
+   "zoom": 6,
+   "borders": [
+    "MZ",
+    "TZ",
+    "ZM"
+   ]
+  },
+  {
+   "code": "MY",
+   "alpha3": "MYS",
+   "name": "Malaysia",
+   "region": "Asia",
+   "subregion": "South-eastern Asia",
+   "capital": "Kuala Lumpur",
+   "aliases": [],
+   "lat": 2.53,
+   "lng": 113.84,
+   "population": null,
+   "flag": "🇲🇾",
+   "landlocked": false,
+   "zoom": 4.5,
+   "borders": [
+    "BN",
+    "ID",
+    "TH"
+   ]
+  },
+  {
+   "code": "MV",
+   "alpha3": "MDV",
+   "name": "Maldives",
+   "region": "Asia",
+   "subregion": "Southern Asia",
+   "capital": "Malé",
+   "aliases": [],
+   "lat": 3.2,
+   "lng": 73.22,
+   "population": null,
+   "flag": "🇲🇻",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "ML",
+   "alpha3": "MLI",
+   "name": "Mali",
+   "region": "Africa",
+   "subregion": "Western Africa",
+   "capital": "Bamako",
+   "aliases": [],
+   "lat": 17.5707,
+   "lng": -3.9962,
+   "population": 23300000,
+   "flag": "🇲🇱",
+   "landlocked": true,
+   "zoom": 5,
+   "borders": [
+    "BF",
+    "CI",
+    "DZ",
+    "GN",
+    "MR",
+    "NE",
+    "SN"
+   ]
+  },
+  {
+   "code": "MT",
+   "alpha3": "MLT",
+   "name": "Malta",
+   "region": "Europe",
+   "subregion": "Southern Europe",
+   "capital": "Valletta",
+   "aliases": [],
+   "lat": 35.94,
+   "lng": 14.38,
+   "population": null,
+   "flag": "🇲🇹",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "MH",
+   "alpha3": "MHL",
+   "name": "Marshall Islands",
+   "region": "Oceania",
+   "subregion": "Micronesia",
+   "capital": "Majuro",
+   "aliases": [],
+   "lat": 7.13,
+   "lng": 171.18,
+   "population": null,
+   "flag": "🇲🇭",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "MR",
+   "alpha3": "MRT",
+   "name": "Mauritania",
+   "region": "Africa",
+   "subregion": "Western Africa",
+   "capital": "Nouakchott",
+   "aliases": [],
+   "lat": 19.59,
+   "lng": -9.74,
+   "population": null,
+   "flag": "🇲🇷",
+   "landlocked": false,
+   "zoom": 5,
+   "borders": [
+    "DZ",
+    "ML",
+    "SN"
+   ]
+  },
+  {
+   "code": "MU",
+   "alpha3": "MUS",
+   "name": "Mauritius",
+   "region": "Africa",
+   "subregion": "Eastern Africa",
+   "capital": "Port Louis",
+   "aliases": [],
+   "lat": -20.35,
+   "lng": 57.55,
+   "population": null,
+   "flag": "🇲🇺",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "MX",
+   "alpha3": "MEX",
+   "name": "Mexico",
+   "region": "Americas",
+   "subregion": "Central America",
+   "capital": "Mexico City",
+   "aliases": [
+    "México"
+   ],
+   "lat": 23.92,
+   "lng": -102.29,
+   "population": null,
+   "flag": "🇲🇽",
+   "landlocked": false,
+   "zoom": 4,
+   "borders": [
+    "BZ",
+    "GT",
+    "US"
+   ]
+  },
+  {
+   "code": "FM",
+   "alpha3": "FSM",
+   "name": "Micronesia",
+   "region": "Oceania",
+   "subregion": "Micronesia",
+   "capital": "Palikir",
+   "aliases": [],
+   "lat": 6.92,
+   "lng": 158.16,
+   "population": null,
+   "flag": "🇫🇲",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "MD",
+   "alpha3": "MDA",
+   "name": "Moldova",
+   "region": "Europe",
+   "subregion": "Eastern Europe",
+   "capital": "Chișinău",
+   "aliases": [
+    "Moldavia"
+   ],
+   "lat": 47.43,
+   "lng": 28.49,
+   "population": null,
+   "flag": "🇲🇩",
+   "landlocked": true,
+   "zoom": 7,
+   "borders": [
+    "RO",
+    "UA"
+   ]
+  },
+  {
+   "code": "MC",
+   "alpha3": "MCO",
+   "name": "Monaco",
+   "region": "Europe",
+   "subregion": "Western Europe",
+   "capital": "Monaco",
+   "aliases": [],
+   "lat": 43.74,
+   "lng": 7.42,
+   "population": null,
+   "flag": "🇲🇨",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": [
+    "FR"
+   ]
+  },
+  {
+   "code": "MN",
+   "alpha3": "MNG",
+   "name": "Mongolia",
+   "region": "Asia",
+   "subregion": "Eastern Asia",
+   "capital": "Ulaanbaatar",
+   "aliases": [],
+   "lat": 46,
+   "lng": 104.15,
+   "population": null,
+   "flag": "🇲🇳",
+   "landlocked": true,
+   "zoom": 4,
+   "borders": [
+    "CN",
+    "RU"
+   ]
+  },
+  {
+   "code": "ME",
+   "alpha3": "MNE",
+   "name": "Montenegro",
+   "region": "Europe",
+   "subregion": "Southern Europe",
+   "capital": "Podgorica",
+   "aliases": [],
+   "lat": 42.8,
+   "lng": 19.14,
+   "population": null,
+   "flag": "🇲🇪",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": [
+    "AL",
+    "BA",
+    "HR",
+    "RS",
+    "XK"
+   ]
+  },
+  {
+   "code": "MA",
+   "alpha3": "MAR",
+   "name": "Morocco",
+   "region": "Africa",
+   "subregion": "Northern Africa",
+   "capital": "Rabat",
+   "aliases": [],
+   "lat": 31.65,
+   "lng": -7.19,
+   "population": null,
+   "flag": "🇲🇦",
+   "landlocked": false,
+   "zoom": 5,
+   "borders": [
+    "DZ"
+   ]
+  },
+  {
+   "code": "MZ",
+   "alpha3": "MOZ",
+   "name": "Mozambique",
+   "region": "Africa",
+   "subregion": "Eastern Africa",
+   "capital": "Maputo",
+   "aliases": [],
+   "lat": -13.94,
+   "lng": 37.84,
+   "population": null,
+   "flag": "🇲🇿",
+   "landlocked": false,
+   "zoom": 5,
+   "borders": [
+    "MW",
+    "SZ",
+    "TZ",
+    "ZA",
+    "ZM",
+    "ZW"
+   ]
+  },
+  {
+   "code": "MM",
+   "alpha3": "MMR",
+   "name": "Myanmar",
+   "region": "Asia",
+   "subregion": "South-eastern Asia",
+   "capital": "Naypyidaw",
+   "aliases": [
+    "Burma"
+   ],
+   "lat": 21.9139,
+   "lng": 95.956,
+   "population": 54600000,
+   "flag": "🇲🇲",
+   "landlocked": false,
+   "zoom": 4.5,
+   "borders": [
+    "BD",
+    "CN",
+    "IN",
+    "LA",
+    "TH"
+   ]
+  },
+  {
+   "code": "NA",
+   "alpha3": "NAM",
+   "name": "Namibia",
+   "region": "Africa",
+   "subregion": "Southern Africa",
+   "capital": "Windhoek",
+   "aliases": [],
+   "lat": -20.58,
+   "lng": 17.11,
+   "population": null,
+   "flag": "🇳🇦",
+   "landlocked": false,
+   "zoom": 5,
+   "borders": [
+    "AO",
+    "BW",
+    "ZA",
+    "ZM"
+   ]
+  },
+  {
+   "code": "NR",
+   "alpha3": "NRU",
+   "name": "Nauru",
+   "region": "Oceania",
+   "subregion": "Micronesia",
+   "capital": "Yaren",
+   "aliases": [],
+   "lat": -0.53,
+   "lng": 166.93,
+   "population": null,
+   "flag": "🇳🇷",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "NP",
+   "alpha3": "NPL",
+   "name": "Nepal",
+   "region": "Asia",
+   "subregion": "Southern Asia",
+   "capital": "Kathmandu",
+   "aliases": [],
+   "lat": 28.3,
+   "lng": 83.64,
+   "population": null,
+   "flag": "🇳🇵",
+   "landlocked": true,
+   "zoom": 6,
+   "borders": [
+    "CN",
+    "IN"
+   ]
+  },
+  {
+   "code": "NL",
+   "alpha3": "NLD",
+   "name": "Netherlands",
+   "region": "Europe",
+   "subregion": "Western Europe",
+   "capital": "Amsterdam",
+   "aliases": [
+    "Nederland",
+    "Holland"
+   ],
+   "lat": 52.42,
+   "lng": 5.61,
+   "population": null,
+   "flag": "🇳🇱",
+   "landlocked": false,
+   "zoom": 7,
+   "borders": [
+    "BE",
+    "DE"
+   ]
+  },
+  {
+   "code": "NZ",
+   "alpha3": "NZL",
+   "name": "New Zealand",
+   "region": "Oceania",
+   "subregion": "Australia and New Zealand",
+   "capital": "Wellington",
+   "aliases": [],
+   "lat": -39.76,
+   "lng": 172.79,
+   "population": null,
+   "flag": "🇳🇿",
+   "landlocked": false,
+   "zoom": 5,
+   "borders": []
+  },
+  {
+   "code": "NI",
+   "alpha3": "NIC",
+   "name": "Nicaragua",
+   "region": "Americas",
+   "subregion": "Central America",
+   "capital": "Managua",
+   "aliases": [],
+   "lat": 12.67,
+   "lng": -85.07,
+   "population": null,
+   "flag": "🇳🇮",
+   "landlocked": false,
+   "zoom": 6.5,
+   "borders": [
+    "CR",
+    "HN"
+   ]
+  },
+  {
+   "code": "NE",
+   "alpha3": "NER",
+   "name": "Niger",
+   "region": "Africa",
+   "subregion": "Western Africa",
+   "capital": "Niamey",
+   "aliases": [],
+   "lat": 17.45,
+   "lng": 9.5,
+   "population": null,
+   "flag": "🇳🇪",
+   "landlocked": true,
+   "zoom": 5,
+   "borders": [
+    "BF",
+    "BJ",
+    "CM",
+    "DZ",
+    "LY",
+    "ML",
+    "NG",
+    "TD"
+   ]
+  },
+  {
+   "code": "NG",
+   "alpha3": "NGA",
+   "name": "Nigeria",
+   "region": "Africa",
+   "subregion": "Western Africa",
+   "capital": "Abuja",
+   "aliases": [
+    "Naija"
+   ],
+   "lat": 9.082,
+   "lng": 8.6753,
+   "population": 232700000,
+   "flag": "🇳🇬",
+   "landlocked": false,
+   "zoom": 5,
+   "borders": [
+    "BJ",
+    "CM",
+    "NE",
+    "TD"
+   ]
+  },
+  {
+   "code": "KP",
+   "alpha3": "PRK",
+   "name": "North Korea",
+   "region": "Asia",
+   "subregion": "Eastern Asia",
+   "capital": "Pyongyang",
+   "aliases": [
+    "DPRK",
+    "Democratic People's Republic of Korea"
+   ],
+   "lat": 40.3399,
+   "lng": 127.5101,
+   "population": 26200000,
+   "flag": "🇰🇵",
+   "landlocked": false,
+   "zoom": 6,
+   "borders": [
+    "CN",
+    "KR",
+    "RU"
+   ]
+  },
+  {
+   "code": "MK",
+   "alpha3": "MKD",
+   "name": "North Macedonia",
+   "region": "Europe",
+   "subregion": "Southern Europe",
+   "capital": "Skopje",
+   "aliases": [
+    "Macedonia"
+   ],
+   "lat": 41.56,
+   "lng": 21.56,
+   "population": null,
+   "flag": "🇲🇰",
+   "landlocked": true,
+   "zoom": 7.5,
+   "borders": [
+    "AL",
+    "BG",
+    "GR",
+    "RS",
+    "XK"
+   ]
+  },
+  {
+   "code": "NO",
+   "alpha3": "NOR",
+   "name": "Norway",
+   "region": "Europe",
+   "subregion": "Northern Europe",
+   "capital": "Oslo",
+   "aliases": [
+    "Norge",
+    "Noreg"
+   ],
+   "lat": 61.36,
+   "lng": 9.68,
+   "population": null,
+   "flag": "🇳🇴",
+   "landlocked": false,
+   "zoom": 4,
+   "borders": [
+    "FI",
+    "RU",
+    "SE"
+   ]
+  },
+  {
+   "code": "OM",
+   "alpha3": "OMN",
+   "name": "Oman",
+   "region": "Middle East",
+   "subregion": "Western Asia",
+   "capital": "Muscat",
+   "aliases": [],
+   "lat": 22.12,
+   "lng": 57.34,
+   "population": null,
+   "flag": "🇴🇲",
+   "landlocked": false,
+   "zoom": 5.5,
+   "borders": [
+    "AE",
+    "SA",
+    "YE"
+   ]
+  },
+  {
+   "code": "PK",
+   "alpha3": "PAK",
+   "name": "Pakistan",
+   "region": "Asia",
+   "subregion": "Southern Asia",
+   "capital": "Islamabad",
+   "aliases": [],
+   "lat": 30.3753,
+   "lng": 69.3451,
+   "population": 247500000,
+   "flag": "🇵🇰",
+   "landlocked": false,
+   "zoom": 4.5,
+   "borders": [
+    "AF",
+    "CN",
+    "IN",
+    "IR"
+   ]
+  },
+  {
+   "code": "PW",
+   "alpha3": "PLW",
+   "name": "Palau",
+   "region": "Oceania",
+   "subregion": "Micronesia",
+   "capital": "Ngerulmud",
+   "aliases": [],
+   "lat": 7.51,
+   "lng": 134.58,
+   "population": null,
+   "flag": "🇵🇼",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "PS",
+   "alpha3": "PSE",
+   "name": "Palestinian Territories",
+   "region": "Middle East",
+   "subregion": "Western Asia",
+   "capital": "Ramallah",
+   "aliases": [
+    "Palestine",
+    "State of Palestine",
+    "West Bank",
+    "Gaza"
+   ],
+   "lat": 31.9522,
+   "lng": 35.2332,
+   "population": 5400000,
+   "flag": "🇵🇸",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": [
+    "EG",
+    "IL",
+    "JO"
+   ]
+  },
+  {
+   "code": "PA",
+   "alpha3": "PAN",
+   "name": "Panama",
+   "region": "Americas",
+   "subregion": "Central America",
+   "capital": "Panama City",
+   "aliases": [],
+   "lat": 8.72,
+   "lng": -80.35,
+   "population": null,
+   "flag": "🇵🇦",
+   "landlocked": false,
+   "zoom": 6.5,
+   "borders": [
+    "CO",
+    "CR"
+   ]
+  },
+  {
+   "code": "PG",
+   "alpha3": "PNG",
+   "name": "Papua New Guinea",
+   "region": "Oceania",
+   "subregion": "Melanesia",
+   "capital": "Port Moresby",
+   "aliases": [],
+   "lat": -5.7,
+   "lng": 143.91,
+   "population": null,
+   "flag": "🇵🇬",
+   "landlocked": false,
+   "zoom": 5,
+   "borders": [
+    "ID"
+   ]
+  },
+  {
+   "code": "PY",
+   "alpha3": "PRY",
+   "name": "Paraguay",
+   "region": "Americas",
+   "subregion": "South America",
+   "capital": "Asunción",
+   "aliases": [],
+   "lat": -21.67,
+   "lng": -60.15,
+   "population": null,
+   "flag": "🇵🇾",
+   "landlocked": true,
+   "zoom": 5.5,
+   "borders": [
+    "AR",
+    "BO",
+    "BR"
+   ]
+  },
+  {
+   "code": "PE",
+   "alpha3": "PER",
+   "name": "Peru",
+   "region": "Americas",
+   "subregion": "South America",
+   "capital": "Lima",
+   "aliases": [],
+   "lat": -12.98,
+   "lng": -72.9,
+   "population": null,
+   "flag": "🇵🇪",
+   "landlocked": false,
+   "zoom": 4.5,
+   "borders": [
+    "BO",
+    "BR",
+    "CL",
+    "CO",
+    "EC"
+   ]
+  },
+  {
+   "code": "PH",
+   "alpha3": "PHL",
+   "name": "Philippines",
+   "region": "Asia",
+   "subregion": "South-eastern Asia",
+   "capital": "Manila",
+   "aliases": [],
+   "lat": 11.2,
+   "lng": 122.47,
+   "population": null,
+   "flag": "🇵🇭",
+   "landlocked": false,
+   "zoom": 5,
+   "borders": []
+  },
+  {
+   "code": "PL",
+   "alpha3": "POL",
+   "name": "Poland",
+   "region": "Europe",
+   "subregion": "Eastern Europe",
+   "capital": "Warsaw",
+   "aliases": [
+    "Polska"
+   ],
+   "lat": 51.9194,
+   "lng": 19.1451,
+   "population": 37700000,
+   "flag": "🇵🇱",
+   "landlocked": false,
+   "zoom": 5.5,
+   "borders": [
+    "BY",
+    "CZ",
+    "DE",
+    "LT",
+    "RU",
+    "SK",
+    "UA"
+   ]
+  },
+  {
+   "code": "PT",
+   "alpha3": "PRT",
+   "name": "Portugal",
+   "region": "Europe",
+   "subregion": "Southern Europe",
+   "capital": "Lisbon",
+   "aliases": [
+    "Portugal"
+   ],
+   "lat": 39.61,
+   "lng": -8.27,
+   "population": null,
+   "flag": "🇵🇹",
+   "landlocked": false,
+   "zoom": 6.5,
+   "borders": [
+    "ES"
+   ]
+  },
+  {
+   "code": "QA",
+   "alpha3": "QAT",
+   "name": "Qatar",
+   "region": "Middle East",
+   "subregion": "Western Asia",
+   "capital": "Doha",
+   "aliases": [],
+   "lat": 25.24,
+   "lng": 51.14,
+   "population": null,
+   "flag": "🇶🇦",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": [
+    "SA"
+   ]
+  },
+  {
+   "code": "CG",
+   "alpha3": "COG",
+   "name": "Republic of the Congo",
+   "region": "Africa",
+   "subregion": "Middle Africa",
+   "capital": "Brazzaville",
+   "aliases": [
+    "Congo",
+    "Congo-Brazzaville",
+    "Congo Brazzaville"
+   ],
+   "lat": 0.14,
+   "lng": 15.9,
+   "population": null,
+   "flag": "🇨🇬",
+   "landlocked": false,
+   "zoom": 5.5,
+   "borders": [
+    "AO",
+    "CD",
+    "CF",
+    "CM",
+    "GA"
+   ]
+  },
+  {
+   "code": "RO",
+   "alpha3": "ROU",
+   "name": "Romania",
+   "region": "Europe",
+   "subregion": "Eastern Europe",
+   "capital": "Bucharest",
+   "aliases": [
+    "România"
+   ],
+   "lat": 45.73,
+   "lng": 24.97,
+   "population": null,
+   "flag": "🇷🇴",
+   "landlocked": false,
+   "zoom": 5.5,
+   "borders": [
+    "BG",
+    "HU",
+    "MD",
+    "RS",
+    "UA"
+   ]
+  },
+  {
+   "code": "RU",
+   "alpha3": "RUS",
+   "name": "Russia",
+   "region": "Europe",
+   "subregion": "Eastern Europe",
+   "capital": "Moscow",
+   "aliases": [
+    "Russian Federation",
+    "Rossiya",
+    "Россия"
+   ],
+   "lat": 61.524,
+   "lng": 105.3188,
+   "population": 143800000,
+   "flag": "🇷🇺",
+   "landlocked": false,
+   "zoom": 2.5,
+   "borders": [
+    "AZ",
+    "BY",
+    "CN",
+    "EE",
+    "FI",
+    "GE",
+    "KP",
+    "KZ",
+    "LT",
+    "LV",
+    "MN",
+    "NO",
+    "PL",
+    "UA"
+   ]
+  },
+  {
+   "code": "RW",
+   "alpha3": "RWA",
+   "name": "Rwanda",
+   "region": "Africa",
+   "subregion": "Eastern Africa",
+   "capital": "Kigali",
+   "aliases": [],
+   "lat": -1.9,
+   "lng": 30.1,
+   "population": null,
+   "flag": "🇷🇼",
+   "landlocked": true,
+   "zoom": 8,
+   "borders": [
+    "BI",
+    "CD",
+    "TZ",
+    "UG"
+   ]
+  },
+  {
+   "code": "KN",
+   "alpha3": "KNA",
+   "name": "Saint Kitts and Nevis",
+   "region": "Americas",
+   "subregion": "Caribbean",
+   "capital": "Basseterre",
+   "aliases": [],
+   "lat": 17.36,
+   "lng": -62.78,
+   "population": null,
+   "flag": "🇰🇳",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "LC",
+   "alpha3": "LCA",
+   "name": "Saint Lucia",
+   "region": "Americas",
+   "subregion": "Caribbean",
+   "capital": "Castries",
+   "aliases": [],
+   "lat": 13.91,
+   "lng": -60.98,
+   "population": null,
+   "flag": "🇱🇨",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "VC",
+   "alpha3": "VCT",
+   "name": "Saint Vincent and the Grenadines",
+   "region": "Americas",
+   "subregion": "Caribbean",
+   "capital": "Kingstown",
+   "aliases": [],
+   "lat": 12.98,
+   "lng": -61.29,
+   "population": null,
+   "flag": "🇻🇨",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "WS",
+   "alpha3": "WSM",
+   "name": "Samoa",
+   "region": "Oceania",
+   "subregion": "Polynesia",
+   "capital": "Apia",
+   "aliases": [],
+   "lat": -13.76,
+   "lng": -172.1,
+   "population": null,
+   "flag": "🇼🇸",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "SM",
+   "alpha3": "SMR",
+   "name": "San Marino",
+   "region": "Europe",
+   "subregion": "Southern Europe",
+   "capital": "San Marino",
+   "aliases": [],
+   "lat": 43.94,
+   "lng": 12.46,
+   "population": null,
+   "flag": "🇸🇲",
+   "landlocked": true,
+   "zoom": 8,
+   "borders": [
+    "IT"
+   ]
+  },
+  {
+   "code": "ST",
+   "alpha3": "STP",
+   "name": "São Tomé and Príncipe",
+   "region": "Africa",
+   "subregion": "Middle Africa",
+   "capital": "São Tomé",
+   "aliases": [
+    "Sao Tome and Principe"
+   ],
+   "lat": 0.19,
+   "lng": 6.61,
+   "population": null,
+   "flag": "🇸🇹",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "SA",
+   "alpha3": "SAU",
+   "name": "Saudi Arabia",
+   "region": "Middle East",
+   "subregion": "Western Asia",
+   "capital": "Riyadh",
+   "aliases": [
+    "KSA"
+   ],
+   "lat": 23.8859,
+   "lng": 45.0792,
+   "population": 36900000,
+   "flag": "🇸🇦",
+   "landlocked": false,
+   "zoom": 4.5,
+   "borders": [
+    "AE",
+    "IQ",
+    "JO",
+    "KW",
+    "OM",
+    "QA",
+    "YE"
+   ]
+  },
+  {
+   "code": "SN",
+   "alpha3": "SEN",
+   "name": "Senegal",
+   "region": "Africa",
+   "subregion": "Western Africa",
+   "capital": "Dakar",
+   "aliases": [],
+   "lat": 15.14,
+   "lng": -14.78,
+   "population": null,
+   "flag": "🇸🇳",
+   "landlocked": false,
+   "zoom": 6,
+   "borders": [
+    "GM",
+    "GN",
+    "GW",
+    "ML",
+    "MR"
+   ]
+  },
+  {
+   "code": "RS",
+   "alpha3": "SRB",
+   "name": "Serbia",
+   "region": "Europe",
+   "subregion": "Southern Europe",
+   "capital": "Belgrade",
+   "aliases": [
+    "Srbija"
+   ],
+   "lat": 44.19,
+   "lng": 20.79,
+   "population": null,
+   "flag": "🇷🇸",
+   "landlocked": true,
+   "zoom": 6.5,
+   "borders": [
+    "BA",
+    "BG",
+    "HR",
+    "HU",
+    "ME",
+    "MK",
+    "RO",
+    "XK"
+   ]
+  },
+  {
+   "code": "SC",
+   "alpha3": "SYC",
+   "name": "Seychelles",
+   "region": "Africa",
+   "subregion": "Eastern Africa",
+   "capital": "Victoria",
+   "aliases": [],
+   "lat": -4.68,
+   "lng": 55.49,
+   "population": null,
+   "flag": "🇸🇨",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "SL",
+   "alpha3": "SLE",
+   "name": "Sierra Leone",
+   "region": "Africa",
+   "subregion": "Western Africa",
+   "capital": "Freetown",
+   "aliases": [],
+   "lat": 8.62,
+   "lng": -11.76,
+   "population": null,
+   "flag": "🇸🇱",
+   "landlocked": false,
+   "zoom": 7,
+   "borders": [
+    "GN",
+    "LR"
+   ]
+  },
+  {
+   "code": "SG",
+   "alpha3": "SGP",
+   "name": "Singapore",
+   "region": "Asia",
+   "subregion": "South-eastern Asia",
+   "capital": "Singapore",
+   "aliases": [],
+   "lat": 1.35,
+   "lng": 103.82,
+   "population": null,
+   "flag": "🇸🇬",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "SK",
+   "alpha3": "SVK",
+   "name": "Slovakia",
+   "region": "Europe",
+   "subregion": "Eastern Europe",
+   "capital": "Bratislava",
+   "aliases": [
+    "Slovensko"
+   ],
+   "lat": 48.73,
+   "lng": 19.05,
+   "population": null,
+   "flag": "🇸🇰",
+   "landlocked": true,
+   "zoom": 6.5,
+   "borders": [
+    "AT",
+    "CZ",
+    "HU",
+    "PL",
+    "UA"
+   ]
+  },
+  {
+   "code": "SI",
+   "alpha3": "SVN",
+   "name": "Slovenia",
+   "region": "Europe",
+   "subregion": "Southern Europe",
+   "capital": "Ljubljana",
+   "aliases": [],
+   "lat": 46.06,
+   "lng": 14.92,
+   "population": null,
+   "flag": "🇸🇮",
+   "landlocked": false,
+   "zoom": 7.5,
+   "borders": [
+    "AT",
+    "HR",
+    "HU",
+    "IT"
+   ]
+  },
+  {
+   "code": "SB",
+   "alpha3": "SLB",
+   "name": "Solomon Islands",
+   "region": "Oceania",
+   "subregion": "Melanesia",
+   "capital": "Honiara",
+   "aliases": [],
+   "lat": -8.03,
+   "lng": 159.17,
+   "population": null,
+   "flag": "🇸🇧",
+   "landlocked": false,
+   "zoom": 6,
+   "borders": []
+  },
+  {
+   "code": "SO",
+   "alpha3": "SOM",
+   "name": "Somalia",
+   "region": "Africa",
+   "subregion": "Eastern Africa",
+   "capital": "Mogadishu",
+   "aliases": [],
+   "lat": 5.1521,
+   "lng": 46.1996,
+   "population": 18100000,
+   "flag": "🇸🇴",
+   "landlocked": false,
+   "zoom": 5,
+   "borders": [
+    "DJ",
+    "ET",
+    "KE"
+   ]
+  },
+  {
+   "code": "ZA",
+   "alpha3": "ZAF",
+   "name": "South Africa",
+   "region": "Africa",
+   "subregion": "Southern Africa",
+   "capital": "Pretoria",
+   "aliases": [
+    "RSA"
+   ],
+   "lat": -29.71,
+   "lng": 23.67,
+   "population": null,
+   "flag": "🇿🇦",
+   "landlocked": false,
+   "zoom": 4.5,
+   "borders": [
+    "BW",
+    "LS",
+    "MZ",
+    "NA",
+    "SZ",
+    "ZW"
+   ]
+  },
+  {
+   "code": "KR",
+   "alpha3": "KOR",
+   "name": "South Korea",
+   "region": "Asia",
+   "subregion": "Eastern Asia",
+   "capital": "Seoul",
+   "aliases": [
+    "Republic of Korea",
+    "Korea"
+   ],
+   "lat": 35.9078,
+   "lng": 127.7669,
+   "population": 51700000,
+   "flag": "🇰🇷",
+   "landlocked": false,
+   "zoom": 6.5,
+   "borders": [
+    "KP"
+   ]
+  },
+  {
+   "code": "SS",
+   "alpha3": "SSD",
+   "name": "South Sudan",
+   "region": "Africa",
+   "subregion": "Eastern Africa",
+   "capital": "Juba",
+   "aliases": [],
+   "lat": 7.23,
+   "lng": 30.39,
+   "population": null,
+   "flag": "🇸🇸",
+   "landlocked": true,
+   "zoom": 5.5,
+   "borders": [
+    "CD",
+    "CF",
+    "ET",
+    "KE",
+    "SD",
+    "UG"
+   ]
+  },
+  {
+   "code": "ES",
+   "alpha3": "ESP",
+   "name": "Spain",
+   "region": "Europe",
+   "subregion": "Southern Europe",
+   "capital": "Madrid",
+   "aliases": [
+    "España"
+   ],
+   "lat": 40.09,
+   "lng": -3.46,
+   "population": null,
+   "flag": "🇪🇸",
+   "landlocked": false,
+   "zoom": 5,
+   "borders": [
+    "AD",
+    "FR",
+    "PT"
+   ]
+  },
+  {
+   "code": "LK",
+   "alpha3": "LKA",
+   "name": "Sri Lanka",
+   "region": "Asia",
+   "subregion": "Southern Asia",
+   "capital": "Sri Jayawardenepura Kotte",
+   "aliases": [],
+   "lat": 7.58,
+   "lng": 80.7,
+   "population": null,
+   "flag": "🇱🇰",
+   "landlocked": false,
+   "zoom": 7,
+   "borders": []
+  },
+  {
+   "code": "SD",
+   "alpha3": "SDN",
+   "name": "Sudan",
+   "region": "Africa",
+   "subregion": "Northern Africa",
+   "capital": "Khartoum",
+   "aliases": [
+    "As-Sudan"
+   ],
+   "lat": 12.8628,
+   "lng": 30.2176,
+   "population": 48100000,
+   "flag": "🇸🇩",
+   "landlocked": false,
+   "zoom": 4.5,
+   "borders": [
+    "CF",
+    "EG",
+    "ER",
+    "ET",
+    "LY",
+    "SS",
+    "TD"
+   ]
+  },
+  {
+   "code": "SR",
+   "alpha3": "SUR",
+   "name": "Suriname",
+   "region": "Americas",
+   "subregion": "South America",
+   "capital": "Paramaribo",
+   "aliases": [],
+   "lat": 4.14,
+   "lng": -55.91,
+   "population": null,
+   "flag": "🇸🇷",
+   "landlocked": false,
+   "zoom": 6.5,
+   "borders": [
+    "BR",
+    "FR",
+    "GY"
+   ]
+  },
+  {
+   "code": "SE",
+   "alpha3": "SWE",
+   "name": "Sweden",
+   "region": "Europe",
+   "subregion": "Northern Europe",
+   "capital": "Stockholm",
+   "aliases": [
+    "Sverige",
+    "Sweden"
+   ],
+   "lat": 65.86,
+   "lng": 19.02,
+   "population": null,
+   "flag": "🇸🇪",
+   "landlocked": false,
+   "zoom": 5,
+   "borders": [
+    "FI",
+    "NO"
+   ]
+  },
+  {
+   "code": "CH",
+   "alpha3": "CHE",
+   "name": "Switzerland",
+   "region": "Europe",
+   "subregion": "Western Europe",
+   "capital": "Bern",
+   "aliases": [
+    "Schweiz",
+    "Suisse",
+    "Svizzera"
+   ],
+   "lat": 46.72,
+   "lng": 7.46,
+   "population": null,
+   "flag": "🇨🇭",
+   "landlocked": true,
+   "zoom": 6.5,
+   "borders": [
+    "AT",
+    "DE",
+    "FR",
+    "IT",
+    "LI"
+   ]
+  },
+  {
+   "code": "SY",
+   "alpha3": "SYR",
+   "name": "Syria",
+   "region": "Middle East",
+   "subregion": "Western Asia",
+   "capital": "Damascus",
+   "aliases": [
+    "Syrian Arab Republic"
+   ],
+   "lat": 34.8021,
+   "lng": 38.9968,
+   "population": 23200000,
+   "flag": "🇸🇾",
+   "landlocked": false,
+   "zoom": 6,
+   "borders": [
+    "IL",
+    "IQ",
+    "JO",
+    "LB",
+    "TR"
+   ]
+  },
+  {
+   "code": "TW",
+   "alpha3": "TWN",
+   "name": "Taiwan",
+   "region": "Asia",
+   "subregion": "Eastern Asia",
+   "capital": "Taipei",
+   "aliases": [
+    "Republic of China",
+    "Chinese Taipei"
+   ],
+   "lat": 23.6978,
+   "lng": 120.9605,
+   "population": 23600000,
+   "flag": "🇹🇼",
+   "landlocked": false,
+   "zoom": 7,
+   "borders": []
+  },
+  {
+   "code": "TJ",
+   "alpha3": "TJK",
+   "name": "Tajikistan",
+   "region": "Asia",
+   "subregion": "Central Asia",
+   "capital": "Dushanbe",
+   "aliases": [],
+   "lat": 38.2,
+   "lng": 72.59,
+   "population": null,
+   "flag": "🇹🇯",
+   "landlocked": true,
+   "zoom": 6,
+   "borders": [
+    "AF",
+    "CN",
+    "KG",
+    "UZ"
+   ]
+  },
+  {
+   "code": "TZ",
+   "alpha3": "TZA",
+   "name": "Tanzania",
+   "region": "Africa",
+   "subregion": "Eastern Africa",
+   "capital": "Dodoma",
+   "aliases": [],
+   "lat": -6.05,
+   "lng": 34.96,
+   "population": null,
+   "flag": "🇹🇿",
+   "landlocked": false,
+   "zoom": 5.5,
+   "borders": [
+    "BI",
+    "CD",
+    "KE",
+    "MW",
+    "MZ",
+    "RW",
+    "UG",
+    "ZM"
+   ]
+  },
+  {
+   "code": "TH",
+   "alpha3": "THA",
+   "name": "Thailand",
+   "region": "Asia",
+   "subregion": "South-eastern Asia",
+   "capital": "Bangkok",
+   "aliases": [
+    "Siam"
+   ],
+   "lat": 15.46,
+   "lng": 101.07,
+   "population": null,
+   "flag": "🇹🇭",
+   "landlocked": false,
+   "zoom": 5,
+   "borders": [
+    "KH",
+    "LA",
+    "MM",
+    "MY"
+   ]
+  },
+  {
+   "code": "TL",
+   "alpha3": "TLS",
+   "name": "Timor-Leste",
+   "region": "Asia",
+   "subregion": "South-eastern Asia",
+   "capital": "Dili",
+   "aliases": [
+    "East Timor"
+   ],
+   "lat": -8.8,
+   "lng": 125.85,
+   "population": null,
+   "flag": "🇹🇱",
+   "landlocked": false,
+   "zoom": 7.5,
+   "borders": [
+    "ID"
+   ]
+  },
+  {
+   "code": "TG",
+   "alpha3": "TGO",
+   "name": "Togo",
+   "region": "Africa",
+   "subregion": "Western Africa",
+   "capital": "Lomé",
+   "aliases": [],
+   "lat": 8.81,
+   "lng": 1.06,
+   "population": null,
+   "flag": "🇹🇬",
+   "landlocked": false,
+   "zoom": 6.5,
+   "borders": [
+    "BF",
+    "BJ",
+    "GH"
+   ]
+  },
+  {
+   "code": "TO",
+   "alpha3": "TON",
+   "name": "Tonga",
+   "region": "Oceania",
+   "subregion": "Polynesia",
+   "capital": "Nuku'alofa",
+   "aliases": [],
+   "lat": -21.18,
+   "lng": -175.2,
+   "population": null,
+   "flag": "🇹🇴",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "TT",
+   "alpha3": "TTO",
+   "name": "Trinidad and Tobago",
+   "region": "Americas",
+   "subregion": "Caribbean",
+   "capital": "Port of Spain",
+   "aliases": [],
+   "lat": 11,
+   "lng": -60.92,
+   "population": null,
+   "flag": "🇹🇹",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "TN",
+   "alpha3": "TUN",
+   "name": "Tunisia",
+   "region": "Africa",
+   "subregion": "Northern Africa",
+   "capital": "Tunis",
+   "aliases": [],
+   "lat": 33.69,
+   "lng": 9.01,
+   "population": null,
+   "flag": "🇹🇳",
+   "landlocked": false,
+   "zoom": 6,
+   "borders": [
+    "DZ",
+    "LY"
+   ]
+  },
+  {
+   "code": "TR",
+   "alpha3": "TUR",
+   "name": "Turkey",
+   "region": "Europe",
+   "subregion": "Western Asia",
+   "capital": "Ankara",
+   "aliases": [
+    "Türkiye",
+    "Turkiye"
+   ],
+   "lat": 38.9637,
+   "lng": 35.2433,
+   "population": 85700000,
+   "flag": "🇹🇷",
+   "landlocked": false,
+   "zoom": 4.5,
+   "borders": [
+    "AM",
+    "AZ",
+    "BG",
+    "GE",
+    "GR",
+    "IQ",
+    "IR",
+    "SY"
+   ]
+  },
+  {
+   "code": "TM",
+   "alpha3": "TKM",
+   "name": "Turkmenistan",
+   "region": "Asia",
+   "subregion": "Central Asia",
+   "capital": "Ashgabat",
+   "aliases": [],
+   "lat": 39.86,
+   "lng": 58.68,
+   "population": null,
+   "flag": "🇹🇲",
+   "landlocked": true,
+   "zoom": 5,
+   "borders": [
+    "AF",
+    "IR",
+    "KZ",
+    "UZ"
+   ]
+  },
+  {
+   "code": "TV",
+   "alpha3": "TUV",
+   "name": "Tuvalu",
+   "region": "Oceania",
+   "subregion": "Polynesia",
+   "capital": "Funafuti",
+   "aliases": [],
+   "lat": -7.11,
+   "lng": 177.65,
+   "population": null,
+   "flag": "🇹🇻",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "UG",
+   "alpha3": "UGA",
+   "name": "Uganda",
+   "region": "Africa",
+   "subregion": "Eastern Africa",
+   "capital": "Kampala",
+   "aliases": [],
+   "lat": 1.97,
+   "lng": 32.95,
+   "population": null,
+   "flag": "🇺🇬",
+   "landlocked": true,
+   "zoom": 6.5,
+   "borders": [
+    "CD",
+    "KE",
+    "RW",
+    "SS",
+    "TZ"
+   ]
+  },
+  {
+   "code": "UA",
+   "alpha3": "UKR",
+   "name": "Ukraine",
+   "region": "Europe",
+   "subregion": "Eastern Europe",
+   "capital": "Kyiv",
+   "aliases": [
+    "Ukraina",
+    "Україна"
+   ],
+   "lat": 48.3794,
+   "lng": 31.1656,
+   "population": 36700000,
+   "flag": "🇺🇦",
+   "landlocked": false,
+   "zoom": 4.5,
+   "borders": [
+    "BY",
+    "HU",
+    "MD",
+    "PL",
+    "RO",
+    "RU",
+    "SK"
+   ]
+  },
+  {
+   "code": "AE",
+   "alpha3": "ARE",
+   "name": "United Arab Emirates",
+   "region": "Middle East",
+   "subregion": "Western Asia",
+   "capital": "Abu Dhabi",
+   "aliases": [
+    "UAE",
+    "Emirates"
+   ],
+   "lat": 23.47,
+   "lng": 54.55,
+   "population": null,
+   "flag": "🇦🇪",
+   "landlocked": false,
+   "zoom": 6.5,
+   "borders": [
+    "OM",
+    "SA"
+   ]
+  },
+  {
+   "code": "GB",
+   "alpha3": "GBR",
+   "name": "United Kingdom",
+   "region": "Europe",
+   "subregion": "Northern Europe",
+   "capital": "London",
+   "aliases": [
+    "UK",
+    "Britain",
+    "Great Britain",
+    "England"
+   ],
+   "lat": 55.3781,
+   "lng": -3.436,
+   "population": 68100000,
+   "flag": "🇬🇧",
+   "landlocked": false,
+   "zoom": 5.5,
+   "borders": [
+    "IE"
+   ]
+  },
+  {
+   "code": "US",
+   "alpha3": "USA",
+   "name": "United States",
+   "region": "Americas",
+   "subregion": "Northern America",
+   "capital": "Washington, D.C.",
+   "aliases": [
+    "USA",
+    "United States of America",
+    "America",
+    "U.S."
+   ],
+   "lat": 37.0902,
+   "lng": -95.7129,
+   "population": 341800000,
+   "flag": "🇺🇸",
+   "landlocked": false,
+   "zoom": 2.5,
+   "borders": [
+    "CA",
+    "MX"
+   ]
+  },
+  {
+   "code": "UY",
+   "alpha3": "URY",
+   "name": "Uruguay",
+   "region": "Americas",
+   "subregion": "South America",
+   "capital": "Montevideo",
+   "aliases": [],
+   "lat": -32.96,
+   "lng": -55.97,
+   "population": null,
+   "flag": "🇺🇾",
+   "landlocked": false,
+   "zoom": 6.5,
+   "borders": [
+    "AR",
+    "BR"
+   ]
+  },
+  {
+   "code": "UZ",
+   "alpha3": "UZB",
+   "name": "Uzbekistan",
+   "region": "Asia",
+   "subregion": "Central Asia",
+   "capital": "Tashkent",
+   "aliases": [],
+   "lat": 41.69,
+   "lng": 64.01,
+   "population": null,
+   "flag": "🇺🇿",
+   "landlocked": true,
+   "zoom": 4.5,
+   "borders": [
+    "AF",
+    "KG",
+    "KZ",
+    "TJ",
+    "TM"
+   ]
+  },
+  {
+   "code": "VU",
+   "alpha3": "VUT",
+   "name": "Vanuatu",
+   "region": "Oceania",
+   "subregion": "Melanesia",
+   "capital": "Port Vila",
+   "aliases": [],
+   "lat": -15.37,
+   "lng": 166.91,
+   "population": null,
+   "flag": "🇻🇺",
+   "landlocked": false,
+   "zoom": 8,
+   "borders": []
+  },
+  {
+   "code": "VA",
+   "alpha3": "VAT",
+   "name": "Vatican City",
+   "region": "Europe",
+   "subregion": "Southern Europe",
+   "capital": "Vatican City",
+   "aliases": [
+    "Holy See"
+   ],
+   "lat": 41.9,
+   "lng": 12.45,
+   "population": null,
+   "flag": "🇻🇦",
+   "landlocked": true,
+   "zoom": 8,
+   "borders": [
+    "IT"
+   ]
+  },
+  {
+   "code": "VE",
+   "alpha3": "VEN",
+   "name": "Venezuela",
+   "region": "Americas",
+   "subregion": "South America",
+   "capital": "Caracas",
+   "aliases": [],
+   "lat": 7.18,
+   "lng": -64.6,
+   "population": null,
+   "flag": "🇻🇪",
+   "landlocked": false,
+   "zoom": 5,
+   "borders": [
+    "BR",
+    "CO",
+    "GY"
+   ]
+  },
+  {
+   "code": "VN",
+   "alpha3": "VNM",
+   "name": "Vietnam",
+   "region": "Asia",
+   "subregion": "South-eastern Asia",
+   "capital": "Hanoi",
+   "aliases": [
+    "Viet Nam"
+   ],
+   "lat": 21.72,
+   "lng": 105.39,
+   "population": null,
+   "flag": "🇻🇳",
+   "landlocked": false,
+   "zoom": 5,
+   "borders": [
+    "CN",
+    "KH",
+    "LA"
+   ]
+  },
+  {
+   "code": "YE",
+   "alpha3": "YEM",
+   "name": "Yemen",
+   "region": "Middle East",
+   "subregion": "Western Asia",
+   "capital": "Sana'a",
+   "aliases": [
+    "Yemen Arab Republic"
+   ],
+   "lat": 15.5527,
+   "lng": 48.5164,
+   "population": 34400000,
+   "flag": "🇾🇪",
+   "landlocked": false,
+   "zoom": 5.5,
+   "borders": [
+    "OM",
+    "SA"
+   ]
+  },
+  {
+   "code": "ZM",
+   "alpha3": "ZMB",
+   "name": "Zambia",
+   "region": "Africa",
+   "subregion": "Eastern Africa",
+   "capital": "Lusaka",
+   "aliases": [],
+   "lat": -14.66,
+   "lng": 26.4,
+   "population": null,
+   "flag": "🇿🇲",
+   "landlocked": true,
+   "zoom": 5.5,
+   "borders": [
+    "AO",
+    "BW",
+    "CD",
+    "MW",
+    "MZ",
+    "NA",
+    "TZ",
+    "ZW"
+   ]
+  },
+  {
+   "code": "ZW",
+   "alpha3": "ZWE",
+   "name": "Zimbabwe",
+   "region": "Africa",
+   "subregion": "Eastern Africa",
+   "capital": "Harare",
+   "aliases": [],
+   "lat": -18.91,
+   "lng": 29.93,
+   "population": null,
+   "flag": "🇿🇼",
+   "landlocked": true,
+   "zoom": 6,
+   "borders": [
+    "BW",
+    "MZ",
+    "ZA",
+    "ZM"
+   ]
+  }
+ ]
+}

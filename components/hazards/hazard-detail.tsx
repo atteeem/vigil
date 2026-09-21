@@ -5,6 +5,8 @@ import { FollowButton } from "@/components/watch/follow-button";
 import { RelativeTime } from "@/components/ui/relative-time";
 import type { HazardDetail } from "@/lib/hazards/public-types";
 import { hazardHeadline } from "@/lib/hazards/headline";
+import Link from "next/link";
+import { getCountryByCode } from "@/lib/reference/countries";
 import { cn } from "@/lib/utils";
 
 type Meta = Record<string, unknown>;
@@ -80,6 +82,13 @@ export function HazardDetailView({ detail: d, className }: { detail: HazardDetai
         {hazardHeadline(d)}
       </h2>
       {followTarget(d) && <FollowButton entityType={followTarget(d)!.entityType} entityKey={followTarget(d)!.entityKey} label={followTarget(d)!.label} className="mt-1.5" />}
+      {d.countryCode && getCountryByCode(d.countryCode) && (
+        <p className="mt-1 text-[11px]">
+          <Link href={`/country/${d.countryCode}`} className="text-accent hover:underline" data-testid="hazard-country-link">
+            {getCountryByCode(d.countryCode)!.name} country page
+          </Link>
+        </p>
+      )}
       {d.category === "earthquake" && d.description && <p className="text-xs text-ink-dim" data-testid="hazard-place">{d.description}</p>}
       {d.asOf && <p className="mt-1 text-[11px] text-accent" data-testid="hazard-asof">Reconstructed as known at {utc(d.asOf)}</p>}
 

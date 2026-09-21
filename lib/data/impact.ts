@@ -35,6 +35,10 @@ export { DIMENSION_LABEL };
 
 /** Only security is built from geography/severity/hard rules; the rest are
  * tag-and-intensity estimates until real supply-chain/market data feeds them. */
+/** The conflict-effect tag that gives a non-security dimension any evidence at all. Without it the
+ * dimension has no input and reads "insufficient data" rather than a filler number. */
+const DIMENSION_TAG: Partial<Record<ExposureDimension, string>> = { energy: "Energy", trade: "Trade", finance: "Finance", food_supply: "Food & Supply" };
+
 const DIMENSION_BASIS: Record<ExposureDimension, ImpactComponent["basis"]> = {
   security: "computed",
   energy: "estimated",
@@ -120,23 +124,22 @@ export function computeImpact(country: Country, conflict: Conflict): ConflictImp
   }
 
   const energyTerms: Term[] = [
-    { label: "Energy supply exposure", description: "The conflict is tagged as affecting energy supply.", points: effects.has("Energy") ? 38 : 8 },
+    { label: "Energy supply exposure", description: "The conflict is tagged as affecting energy supply.", points: effects.has("Energy") ? 38 : 0 },
     { label: "Proximity", description: "Geographic distance to the conflict.", points: proximity * 0.22 },
     { label: "Conflict intensity", description: "Current intensity of the conflict.", points: conflict.intensity * 0.24 },
   ];
   const tradeTerms: Term[] = [
-    { label: "Trade/shipping exposure", description: "The conflict is tagged as affecting trade.", points: effects.has("Trade") ? 34 : 8 },
+    { label: "Trade/shipping exposure", description: "The conflict is tagged as affecting trade.", points: effects.has("Trade") ? 34 : 0 },
     { label: "Proximity", description: "Geographic distance to the conflict.", points: proximity * 0.28 },
     { label: "Shared region", description: "The conflict is in your country's own region.", points: sameRegion ? 10 : 0 },
     { label: "Conflict intensity", description: "Current intensity of the conflict.", points: conflict.intensity * 0.14 },
   ];
   const financeTerms: Term[] = [
-    { label: "Baseline market exposure", description: "Any monitored conflict carries some market risk.", points: 14 },
     { label: "Conflict intensity", description: "Current intensity of the conflict.", points: conflict.intensity * 0.34 },
     { label: "Sanctions/economic exposure", description: "The conflict is tagged as affecting finance.", points: effects.has("Finance") ? 14 : 0 },
   ];
   const foodTerms: Term[] = [
-    { label: "Food/supply chain exposure", description: "The conflict is tagged as affecting food and supply.", points: effects.has("Food & Supply") ? 34 : 7 },
+    { label: "Food/supply chain exposure", description: "The conflict is tagged as affecting food and supply.", points: effects.has("Food & Supply") ? 34 : 0 },
     { label: "Proximity", description: "Geographic distance to the conflict.", points: proximity * 0.14 },
     { label: "Shared region", description: "The conflict is in your country's own region.", points: sameRegion ? 9 : 0 },
     { label: "Conflict intensity", description: "Current intensity of the conflict.", points: conflict.intensity * 0.09 },
@@ -152,6 +155,9 @@ export function computeImpact(country: Country, conflict: Conflict): ConflictImp
   };
 
   const components: ImpactComponent[] = DIMENSIONS.map((dimension) => {
+    const tag = DIMENSION_TAG[dimension];
+    // No tagged effect on this dimension: no evidence, so no number (never a proximity-only filler).
+    if (tag && !effects.has(tag)) return { dimension, value: 0, basis: "insufficient" as const, drivers: [] };
     const value = Math.round(raw[dimension].value);
     return { dimension, value, basis: DIMENSION_BASIS[dimension], drivers: driversFromTerms(raw[dimension].terms, value) };
   });
@@ -193,10 +199,12 @@ export function computeCountryExposure(country: Country, conflicts: readonly Con
   // shows Security 100 rather than being averaged away.
   const components: ImpactComponent[] = DIMENSIONS.map((dimension) => {
     const rows = perConflict
-      .map(({ conflict, impact }) => ({ conflict, value: impact.components.find((c) => c.dimension === dimension)?.value ?? 0 }))
+      .map(({ conflict, impact }) => ({ conflict, value: impact.components.find((c) => c.dimension === dimension)?.value ?? 0, basis: impact.components.find((c) => c.dimension === dimension)?.basis }))
       .sort((a, b) => b.value - a.value);
     const value = combineDamped(rows.map((r) => r.value));
     const lead = rows[0]?.conflict;
+    // A dimension with no evidence from any scored conflict is "insufficient", not a low number.
+    if (DIMENSION_TAG[dimension] && !rows.some((r) => r.basis !== "insufficient")) return { dimension, value: 0, basis: "insufficient" as const, drivers: [] };
     return {
       dimension,
       value,

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/client";
-import { COUNTRIES } from "@/lib/reference/countries";
+import { searchCountries } from "@/lib/countries/registry";
 import { normalizeEntityText } from "@/lib/military/aliases";
 import { entityHref } from "./entities";
 import { searchHazards } from "@/lib/hazards/query";
@@ -16,14 +16,11 @@ export interface SearchResult {
 export async function searchPublic(query: string, limit = 8): Promise<SearchResult[]> {
   const q = query.trim();
   if (q.length < 2) return [];
-  const lower = q.toLowerCase();
   const results: SearchResult[] = [];
 
-  for (const c of COUNTRIES) {
-    if (c.name.toLowerCase().includes(lower) || c.code.toLowerCase() === lower) {
-      results.push({ type: "country", id: c.code, title: c.name, subtitle: c.region, href: `/country/${c.code}` });
-    }
-  }
+  // Countries resolve through the canonical registry: ISO2, ISO3, canonical name or alias
+  // ("FI", "FIN", "Finland", "Suomi") all reach the same /country/[code] page.
+  for (const c of searchCountries(q, 5)) results.push({ type: "country", id: c.code, title: c.name, subtitle: `${c.region} · ${c.alpha3}`, href: `/country/${c.code}` });
   const norm = normalizeEntityText(q);
   const [conflicts, events, aliasHits] = await Promise.all([
     prisma.conflict.findMany({

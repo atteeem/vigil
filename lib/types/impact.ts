@@ -13,7 +13,7 @@ export interface ImpactComponent {
   /** "computed": derived from geography/severity/hard rules. "estimated":
    * a rule-of-thumb from the conflict's tagged effects and intensity — no
    * sourced energy/trade/finance/food data feeds it yet, and the UI says so. */
-  basis: "computed" | "estimated";
+  basis: "computed" | "estimated" | "insufficient";
 }
 
 export interface ImpactScore {

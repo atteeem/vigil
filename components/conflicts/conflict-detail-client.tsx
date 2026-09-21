@@ -106,9 +106,9 @@ export function ConflictDetailClient({ detail }: { detail: PublicConflictDetail 
       {/* Geography */}
       <Section title="Geography" testId="section-geography">
         <div className="grid gap-4 rounded-2xl border border-border bg-card/70 p-5 sm:grid-cols-3">
-          <GeoList label="Fighting occurs in" testId="geo-fighting" items={detail.geography.fighting.map((c) => c.name)} empty="No fighting geography recorded" />
-          <GeoList label="Participants / belligerents" testId="geo-participants" items={detail.geography.participants.map((c) => c.name)} empty="None recorded" />
-          <GeoList label="External supporters" testId="geo-supporters" items={detail.geography.supporters.map((c) => c.name)} empty="None recorded" />
+          <GeoList label="Fighting occurs in" testId="geo-fighting" items={detail.geography.fighting} empty="No fighting geography recorded" />
+          <GeoList label="Participants / belligerents" testId="geo-participants" items={detail.geography.participants} empty="None recorded" />
+          <GeoList label="External supporters" testId="geo-supporters" items={detail.geography.supporters} empty="None recorded" />
         </div>
         <p className="mt-2 text-xs text-ink-faint">
           {conflict.region}
@@ -410,11 +410,24 @@ function Section({ title, children, testId, aside }: { title: string; children: 
   );
 }
 
-function GeoList({ label, items, empty, testId }: { label: string; items: string[]; empty: string; testId: string }) {
+function GeoList({ label, items, empty, testId }: { label: string; items: { code: string; name: string }[]; empty: string; testId: string }) {
   return (
     <div data-testid={testId}>
       <p className="text-[11px] font-medium uppercase tracking-wide text-ink-faint">{label}</p>
-      <p className="mt-1 text-sm text-ink">{items.length > 0 ? items.join(", ") : <span className="text-ink-faint">{empty}</span>}</p>
+      <p className="mt-1 text-sm text-ink">
+        {items.length > 0 ? (
+          items.map((c, i) => (
+            <span key={c.code}>
+              {i > 0 && ", "}
+              <Link href={`/country/${c.code}`} className="hover:text-accent" data-testid="geo-country-link">
+                {c.name}
+              </Link>
+            </span>
+          ))
+        ) : (
+          <span className="text-ink-faint">{empty}</span>
+        )}
+      </p>
     </div>
   );
 }

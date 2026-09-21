@@ -78,6 +78,11 @@ export function DevelopmentCard({ d, showMap = true, historical = false }: { d: 
             {d.conflictName}
           </Link>
         )}
+        {d.countryCode && (
+          <Link href={`/country/${d.countryCode}`} className="hover:text-ink" data-testid="dev-country-link">
+            {d.countryCode}
+          </Link>
+        )}
         {showMap && (
           <Link href={mapHrefFor(d, { at: historical })} className="inline-flex items-center gap-1 text-accent hover:underline" data-testid="dev-map-link">
             <MapPin className="h-3 w-3" /> {d.mapTarget ? "View on map" : "Open"}

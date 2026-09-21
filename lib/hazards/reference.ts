@@ -1,5 +1,6 @@
 import airportData from "@/data/airports.json";
 import centroidData from "@/data/country-centroids.json";
+import { resolveCountry } from "@/lib/countries/registry";
 
 // Static reference data used to LOCATE structured events that name a place but carry no coordinates.
 // Airports: OurAirports (public domain), large airports and scheduled-service medium airports.
@@ -41,7 +42,7 @@ export function countryFromPlace(place: string | null | undefined): string | nul
   const last = (place ?? "").split(",").pop()?.trim().toLowerCase() ?? "";
   if (!last) return null;
   if (US_STATES.has(last)) return "US";
-  return NAME_ALIASES[last] ?? codeByName.get(last) ?? null;
+  return NAME_ALIASES[last] ?? codeByName.get(last) ?? resolveCountry(last)?.code ?? null;
 }
 
 /** Every country we can name (the reference list plus the Natural Earth centroid table). */

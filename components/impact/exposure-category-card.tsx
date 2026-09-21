@@ -24,6 +24,19 @@ export function ExposureCategoryCard({
   basis: ImpactComponent["basis"];
 }) {
   const severity = severityFromScore(value);
+  if (basis === "insufficient") {
+    return (
+      <div className="rounded-2xl border border-border bg-card/70 p-4" data-testid={`exposure-card-${dimension}`}>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">{DIMENSION_LABEL[dimension]}</p>
+        <p className="mt-1 text-sm font-medium text-ink-dim" data-testid={`exposure-insufficient-${dimension}`}>
+          Insufficient data
+        </p>
+        <p className="mt-2 text-[10px] uppercase tracking-wide text-ink-faint" data-testid={`exposure-basis-${dimension}`}>
+          No monitored conflict is tagged as affecting this
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-border bg-card/70 p-4" data-testid={`exposure-card-${dimension}`}>
@@ -38,7 +51,7 @@ export function ExposureCategoryCard({
       </div>
       <p className="text-[11px] text-ink-faint">{formatSigned(change24h)} today</p>
       <p className="mt-2 text-[10px] uppercase tracking-wide text-ink-faint" data-testid={`exposure-basis-${dimension}`}>
-        {basis === "estimated" ? "Estimated — no sourced data yet" : "Computed"}
+        {basis === "estimated" ? "Estimated from tagged effects, proximity and intensity — no market or supply-chain data" : "Computed"}
       </p>
 
       {topConflictName && (

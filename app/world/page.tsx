@@ -25,6 +25,8 @@ import type { TerritoryFeatureProperties } from "@/lib/types/territorial-control
 import { HAZARD_LAYERS, type HazardLayer } from "@/lib/hazards/types";
 import { useHazards, type HazardViewport } from "@/hooks/use-hazards";
 import { HazardPanel } from "@/components/hazards/hazard-panel";
+import Link from "next/link";
+import { getCountryByCode } from "@/lib/reference/countries";
 import { WhatChangedPanel } from "@/components/brief/what-changed-panel";
 import type { BriefDevelopment } from "@/lib/brief/types";
 
@@ -59,6 +61,7 @@ export default function WorldPage() {
   const [focus, setFocus] = useState<{ lat: number; lng: number; zoom: number } | null>(null);
   const [deepLinkAt, setDeepLinkAt] = useState<Date | null>(null);
   const [pendingEventId, setPendingEventId] = useState<string | null>(null);
+  const [fromCountry, setFromCountry] = useState<string | null>(null);
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     const layers = (p.get("layers") ?? "").split(",").filter((l): l is HazardLayer => (HAZARD_LAYERS as readonly string[]).includes(l));
@@ -73,6 +76,8 @@ export default function WorldPage() {
     const ev = p.get("event");
     if (ev) setPendingEventId(ev);
     if (p.get("territory") === "1") setShowTerritorial(true);
+    const cc = p.get("country");
+    if (cc && getCountryByCode(cc)) setFromCountry(cc.toUpperCase());
   }, []);
 
   const toggleHazardLayer = useCallback((layer: HazardLayer) => {
@@ -301,6 +306,11 @@ export default function WorldPage() {
                 hazardHealth={hazards?.meta.health}
               />
             </div>
+            {fromCountry && (
+              <Link href={`/country/${fromCountry}`} className="pointer-events-auto rounded-full border border-border bg-surface/80 px-3 py-1.5 text-xs font-medium text-ink-dim backdrop-blur-xl hover:text-ink" data-testid="back-to-country">
+                ← {getCountryByCode(fromCountry)?.name} country page
+              </Link>
+            )}
             <WhatChangedPanel timeRange={timeRange} asOf={timeline.asOf} onSelect={openDevelopment} />
             {showTerritorial && (
               <div className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-border bg-surface/80 p-3 backdrop-blur-xl">

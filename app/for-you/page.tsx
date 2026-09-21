@@ -50,7 +50,12 @@ export default function ForYouPage() {
         <h1 className="text-2xl font-semibold text-ink sm:text-[28px]">
           How The World Affects You
         </h1>
-        <CountrySelector />
+        <div className="flex items-center gap-2">
+          <Link href={`/country/${country.code}`} className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-ink-dim hover:text-ink" data-testid="for-you-country-page">
+            {country.name} country page
+          </Link>
+          <CountrySelector />
+        </div>
       </div>
 
       <div className="mt-6 rounded-2xl border border-border bg-card/70 p-6">

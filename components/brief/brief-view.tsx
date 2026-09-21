@@ -12,10 +12,10 @@ import { cn } from "@/lib/utils";
 const SECTION_ORDER: BriefSection[] = ["escalation", "resolution", "territory", "conflict", "infrastructure", "hazards", "claims"];
 const WINDOW_SHORT: Record<string, string> = { "1h": "1H", "6h": "6H", "12h": "12H", "24h": "24H", "3d": "3D", "7d": "7D", custom: "Custom" };
 
-export function WindowTabs({ value, onChange }: { value: string; onChange: (w: string) => void }) {
+export function WindowTabs({ value, onChange, windows = BRIEF_WINDOWS }: { value: string; onChange: (w: string) => void; windows?: readonly string[] }) {
   return (
     <div className="flex flex-wrap gap-1" role="tablist" aria-label="Brief window" data-testid="brief-windows">
-      {BRIEF_WINDOWS.map((w) => (
+      {windows.map((w) => (
         <button key={w} type="button" role="tab" aria-selected={value === w} onClick={() => onChange(w)} data-testid={`window-${w}`} className={cn("rounded-full border px-3 py-1 text-xs font-medium transition-colors", value === w ? "border-ink bg-ink text-bg" : "border-border text-ink-dim hover:text-ink")}>
           {WINDOW_SHORT[w]}
         </button>
@@ -117,7 +117,7 @@ export function BriefBody({ brief, compact = false }: { brief: Brief; compact?: 
 }
 
 /** Window selector + fetch + body for one scope. */
-export function BriefPanel({ scope, title, initialWindow = "6h", allowSave = true, compact = false }: { scope: Omit<BriefParams, "window">; title?: string; initialWindow?: string; allowSave?: boolean; compact?: boolean }) {
+export function BriefPanel({ scope, title, initialWindow = "6h", allowSave = true, compact = false, windows }: { scope: Omit<BriefParams, "window">; title?: string; initialWindow?: string; allowSave?: boolean; compact?: boolean; windows?: readonly string[] }) {
   const [window, setWindow] = useState(initialWindow);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -132,6 +132,7 @@ export function BriefPanel({ scope, title, initialWindow = "6h", allowSave = tru
       <div className="flex flex-wrap items-center justify-between gap-3">
         {title && <h1 className="text-2xl font-semibold text-ink sm:text-[28px]">{title}</h1>}
         <WindowTabs
+          windows={windows}
           value={window}
           onChange={(w) => {
             setWindow(w);

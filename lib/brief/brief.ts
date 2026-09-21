@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/db/client";
 import { scoreConflict } from "@/lib/db/repositories/scoring";
-import { getCountryByCode } from "@/lib/reference/countries";
-import { allCountries, countryCentroid } from "@/lib/hazards/reference";
+import { resolveCountry } from "@/lib/countries/registry";
 import { buildUniverse, type Universe } from "./collect";
 import { dataRevision } from "./revision";
 import { DEFAULT_WINDOW, MAX_CUSTOM_WINDOW_MS, WINDOW_LABEL, WINDOW_MS, type Brief, type BriefCounts, type BriefDevelopment, type BriefRange, type BriefScope, type BriefWindow, type EscalationAssessment, type HotspotAssessment, BRIEF_WINDOWS } from "./types";
@@ -106,18 +105,9 @@ function impactFor(conflictId: string, country: string): Promise<number> {
 // Impact depends on conflict state: forget it whenever the data revision moves (see getBrief).
 let impactRevision = "";
 
-const upper = (s: string) => s.trim().toUpperCase();
-const ALPHA3: Record<string, string> = { FIN: "FI", UKR: "UA", RUS: "RU", POL: "PL", DEU: "DE", GBR: "GB", USA: "US", ISR: "IL", PSE: "PS", LBN: "LB", SYR: "SY", IRN: "IR", SAU: "SA", YEM: "YE", SDN: "SD", COD: "CD", SOM: "SO", MLI: "ML", NGA: "NG", EGY: "EG", MMR: "MM", IND: "IN", PAK: "PK", KOR: "KR", PRK: "KP", TWN: "TW", CHN: "CN", JPN: "JP", TUR: "TR", SWE: "SE", NOR: "NO", EST: "EE", LVA: "LV", LTU: "LT" };
-
 export function normalizeCountry(input: string): { code: string; name: string } | null {
-  const raw = upper(input);
-  const code = raw.length === 3 ? (ALPHA3[raw] ?? raw) : raw;
-  const c = getCountryByCode(code);
-  if (c) return { code: c.code, name: c.name };
-  const cen = countryCentroid(code);
-  if (cen && code.length === 2) return { code, name: cen.name };
-  const byName = allCountries().find((x) => x.name.toLowerCase() === input.trim().toLowerCase());
-  return byName ?? null;
+  const c = resolveCountry(input);
+  return c ? { code: c.code, name: c.name } : null;
 }
 
 const rankKey = (d: BriefDevelopment) => (d.impact != null ? 0.6 * d.significance + 0.4 * d.impact : d.significance);
