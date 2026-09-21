@@ -625,7 +625,7 @@ export function WorldMap({
     });
     // The heat mode draws its own borders (heat-borders) from the same topology; the basemap's are hidden there so
     // no border is ever traced twice.
-    for (const layer of map.getStyle().layers ?? []) {
+    for (const layer of map.getStyle()?.layers ?? []) {
       if ((layer.metadata as Record<string, unknown> | undefined)?.["vigil:role"] === "basemap-border") map.setLayoutProperty(layer.id, "visibility", viewModeRef.current === "heatmap" ? "none" : "visible");
     }
   };

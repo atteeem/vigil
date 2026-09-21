@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* Tailwind scans source files for class names. The shipped glyph PBFs and PMTiles archives are binary: scanning them
+   produced garbage utilities that broke the whole stylesheet. Keep them out of the scan. */
+@source not "../public/fonts";
+@source not "../public/basemaps";
 @import "maplibre-gl/dist/maplibre-gl.css";
 
 @theme {
