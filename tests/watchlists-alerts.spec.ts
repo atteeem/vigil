@@ -56,6 +56,7 @@ test.afterAll(async () => {
   await prisma.notification.deleteMany({});
   await prisma.alertState.deleteMany({});
   await prisma.alertRecord.deleteMany({});
+  await prisma.event.deleteMany({ where: { conflict: { slug: { startsWith: "wl-" } } } }); // published events must not linger in later specs
   await prisma.conflict.deleteMany({ where: { slug: { startsWith: "wl-" } } });
   await prisma.militaryUnit.deleteMany({ where: { name: { startsWith: "WL " } } });
   await prisma.source.deleteMany({ where: { name: { startsWith: "WL " } } });

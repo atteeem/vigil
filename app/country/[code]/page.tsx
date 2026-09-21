@@ -123,6 +123,9 @@ export default async function CountryPage({ params }: { params: Promise<{ code: 
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Link href={`/brief/country/${c.code}`} className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-ink-dim hover:text-ink" data-testid="country-brief-link">
+            Country brief
+          </Link>
           <FollowButton entityType="country" entityKey={c.code} label={c.name} />
           <SetBaseCountryButton code={c.code} />
         </div>

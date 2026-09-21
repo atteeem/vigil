@@ -36,6 +36,7 @@ test.afterAll(async () => {
   await prisma.globalEvent.deleteMany({});
   await prisma.stateTransition.deleteMany({});
   await prisma.watcher.deleteMany({});
+  await prisma.event.deleteMany({ where: { conflict: { slug: { startsWith: "ci-" } } } }); // published events must not linger in later specs
   await prisma.conflict.deleteMany({ where: { slug: { startsWith: "ci-" } } });
   await prisma.militaryUnit.deleteMany({ where: { name: { startsWith: "CI " } } });
   await prisma.source.deleteMany({ where: { name: { startsWith: "CI " } } });
@@ -406,7 +407,14 @@ test.describe.serial("Country page UI", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openCountry(page, "/country/NA");
     await expect(page.getByTestId("country-overview")).toBeInViewport();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+    const overflowing = await page.evaluate(() => {
+      const w = window.innerWidth;
+      return [...document.querySelectorAll("main *")]
+        .filter((el) => el.getBoundingClientRect().right > w + 1 && el.getBoundingClientRect().width > 0)
+        .slice(0, 6)
+        .map((el) => `${el.tagName}[${(el as HTMLElement).dataset.testid ?? ""}].${String(el.className).slice(0, 50)} right=${Math.round(el.getBoundingClientRect().right)}`);
+    });
+    expect(overflowing, "elements wider than the viewport").toEqual([]);
     const territory = page.getByTestId("section-actors");
     if (await territory.count()) expect(await territory.evaluate((el) => (el as HTMLDetailsElement).open)).toBe(false);
     await expect(page.getByTestId("section-coverage").evaluate((el) => (el as HTMLDetailsElement).open)).resolves.toBe(false);

@@ -42,6 +42,7 @@ test.afterAll(async () => {
   await prisma.stateTransition.deleteMany({});
   await prisma.briefSnapshot.deleteMany({});
   await prisma.watcher.deleteMany({});
+  await prisma.event.deleteMany({ where: { conflict: { slug: { startsWith: "br-" } } } }); // published events must not linger in later specs
   await prisma.conflict.deleteMany({ where: { slug: { startsWith: "br-" } } });
   await prisma.militaryUnit.deleteMany({ where: { name: { startsWith: "BR " } } });
   await prisma.source.deleteMany({ where: { name: { startsWith: "BR " } } });
