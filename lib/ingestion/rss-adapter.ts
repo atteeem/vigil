@@ -101,10 +101,17 @@ export const RSSAdapter: SourceAdapter = {
   async fetchLatest(source: Source): Promise<unknown[]> {
     if (!source.url) return [];
     // `rsshub://route` resolves against the optional RSSHUB_BASE_URL sidecar; ordinary URLs are unchanged.
-    const res = await fetch(resolveFeedUrl(source.url), { headers: RSS_REQUEST_HEADERS });
-    if (!res.ok) throw new HttpFetchError(res.status, res.statusText, parseRetryAfter(res.headers.get("retry-after")));
-    const xml = await res.text();
-    return parseRss(xml);
+    // The signal covers connecting AND reading the body, and actually cancels the request (poll.ts's withTimeout only
+    // stops waiting for it), so a hung feed cannot keep a socket open after it has been given up on.
+    const timeoutMs = Number(process.env.INGESTION_FETCH_TIMEOUT_MS) || 20_000;
+    try {
+      const res = await fetch(resolveFeedUrl(source.url), { headers: RSS_REQUEST_HEADERS, signal: AbortSignal.timeout(timeoutMs) });
+      if (!res.ok) throw new HttpFetchError(res.status, res.statusText, parseRetryAfter(res.headers.get("retry-after")));
+      return parseRss(await res.text());
+    } catch (err) {
+      if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) throw new Error(`Fetching ${source.name} timed out after ${timeoutMs}ms`);
+      throw err;
+    }
   },
 
   normalize(raw: unknown, source: Source): NormalizedItem {

@@ -11,7 +11,18 @@ function sqlitePath(databaseUrl: string): string {
 
 function createPrismaClient() {
   const adapter = new PrismaBetterSqlite3({ url: sqlitePath(process.env.DATABASE_URL ?? "file:./prisma/dev.db") });
-  return new PrismaClient({ adapter });
+  const client = new PrismaClient({ adapter });
+  // better-sqlite3 runs every query synchronously on the Node main thread, so a commit's fsync stalls the whole
+  // server (page requests included). SQLite's default rollback journal + synchronous=FULL costs several fsyncs per
+  // write transaction; on a slow disk the ingestion pass alone blocked the event loop for 15-30 s at a time
+  // (measured: ~28 s to store 42 items, ~0.3 s after this change). WAL needs one sequential append per commit and
+  // synchronous=NORMAL syncs only at checkpoints (durable across an application crash; a power cut can lose the
+  // last few commits, never corrupt the database). WAL is persistent in the file; synchronous is per connection.
+  void client
+    .$queryRawUnsafe("PRAGMA journal_mode = WAL")
+    .then(() => client.$queryRawUnsafe("PRAGMA synchronous = NORMAL"))
+    .catch((err) => console.warn("[db] could not switch SQLite to WAL / synchronous=NORMAL:", err));
+  return client;
 }
 
 // Standard Next.js dev-mode singleton: without this, every hot-reload of a

@@ -221,6 +221,9 @@ export async function pollSource(source: Source): Promise<FetchResult> {
 
     if (source.autoProcessing) {
       for (const item of createdItems) {
+        // Each item's extraction is synchronous database work; yield between items so page requests and other
+        // sources' network callbacks are served in between instead of waiting for the whole batch.
+        await new Promise<void>((resolve) => setImmediate(resolve));
         await computeAndStoreSnapshot(item, source);
         await computeAndStoreFacts(item);
         await computeAndStoreMilitaryEntities(item, source);

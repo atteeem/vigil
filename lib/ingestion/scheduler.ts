@@ -26,7 +26,13 @@ const inFlightSourceIds = new Set<string>();
 // up the next due source — keeps total connections bounded without
 // making a slow/hung source (bounded anyway by pollSource's own fetch
 // timeout) block sources behind it in a queue.
-const MAX_CONCURRENT_FETCHES = 4;
+const MAX_CONCURRENT_FETCHES = Math.max(1, Number(process.env.INGESTION_MAX_CONCURRENCY) || 4);
+
+// A tick starts at most this many sources. After a long idle period (or on a fresh database) every source is due at
+// once; processing each new item is synchronous database work on the server's only thread, so starting dozens at
+// once starves page requests. The remainder simply stays due and is picked up by the following ticks (30 s apart),
+// so every source is still polled. Development defaults to a small burst; production is unlimited unless set.
+const MAX_SOURCES_PER_TICK = Number(process.env.INGESTION_MAX_SOURCES_PER_TICK) || (process.env.NODE_ENV === "production" ? Infinity : 12);
 
 /** Runs `worker` over every item in `items`, at most `limit` concurrently.
  * A worker-pool, not batching by chunks — a slot frees up and immediately
@@ -82,8 +88,12 @@ export async function schedulerTick(now = new Date(), sourceIds?: string[]): Pro
     return true;
   });
 
-  for (const source of toPoll) inFlightSourceIds.add(source.id);
-  await runWithConcurrencyLimit(toPoll, MAX_CONCURRENT_FETCHES, async (source: Source) => {
+  // Only sources actually being polled are "in flight": marking the whole queue up front made a tick with 60 due
+  // sources report 57 in flight while at most MAX_CONCURRENT_FETCHES were running. The tick itself is not
+  // re-entrant either (see startScheduler), so nothing else can pick the queued ones up meanwhile.
+  const batch = toPoll.slice(0, MAX_SOURCES_PER_TICK);
+  await runWithConcurrencyLimit(batch, MAX_CONCURRENT_FETCHES, async (source: Source) => {
+    inFlightSourceIds.add(source.id);
     try {
       await pollSource(source);
     } finally {
@@ -91,7 +101,7 @@ export async function schedulerTick(now = new Date(), sourceIds?: string[]): Pro
     }
   });
 
-  return { due: due.length, polled: toPoll.length, skippedInFlight };
+  return { due: due.length, polled: batch.length, skippedInFlight };
 }
 
 const DEFAULT_TICK_INTERVAL_MS = 30_000;
@@ -109,12 +119,19 @@ export function startScheduler(tickIntervalMs = DEFAULT_TICK_INTERVAL_MS) {
   g.__vigilScheduler = true;
 
   console.log(`[ingestion] scheduler started (tick every ${tickIntervalMs}ms)`);
+  // Ticks never overlap: a slow pass (many due sources, slow feeds) is allowed to finish before the next starts.
+  let running = false;
   const tick = () => {
+    if (running) return;
+    running = true;
     schedulerTick()
       .then(({ due, polled, skippedInFlight }) => {
         if (polled > 0) console.log(`[ingestion] scheduler tick: ${polled}/${due} due source(s) polled${skippedInFlight ? `, ${skippedInFlight} already in flight` : ""}`);
       })
-      .catch((err) => console.error("[ingestion] scheduler tick failed:", err));
+      .catch((err) => console.error("[ingestion] scheduler tick failed:", err))
+      .finally(() => {
+        running = false;
+      });
   };
   tick();
   setInterval(tick, tickIntervalMs);

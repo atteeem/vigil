@@ -26,7 +26,7 @@ export async function register() {
     // assertion runs, which is exactly the kind of nondeterminism this
     // suite exists to avoid. Real local dev (no this env var) still gets
     // the live background scheduler as normal.
-    if (process.env.DISABLE_BACKGROUND_SCHEDULER !== "true") {
+    if (process.env.DISABLE_BACKGROUND_SCHEDULER !== "true" && process.env.DISABLE_INGESTION_SCHEDULER !== "1") {
       const { startScheduler } = await import("@/lib/ingestion/scheduler");
       const tickIntervalMs = Number(process.env.SCHEDULER_TICK_INTERVAL_MS) || 30_000;
       startScheduler(tickIntervalMs);
