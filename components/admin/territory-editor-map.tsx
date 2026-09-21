@@ -306,7 +306,7 @@ export function TerritoryEditorMap({ value, onChange, color, status, overlays = 
         return;
       }
       const handles = map.queryRenderedFeatures(e.point, { layers: ["ed-verts", "ed-mids"].filter((l) => map.getLayer(l)) });
-      if (handles.length > 0) return; // handled by the layer-specific handlers below
+      if (modeRef.current === "select" && handles.length > 0) return; // handled by the layer-specific handlers below (handles are hidden while drawing)
       const at: Position = snapped(map, [e.lngLat.lng, e.lngLat.lat]);
 
       if (modeRef.current !== "select") {
