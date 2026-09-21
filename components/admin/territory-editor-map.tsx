@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Map as MapLibreMap, config as maplibreConfig, type GeoJSONSource, type MapMouseEvent } from "maplibre-gl";
-import { Eraser, MousePointer2, PenTool, Trash2, Undo2, Check, X, Minus } from "lucide-react";
+import { Eraser, MousePointer2, PenTool, Trash2, Undo2, Redo2, Check, X, Minus, Scissors, Combine, Magnet, Spline } from "lucide-react";
 import { getMapStyle, getMapTilerKey } from "@/lib/map/style";
 import { createContestedPatternImageData } from "@/lib/map/territorial-pattern";
 import {
@@ -20,6 +20,7 @@ import {
   type PolygonRings,
   type VertexRef,
 } from "@/lib/territory/geometry";
+import { canRedo, canUndo, createHistory, cutHole, mergePolygons, pushHistory, redo, simplifyPolygons, snapPoint, undo, type History } from "@/lib/territory/edit-tools";
 import type { AssignableTerritorialStatus, TerritorialGeometry } from "@/lib/types/territorial-control";
 import { cn } from "@/lib/utils";
 
@@ -60,6 +61,9 @@ interface Props {
 const FILL_OPACITY: Record<string, number> = { controlled: 0.35, contested: 0.22, uncertain: 0.12 };
 const EMPTY: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 const CLOSE_PX = 12;
+const SNAP_PX = 10;
+/** Simplify strength in degrees (~55 m / ~220 m / ~1.1 km). */
+const SIMPLIFY_LEVELS = { light: 0.0005, medium: 0.002, strong: 0.01 } as const;
 
 const same = (a: TerritorialGeometry | null, b: TerritorialGeometry | null) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -73,7 +77,11 @@ export function TerritoryEditorMap({ value, onChange, color, status, overlays = 
   const [ready, setReady] = useState(false);
 
   const [polys, setPolys] = useState<PolygonRings[]>(() => polysFrom(value));
-  const [mode, setMode] = useState<"select" | "draw">("select");
+  const [mode, setMode] = useState<"select" | "draw" | "hole">("select");
+  const [snap, setSnap] = useState(true);
+  const [level, setLevel] = useState<keyof typeof SIMPLIFY_LEVELS>("light");
+  const [notice, setNotice] = useState<string | null>(null);
+  const [hist, setHist] = useState({ undo: false, redo: false });
   const [drawPoints, setDrawPoints] = useState<Position[]>([]);
   const [selected, setSelected] = useState<VertexRef | null>(null);
   const [selectedPolygon, setSelectedPolygon] = useState<number | null>(null);
@@ -87,6 +95,10 @@ export function TerritoryEditorMap({ value, onChange, color, status, overlays = 
   const movedRef = useRef(false);
   const onChangeRef = useRef(onChange);
   const cursorRef = useRef<Position | null>(null);
+  const historyRef = useRef<History<PolygonRings[]>>(createHistory(polys));
+  const snapRef = useRef(snap);
+  const overlaysRef = useRef<PolygonRings[]>([]);
+  const selectedPolygonRef = useRef<number | null>(null);
   // polysRef is written only where polys changes (commit / external value /
   // live drag), never from render, so a parent re-render can't reset a drag.
   useLayoutEffect(() => {
@@ -94,12 +106,41 @@ export function TerritoryEditorMap({ value, onChange, color, status, overlays = 
     drawRef.current = drawPoints;
     selectedRef.current = selected;
     onChangeRef.current = onChange;
+    snapRef.current = snap;
+    selectedPolygonRef.current = selectedPolygon;
+    overlaysRef.current = overlays.flatMap((o) => polygonsOf(o.geometry) as PolygonRings[]);
   });
+
+  const syncHistory = useCallback(() => setHist({ undo: canUndo(historyRef.current), redo: canRedo(historyRef.current) }), []);
 
   const commit = useCallback((next: PolygonRings[]) => {
     polysRef.current = next;
     setPolys(next);
+    historyRef.current = pushHistory(historyRef.current, next);
+    syncHistory();
     onChangeRef.current(fromPolygons(next));
+  }, [syncHistory]);
+
+  /** Applies a state taken from the edit history (undo / redo) without recording a new step. */
+  const applyHistory = useCallback((h: History<PolygonRings[]>) => {
+    historyRef.current = h;
+    polysRef.current = h.present;
+    setPolys(h.present);
+    setSelected(null);
+    setSelectedPolygon(null);
+    syncHistory();
+    onChangeRef.current(fromPolygons(h.present));
+  }, [syncHistory]);
+
+  /** Snap a map position to existing vertices/edges (this draft and the context overlays) within a few pixels. */
+  const snapped = useCallback((map: MapLibreMap, at: Position, skip?: (polygon: number, ring: number, vertex: number) => boolean): Position => {
+    if (!snapRef.current) return at;
+    const a = map.unproject([0, 0]);
+    const b = map.unproject([SNAP_PX, 0]);
+    const tolerance = Math.abs(b.lng - a.lng);
+    const draft = snapPoint(at, polysRef.current, tolerance, skip);
+    if (draft.kind) return draft.point;
+    return snapPoint(at, overlaysRef.current, tolerance).point;
   }, []);
 
   // ---- render editor state into the map sources -----------------------------
@@ -107,7 +148,7 @@ export function TerritoryEditorMap({ value, onChange, color, status, overlays = 
     const map = mapRef.current;
     if (!map || !map.getSource("ed-draft")) return;
     const current = polysRef.current;
-    const drawing = modeRef.current === "draw";
+    const drawing = modeRef.current !== "select";
     const sel = selectedRef.current;
 
     const draft: GeoJSON.Feature[] = current.map((rings, p) => ({
@@ -234,6 +275,21 @@ export function TerritoryEditorMap({ value, onChange, color, status, overlays = 
       }
       const polygon = polygonFromPoints(pts);
       if (!polygon) return;
+      if (modeRef.current === "hole") {
+        const target = selectedPolygonRef.current ?? (polysRef.current.length === 1 ? 0 : null);
+        const cut = target === null ? null : cutHole(polysRef.current, target, polygon[0]!);
+        setDrawPoints([]);
+        cursorRef.current = null;
+        setMode("select");
+        if (!cut) {
+          setNotice(target === null ? "Select a polygon first, then cut a hole in it." : "That ring does not overlap the selected polygon (or is not a valid ring): nothing was cut.");
+          return;
+        }
+        setNotice(null);
+        setSelected(null);
+        commit(cut);
+        return;
+      }
       const next = [...polysRef.current, polygon];
       setDrawPoints([]);
       cursorRef.current = null;
@@ -251,9 +307,9 @@ export function TerritoryEditorMap({ value, onChange, color, status, overlays = 
       }
       const handles = map.queryRenderedFeatures(e.point, { layers: ["ed-verts", "ed-mids"].filter((l) => map.getLayer(l)) });
       if (handles.length > 0) return; // handled by the layer-specific handlers below
-      const at: Position = [e.lngLat.lng, e.lngLat.lat];
+      const at: Position = snapped(map, [e.lngLat.lng, e.lngLat.lat]);
 
-      if (modeRef.current === "draw") {
+      if (modeRef.current !== "select") {
         const pts = drawRef.current;
         if (pts.length >= 3) {
           const first = map.project(pts[0]!);
@@ -272,7 +328,7 @@ export function TerritoryEditorMap({ value, onChange, color, status, overlays = 
     });
 
     map.on("dblclick", (e: MapMouseEvent) => {
-      if (modeRef.current === "draw" && drawRef.current.length >= 3) {
+      if (modeRef.current !== "select" && drawRef.current.length >= 3) {
         e.preventDefault();
         finishDraw();
       }
@@ -282,12 +338,16 @@ export function TerritoryEditorMap({ value, onChange, color, status, overlays = 
       const drag = draggingRef.current;
       if (drag) {
         movedRef.current = true;
-        polysRef.current = moveVertex(polysRef.current, drag, [e.lngLat.lng, e.lngLat.lat]);
+        const ring = polysRef.current[drag.polygon]?.[drag.ring];
+        const last = (ring?.length ?? 1) - 1;
+        // Do not snap a vertex to itself or to the two edges that meet at it.
+        const skip = (pi: number, ri: number, vi: number) => pi === drag.polygon && ri === drag.ring && (vi === drag.vertex || vi === drag.vertex - 1 || (drag.vertex === 0 && vi === last - 1) || (drag.vertex === last && vi === 0));
+        polysRef.current = moveVertex(polysRef.current, drag, snapped(map, [e.lngLat.lng, e.lngLat.lat], skip));
         paint();
         return;
       }
-      if (modeRef.current === "draw") {
-        cursorRef.current = [e.lngLat.lng, e.lngLat.lat];
+      if (modeRef.current !== "select") {
+        cursorRef.current = snapped(map, [e.lngLat.lng, e.lngLat.lat]);
         paint();
       }
     });
@@ -381,10 +441,12 @@ export function TerritoryEditorMap({ value, onChange, color, status, overlays = 
     if (same(value, fromPolygons(polysRef.current))) return;
     const next = polysFrom(value);
     polysRef.current = next;
+    historyRef.current = createHistory(next); // a reload / revert / JSON edit starts a fresh history
+    syncHistory();
     setPolys(next);
     setSelected(null);
     setSelectedPolygon(null);
-  }, [value]);
+  }, [value, syncHistory]);
 
   // ---- camera ------------------------------------------------------------------
   useEffect(() => {
@@ -403,13 +465,53 @@ export function TerritoryEditorMap({ value, onChange, color, status, overlays = 
 
   // ---- toolbar actions -----------------------------------------------------------
   const startDraw = () => {
+    setNotice(null);
     setMode("draw");
     setDrawPoints([]);
     cursorRef.current = null;
     setSelected(null);
     setSelectedPolygon(null);
   };
+  const startHole = () => {
+    setNotice(null);
+    if (selectedPolygon === null && polysRef.current.length !== 1) {
+      setNotice("Select the polygon to cut a hole in first.");
+      return;
+    }
+    setMode("hole");
+    setDrawPoints([]);
+    cursorRef.current = null;
+    setSelected(null);
+  };
+  const undoEdit = () => {
+    if (canUndo(historyRef.current)) applyHistory(undo(historyRef.current));
+  };
+  const redoEdit = () => {
+    if (canRedo(historyRef.current)) applyHistory(redo(historyRef.current));
+  };
+  const merge = () => {
+    const merged = mergePolygons(polysRef.current);
+    if (merged.length === polysRef.current.length) {
+      setNotice("The polygons do not overlap or touch, so there is nothing to merge.");
+      return;
+    }
+    setNotice(`Merged ${polysRef.current.length} polygons into ${merged.length}.`);
+    setSelected(null);
+    setSelectedPolygon(null);
+    commit(merged);
+  };
+  const simplify = () => {
+    const r = simplifyPolygons(polysRef.current, SIMPLIFY_LEVELS[level]);
+    if (r.verticesAfter >= r.verticesBefore) {
+      setNotice("Nothing to simplify at this strength.");
+      return;
+    }
+    setNotice(`Simplified: ${r.verticesBefore} → ${r.verticesAfter} vertices${r.keptRings ? ` (${r.keptRings} ring${r.keptRings === 1 ? "" : "s"} left as they were to stay valid)` : ""}.`);
+    setSelected(null);
+    commit(r.polygons);
+  };
   const cancelDraw = () => {
+    setNotice(null);
     setMode("select");
     setDrawPoints([]);
     cursorRef.current = null;
@@ -437,7 +539,14 @@ export function TerritoryEditorMap({ value, onChange, color, status, overlays = 
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    if (mode === "draw") {
+    const key = e.key.toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && mode === "select" && (key === "z" || key === "y")) {
+      e.preventDefault();
+      if (key === "y" || e.shiftKey) redoEdit();
+      else undoEdit();
+      return;
+    }
+    if (mode !== "select") {
       if (e.key === "Enter") finish();
       if (e.key === "Escape") cancelDraw();
       if (e.key === "Backspace") undoPoint();
@@ -450,12 +559,14 @@ export function TerritoryEditorMap({ value, onChange, color, status, overlays = 
   const validity = value ? validateTerritorialGeometry(value) : null;
   const vertexCount = polys.reduce((n, p) => n + p.reduce((m, r) => m + Math.max(0, r.length - 1), 0), 0);
   const hint =
-    mode === "draw"
+    mode !== "select"
       ? drawPoints.length === 0
-        ? "Click the map to place the first point."
+        ? mode === "hole"
+          ? "Cutting a hole: click the map to place the first point of the ring (inside the selected polygon, or across its edge to notch it)."
+          : "Click the map to place the first point."
         : drawPoints.length < 3
           ? `${drawPoints.length} point${drawPoints.length === 1 ? "" : "s"} placed — at least 3 needed.`
-          : "Click the green first point, double-click, or press Finish to close the polygon."
+          : "Click the green first point, double-click, or press Finish to close the ring."
       : polys.length === 0
         ? "No geometry yet — choose Draw polygon."
         : "Drag a vertex to move it, click a small dot on an edge to add a vertex, double-click a vertex to remove it. Draw another polygon to make a MultiPolygon.";
@@ -471,7 +582,10 @@ export function TerritoryEditorMap({ value, onChange, color, status, overlays = 
         <button type="button" className={cn(tool, mode === "select" && "border-accent text-accent")} onClick={cancelDraw} data-testid="editor-select">
           <MousePointer2 className="h-3.5 w-3.5" /> Select / edit
         </button>
-        {mode === "draw" ? (
+        <button type="button" className={cn(tool, mode === "hole" && "border-accent text-accent")} onClick={startHole} disabled={mode === "draw" || polys.length === 0} data-testid="editor-hole">
+          <Scissors className="h-3.5 w-3.5" /> Cut hole
+        </button>
+        {mode !== "select" ? (
           <>
             <button type="button" className={tool} onClick={finish} disabled={drawPoints.length < 3} data-testid="editor-finish">
               <Check className="h-3.5 w-3.5" /> Finish
@@ -494,9 +608,31 @@ export function TerritoryEditorMap({ value, onChange, color, status, overlays = 
             <button type="button" className={tool} onClick={clearAll} disabled={polys.length === 0} data-testid="editor-clear">
               <Eraser className="h-3.5 w-3.5" /> Clear geometry
             </button>
+            <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+            <button type="button" className={tool} onClick={undoEdit} disabled={!hist.undo} data-testid="editor-undo" title="Undo (Ctrl+Z)">
+              <Undo2 className="h-3.5 w-3.5" /> Undo
+            </button>
+            <button type="button" className={tool} onClick={redoEdit} disabled={!hist.redo} data-testid="editor-redo" title="Redo (Ctrl+Y)">
+              <Redo2 className="h-3.5 w-3.5" /> Redo
+            </button>
+            <button type="button" className={tool} onClick={merge} disabled={polys.length < 2} data-testid="editor-merge">
+              <Combine className="h-3.5 w-3.5" /> Merge polygons
+            </button>
+            <button type="button" className={tool} onClick={simplify} disabled={polys.length === 0} data-testid="editor-simplify">
+              <Spline className="h-3.5 w-3.5" /> Simplify
+            </button>
+            <select value={level} onChange={(e) => setLevel(e.target.value as keyof typeof SIMPLIFY_LEVELS)} className="rounded-lg border border-border bg-surface px-1.5 py-1 text-xs text-ink" aria-label="Simplify strength" data-testid="editor-simplify-level">
+              <option value="light">light (~55 m)</option>
+              <option value="medium">medium (~220 m)</option>
+              <option value="strong">strong (~1 km)</option>
+            </select>
           </>
         )}
       </div>
+      <label className="inline-flex items-center gap-1.5 text-xs text-ink-dim">
+        <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} data-testid="editor-snap" />
+        <Magnet className="h-3.5 w-3.5" /> Snap to vertices and edges
+      </label>
       <div
         ref={containerRef}
         tabIndex={0}
@@ -507,6 +643,11 @@ export function TerritoryEditorMap({ value, onChange, color, status, overlays = 
       <p className="text-xs text-ink-faint" data-testid="editor-hint">
         {hint}
       </p>
+      {notice && (
+        <p className="text-xs text-accent" data-testid="editor-notice" role="status">
+          {notice}
+        </p>
+      )}
       <p className="text-xs text-ink-faint" data-testid="editor-summary">
         {polys.length} {polys.length === 1 ? "polygon" : "polygons"}, {vertexCount} vertices
         {validity && !validity.valid ? <span className="ml-2 text-high" data-testid="editor-invalid">Invalid: {validity.errors[0]}</span> : null}

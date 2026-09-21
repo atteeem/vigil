@@ -494,3 +494,124 @@ test.describe("Public map", () => {
     expect(after.reduce((n, f) => n + planarArea(f.geometry), 0)).toBeCloseTo(100, 6);
   });
 });
+
+// ------------------------------------------------------------------------------
+// Editing tools: undo / redo, holes, merge, simplify, snapping (lib/territory/edit-tools.ts).
+
+test.describe("Editing tools", () => {
+  test("undo and redo step through vertex edits, by button and by Ctrl+Z / Ctrl+Y", async ({ page, request }) => {
+    const w = await makeConflict(request);
+    await openNewForm(page, w);
+    await drawPolygon(page, [[-50, -25], [-40, -25], [-40, -15], [-50, -15]]);
+    await expect(page.getByTestId("editor-summary")).toContainText("1 polygon, 4 vertices");
+
+    const mid = await px(page, -45, -25);
+    await page.mouse.click(mid.x, mid.y); // add a vertex on the bottom edge
+    await expect(page.getByTestId("editor-summary")).toContainText("5 vertices");
+
+    await page.getByTestId("editor-undo").click();
+    await expect(page.getByTestId("editor-summary")).toContainText("4 vertices");
+    await page.getByTestId("editor-redo").click();
+    await expect(page.getByTestId("editor-summary")).toContainText("5 vertices");
+
+    await page.getByTestId("territory-editor-map").focus();
+    await page.keyboard.press("Control+z");
+    await expect(page.getByTestId("editor-summary")).toContainText("4 vertices");
+    await page.keyboard.press("Control+y");
+    await expect(page.getByTestId("editor-summary")).toContainText("5 vertices");
+    // Undo all the way: back to the drawn square, then to nothing (the draw itself is a step).
+    await page.getByTestId("editor-undo").click();
+    await page.getByTestId("editor-undo").click();
+    await expect(page.getByTestId("editor-summary")).toContainText("0 polygons");
+    await expect(page.getByTestId("editor-undo")).toBeDisabled();
+    // The JSON box follows the history.
+    expect(await geometryInText(page)).toBeNull();
+    await page.getByTestId("editor-redo").click();
+    await expect(page.getByTestId("editor-summary")).toContainText("1 polygon, 4 vertices");
+  });
+
+  test("cut a hole: the polygon keeps an interior ring, the area drops, and it can be undone", async ({ page, request }) => {
+    const w = await makeConflict(request);
+    await openNewForm(page, w);
+    await drawPolygon(page, [[-50, -25], [-40, -25], [-40, -15], [-50, -15]]);
+    const before = (await geometryInText(page))!;
+    await page.getByTestId("editor-hole").click();
+    for (const [lng, lat] of [[-47, -22], [-43, -22], [-43, -18], [-47, -18]] as [number, number][]) await clickAt(page, lng, lat);
+    await page.getByTestId("editor-finish").click();
+    const after = (await geometryInText(page))!;
+    expect(after.type).toBe("Polygon");
+    expect((after.coordinates as number[][][]).length).toBe(2); // outer ring + one hole
+    expect(planarArea(after)).toBeCloseTo(planarArea(before) - 16, 0);
+    await page.getByTestId("editor-undo").click();
+    expect(((await geometryInText(page))!.coordinates as number[][][]).length).toBe(1);
+  });
+
+  test("a hole ring that misses the polygon says so and changes nothing", async ({ page, request }) => {
+    const w = await makeConflict(request);
+    await openNewForm(page, w);
+    await drawPolygon(page, [[-50, -25], [-40, -25], [-40, -15], [-50, -15]]);
+    await page.getByTestId("editor-hole").click();
+    for (const [lng, lat] of [[-30, -25], [-26, -25], [-26, -21]] as [number, number][]) await clickAt(page, lng, lat);
+    await page.getByTestId("editor-finish").click();
+    await expect(page.getByTestId("editor-notice")).toContainText("nothing was cut");
+    expect(((await geometryInText(page))!.coordinates as number[][][]).length).toBe(1);
+  });
+
+  test("merge fuses overlapping polygons into one", async ({ page, request }) => {
+    const w = await makeConflict(request);
+    await openNewForm(page, w);
+    await drawPolygon(page, [[-50, -25], [-42, -25], [-42, -15], [-50, -15]]);
+    await drawPolygon(page, [[-45, -22], [-38, -22], [-38, -12], [-45, -12]]);
+    await expect(page.getByTestId("editor-summary")).toContainText("2 polygons");
+    await page.getByTestId("editor-merge").click();
+    await expect(page.getByTestId("editor-summary")).toContainText("1 polygon");
+    expect((await geometryInText(page))!.type).toBe("Polygon");
+    await page.getByTestId("editor-undo").click();
+    await expect(page.getByTestId("editor-summary")).toContainText("2 polygons");
+  });
+
+  test("simplify removes redundant vertices from a dense outline and keeps it valid", async ({ page, request }) => {
+    const w = await makeConflict(request);
+    // A square whose sides carry 24 almost-collinear extra points each (typical of a traced border).
+    const side = (a: [number, number], b: [number, number]) => Array.from({ length: 24 }, (_, i) => [a[0] + ((b[0] - a[0]) * i) / 24 + (i % 2 ? 0.0001 : 0), a[1] + ((b[1] - a[1]) * i) / 24 + (i % 2 ? 0.0001 : 0)]);
+    const ring = [...side([-50, -25], [-40, -25]), ...side([-40, -25], [-40, -15]), ...side([-40, -15], [-50, -15]), ...side([-50, -15], [-50, -25])];
+    ring.push(ring[0]!);
+    const draft = await request.post("/api/admin/territorial-control", { data: { conflictId: w.conflict.id, actorId: w.a.id, status: "controlled", confidence: 0.5, geometry: { type: "Polygon", coordinates: [ring] }, validFrom: new Date().toISOString() } }).then((r) => r.json());
+    await page.goto("/admin/territorial-control");
+    await page.getByTestId(`territory-edit-${draft.id}`).click();
+    await editorReady(page);
+    await expect(page.getByTestId("editor-summary")).toContainText("96 vertices");
+    await page.getByTestId("editor-simplify").click();
+    await expect(page.getByTestId("editor-notice")).toContainText("96 →");
+    await expect(page.getByTestId("editor-summary")).not.toContainText("96 vertices");
+    const g = (await geometryInText(page))!;
+    expect((g.coordinates as number[][][])[0]!.length).toBeLessThan(30);
+    expect(planarArea(g)).toBeCloseTo(100, 0);
+    await expect(page.getByTestId("editor-invalid")).toHaveCount(0);
+  });
+
+  test("snapping: a point placed near an existing vertex lands exactly on it; with snapping off it does not", async ({ page, request }) => {
+    const w = await makeConflict(request);
+    await openNewForm(page, w);
+    await drawPolygon(page, [[-50, -25], [-40, -25], [-40, -15], [-50, -15]]);
+    const first = (await geometryInText(page))!;
+    const cornerVertex = (first.coordinates as number[][][])[0]![2]!; // the clicked top-right corner, exactly as stored
+    const corner = await px(page, cornerVertex[0]!, cornerVertex[1]!);
+    const startSecond = async () => {
+      await page.getByTestId("editor-draw").click();
+      await page.mouse.click(corner.x + 4, corner.y + 3); // a few pixels off the corner
+      await clickAt(page, -30, -15);
+      await clickAt(page, -30, -5);
+      await page.getByTestId("editor-finish").click();
+    };
+    await startSecond();
+    let g = (await geometryInText(page))!;
+    expect(g.type).toBe("MultiPolygon");
+    expect((g.coordinates as number[][][][])[1]![0]![0]).toEqual(cornerVertex);
+    await page.getByTestId("editor-undo").click();
+    await page.getByTestId("editor-snap").uncheck();
+    await startSecond();
+    g = (await geometryInText(page))!;
+    expect((g.coordinates as number[][][][])[1]![0]![0]).not.toEqual(cornerVertex);
+  });
+});
