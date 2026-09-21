@@ -43,3 +43,8 @@ Use **Maputnik** (development tool) to design the style; never ship it.
 
 ## Rollback
 The fallback path is env-gated; unsetting `NEXT_PUBLIC_PMTILES_URL` returns to today's behaviour.
+
+## Status update
+Implemented: provider abstraction (`lib/map/basemap.ts`), PMTiles protocol + local-first glyphs, Vigil Intel style,
+bundled key-less geography, diagnostics (`/admin/basemap`, `npm run basemap:check`). Remaining: producing/hosting a real
+archive (see `PMTILES_DEPLOYMENT.md`), benchmark (`PMTILES_BENCHMARK.md`, blocked), disputed-boundary layer, Martin.
