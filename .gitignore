@@ -21,3 +21,6 @@ playwright-report
 blob-report
 playwright/.cache
 prisma/dev.db.*.bak
+
+# Basemap archives are deployed as versioned files, never committed
+*.pmtiles
