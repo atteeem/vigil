@@ -38,6 +38,9 @@ export default defineConfig({
       // Fixture Telegram channels for the credential-gated adapter (test server only).
       TELEGRAM_FIXTURES: "true",
       TEST_FIXTURES: "true",
+      // Optional RSSHub sidecar (docs/RSSHUB_INTEGRATION.md): in tests it points at the local RSS fixture route, so
+      // `rsshub://feed-a` resolves to a real same-origin feed and exercises the normal RSSAdapter path.
+      RSSHUB_BASE_URL: "http://localhost:3100/api/test-fixtures/rss",
       // Fixture-only credentials so the credentialed FAA NOTAM adapter can be exercised against local
       // fixtures; CLOUDFLARE_RADAR_TOKEN is deliberately left unset (the "not configured" path).
       FAA_NOTAM_CLIENT_ID: "fixture-client",

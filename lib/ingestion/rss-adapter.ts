@@ -1,6 +1,7 @@
 import type { Source } from "@prisma/client";
 import type { SourceAdapter, NormalizedItem, HealthCheckResult } from "@/lib/ingestion/types";
 import { HttpFetchError, parseRetryAfter } from "@/lib/ingestion/errors";
+import { resolveFeedUrl } from "@/lib/ingestion/rsshub";
 
 interface RssItem {
   title?: string;
@@ -99,7 +100,8 @@ function parsePublishedAt(value: string | undefined): Date | undefined {
 export const RSSAdapter: SourceAdapter = {
   async fetchLatest(source: Source): Promise<unknown[]> {
     if (!source.url) return [];
-    const res = await fetch(source.url, { headers: RSS_REQUEST_HEADERS });
+    // `rsshub://route` resolves against the optional RSSHUB_BASE_URL sidecar; ordinary URLs are unchanged.
+    const res = await fetch(resolveFeedUrl(source.url), { headers: RSS_REQUEST_HEADERS });
     if (!res.ok) throw new HttpFetchError(res.status, res.statusText, parseRetryAfter(res.headers.get("retry-after")));
     const xml = await res.text();
     return parseRss(xml);
@@ -134,7 +136,7 @@ export const RSSAdapter: SourceAdapter = {
   async healthCheck(source: Source): Promise<HealthCheckResult> {
     if (!source.url) return { ok: false, message: "No feed URL configured." };
     try {
-      const res = await fetch(source.url, { method: "GET", headers: RSS_REQUEST_HEADERS });
+      const res = await fetch(resolveFeedUrl(source.url), { method: "GET", headers: RSS_REQUEST_HEADERS });
       if (!res.ok) return { ok: false, message: `HTTP ${res.status}` };
       return { ok: true };
     } catch (err) {
