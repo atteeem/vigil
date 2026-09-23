@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
+import { enableTerritory } from "./helpers/territory";
 import { parseUsgsEarthquakes } from "@/lib/hazards/providers/usgs-earthquakes";
 import { parseFirmsCsv } from "@/lib/hazards/providers/firms-thermal";
 import { parseEonet } from "@/lib/hazards/providers/eonet";
@@ -458,8 +459,7 @@ test.describe.serial("World map UI", () => {
     await page.getByTestId("hazard-toggle-earthquakes").uncheck();
     await expect(page.locator("[data-hazard-layers]").first()).toHaveAttribute("data-hazard-layers", "weather");
     // Independent of the conflict controls: Territorial Control and Heatmap behave as before.
-    await page.getByTestId("territorial-toggle").click();
-    await expect(page.getByTestId("territorial-toggle")).toHaveAttribute("aria-pressed", "true");
+    await enableTerritory(page);
     await page.getByRole("button", { name: "Heatmap" }).click();
     await expect(page.getByRole("button", { name: "Heatmap" })).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByTestId("hazard-toggle-weather")).toBeChecked();

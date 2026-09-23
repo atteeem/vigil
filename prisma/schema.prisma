@@ -269,6 +269,7 @@ model Conflict {
   events                      Event[]
   actors                      ConflictActor[]
   territories                 ConflictTerritory[]
+  territorialDatasets         TerritorialDataset[]
   militaryUnits               MilitaryUnit[]
   areasOfOperation            AreaOfOperation[]
   territorialChangeCandidates TerritorialChangeCandidate[]
@@ -446,9 +447,17 @@ model ConflictTerritory {
   // replacing the whole polygon. On a PUBLISHED row it records which version
   // the row was split from, so history shows both halves of a split.
   splitFromId String?        @map("split_from_id")
+  // What the source actually supports: "control" (de-facto territorial control, incl. contested), "influence"
+  // (meaningful influence without control) or "presence" (an actor is known to operate there). Never inferred from
+  // activity, attacks or news volume; presence/influence must not be drawn or worded as control.
+  territoryKind String       @default("control") @map("territory_kind")
+  // The registry entry (TerritorialDataset) this geometry came from; null for editorially drawn territory.
+  datasetId   String?        @map("dataset_id")
+  dataset     TerritorialDataset? @relation(fields: [datasetId], references: [id], onDelete: SetNull)
   createdAt   DateTime       @default(now()) @map("created_at")
   updatedAt   DateTime       @updatedAt @map("updated_at")
 
+  @@index([datasetId])
   @@index([conflictId, validFrom])
   @@index([published, validFrom, validTo])
   @@index([splitFromId])
@@ -1447,4 +1456,44 @@ model BriefSnapshot {
 
   @@index([scopeKey, generatedAt])
   @@map("brief_snapshots")
+}
+
+// Registry of territorial datasets: WHAT DATA IS AVAILABLE (and where it came from, under which licence), not the
+// geometry itself. Published geometry stays in ConflictTerritory (versioned, immutable once published, human
+// approved); a dataset is "available" on the map only when it has published territory. Candidates (no geometry yet,
+// or geometry blocked by licensing) are recorded here for the admin coverage view and are never listed publicly.
+model TerritorialDataset {
+  id                  String    @id @default(cuid())
+  slug                String    @unique
+  name                String
+  conflictId          String?   @map("conflict_id")
+  conflict            Conflict? @relation(fields: [conflictId], references: [id], onDelete: SetNull)
+  // A region that is not a Vigil conflict (e.g. a country-level influence layer); free text.
+  regionId            String?   @map("region_id")
+  countryCodes        String?   @map("country_codes") // JSON string[]
+  // TERRITORIAL_CONTROL | CONTESTED_CONTROL | INFLUENCE | PRESENCE (lib/territory/dataset-types.ts)
+  datasetType         String    @map("dataset_type")
+  provider            String
+  sourceUrl           String?   @map("source_url")
+  license             String?
+  attribution         String?
+  coverageDescription String?   @map("coverage_description")
+  lastUpdated         DateTime? @map("last_updated")
+  validFrom           DateTime? @map("valid_from")
+  validTo             DateTime? @map("valid_to")
+  // none | draft | published | blocked
+  geometryAvailability String   @default("none") @map("geometry_availability")
+  actorCoverage       String?   @map("actor_coverage")
+  confidence          Float?
+  // candidate | pending_review | approved | rejected | blocked
+  reviewStatus        String    @default("candidate") @map("review_status")
+  enabled             Boolean   @default(true)
+  notes               String?
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  territories ConflictTerritory[]
+
+  @@index([conflictId])
+  @@map("territorial_datasets")
 }

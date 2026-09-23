@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
-const POLL_INTERVAL_MS = 20_000;
+// Geometry of a dataset changes when a new dated version is published, which is rare: poll gently.
+const POLL_INTERVAL_MS = 120_000;
 
 const EMPTY_COLLECTION: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
@@ -22,23 +23,32 @@ export interface TerritorialControlResult {
  * uses for events — no parallel caching or cancellation design to reason
  * about separately.
  */
-export function useTerritorialControl(asOf: Date | null, prefetchAsOf?: Date | null): TerritorialControlResult {
+export function useTerritorialControl(asOf: Date | null, prefetchAsOf?: Date | null, datasetIds: readonly string[] = []): TerritorialControlResult {
   const [featureCollection, setFeatureCollection] = useState<GeoJSON.FeatureCollection>(EMPTY_COLLECTION);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const cache = useRef(new Map<string, GeoJSON.FeatureCollection>());
   const asOfTime = asOf ? asOf.getTime() : null;
   const prefetchAsOfTime = prefetchAsOf ? prefetchAsOf.getTime() : null;
+  // Geometry is fetched ON DEMAND for the datasets the user turned on; with none selected nothing is requested at all.
+  const datasetKey = [...datasetIds].sort().join(",");
+  const datasetParam = `datasets=${encodeURIComponent(datasetKey)}`;
 
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
+    if (!datasetKey) {
+      setFeatureCollection(EMPTY_COLLECTION); // eslint-disable-line react-hooks/set-state-in-effect -- nothing selected: nothing shown, nothing fetched
+      setLoading(false);
+      setError(false);
+      return () => controller.abort();
+    }
 
     async function pollLive() {
       if (cancelled) return;
       setError(false);
       try {
-        const res = await fetch("/api/territorial-control", { signal: controller.signal });
+        const res = await fetch(`/api/territorial-control?${datasetParam}`, { signal: controller.signal });
         if (!res.ok) return;
         const data = (await res.json()) as GeoJSON.FeatureCollection;
         if (!cancelled) setFeatureCollection(data);
@@ -53,7 +63,7 @@ export function useTerritorialControl(asOf: Date | null, prefetchAsOf?: Date | n
         if (!cancelled) setError(true);
         return;
       }
-      const key = new Date(timestamp).toISOString();
+      const key = `${new Date(timestamp).toISOString()}|${datasetKey}`;
       const cached = cache.current.get(key);
       if (cached) {
         if (!cancelled) {
@@ -67,7 +77,7 @@ export function useTerritorialControl(asOf: Date | null, prefetchAsOf?: Date | n
         setError(false);
       }
       try {
-        const res = await fetch(`/api/territorial-control?at=${encodeURIComponent(key)}`, { signal: controller.signal });
+        const res = await fetch(`/api/territorial-control?at=${encodeURIComponent(new Date(timestamp).toISOString())}&${datasetParam}`, { signal: controller.signal });
         if (!res.ok) {
           if (!cancelled) setError(true);
           return;
@@ -97,14 +107,14 @@ export function useTerritorialControl(asOf: Date | null, prefetchAsOf?: Date | n
       cancelled = true;
       controller.abort();
     };
-  }, [asOfTime]);
+  }, [asOfTime, datasetKey, datasetParam]);
 
   useEffect(() => {
-    if (prefetchAsOfTime === null || Number.isNaN(prefetchAsOfTime)) return;
-    const key = new Date(prefetchAsOfTime).toISOString();
+    if (!datasetKey || prefetchAsOfTime === null || Number.isNaN(prefetchAsOfTime)) return;
+    const key = `${new Date(prefetchAsOfTime).toISOString()}|${datasetKey}`;
     if (cache.current.has(key)) return;
     const controller = new AbortController();
-    fetch(`/api/territorial-control?at=${encodeURIComponent(key)}`, { signal: controller.signal })
+    fetch(`/api/territorial-control?at=${encodeURIComponent(new Date(prefetchAsOfTime).toISOString())}&${datasetParam}`, { signal: controller.signal })
       .then(async (res) => {
         if (!res.ok) return;
         const data = (await res.json()) as GeoJSON.FeatureCollection;
@@ -112,7 +122,7 @@ export function useTerritorialControl(asOf: Date | null, prefetchAsOf?: Date | n
       })
       .catch(() => {});
     return () => controller.abort();
-  }, [prefetchAsOfTime]);
+  }, [prefetchAsOfTime, datasetKey, datasetParam]);
 
   return { featureCollection, loading, error };
 }

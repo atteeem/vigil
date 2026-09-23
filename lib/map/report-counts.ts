@@ -83,3 +83,44 @@ export function aggregateReportBuckets(events: readonly GeoReportable[], zoom: n
     .sort((a, b) => b.reports - a.reports || a.lat - b.lat || a.lng - b.lng)
     .slice(0, maxBuckets);
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// UNIQUE reports. The number on a marker is "how many distinct published reports does it represent": a report is a
+// stored raw item, and one report can be linked to several events (merges, corroboration paths) or reach a conflict
+// through several of them. Counting per-event attachments would count it more than once, so every count on the map
+// and globe is built from report ids, each report attributed to exactly ONE event (the earliest, ties by id).
+// Summing these per-event numbers over ANY set of events (a cluster, a zoom cell, a conflict) is then exactly the
+// number of unique reports, and a split can never add up to more than its parent.
+// ---------------------------------------------------------------------------------------------------------------
+
+export interface ReportIdentifiable {
+  id: string;
+  occurredAt: string;
+  reportIds?: readonly string[];
+  sources?: readonly unknown[];
+  sourceCount?: number;
+}
+
+/** Report ids of one event; legacy events without ids get synthetic ones (one per attached source, at least one). */
+export function reportIdsOf(event: ReportIdentifiable): string[] {
+  if (event.reportIds && event.reportIds.length > 0) return [...new Set(event.reportIds)];
+  return Array.from({ length: reportCountOf(event) }, (_, i) => `${event.id}#${i}`);
+}
+
+/** How many unique reports each event carries once every report is attributed to a single event. */
+export function attributeReports<E extends ReportIdentifiable>(events: readonly E[]): Map<string, { reportIds: string[]; reportCount: number }> {
+  const seen = new Set<string>();
+  const out = new Map<string, { reportIds: string[]; reportCount: number }>();
+  const ordered = [...events].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.id.localeCompare(b.id));
+  for (const e of ordered) {
+    const own = reportIdsOf(e).filter((r) => !seen.has(r));
+    for (const r of own) seen.add(r);
+    out.set(e.id, { reportIds: own, reportCount: own.length });
+  }
+  return out;
+}
+
+/** Unique reports across a set of events. */
+export function uniqueReportCount(events: readonly ReportIdentifiable[]): number {
+  return new Set(events.flatMap((e) => reportIdsOf(e))).size;
+}

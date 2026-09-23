@@ -45,6 +45,7 @@ export function dbEventToConflictEvent(event: EventWithSources & { history?: Eve
   const { verificationStatus, disputed } = toUiVerification(event.verificationStatus as DbVerificationStatus);
   const sources: SourceRef[] = event.sources.map((link) => ({
     id: link.rawIngestionItem.source.id,
+    reportId: link.rawIngestionItem.id,
     name: link.rawIngestionItem.source.name,
     // Prefer the source's own configured category (e.g. "News" for BBC
     // World) over the generic per-adapter-type label, when set.
@@ -104,6 +105,7 @@ export function dbEventToConflictEvent(event: EventWithSources & { history?: Eve
     // separate corroborating source) count.
     sourceCount: independentSourceCount(event.sources),
     sources,
+    reportIds: [...new Set(event.sources.map((l) => l.rawIngestionItem.id))],
     timeline: [
       {
         label: "First report",

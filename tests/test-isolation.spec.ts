@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { disableTerritory, enableTerritory } from "./helpers/territory";
 import { existsSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 
@@ -23,8 +24,10 @@ test.describe("Test/dev database separation", () => {
     expect(res.ok()).toBe(true);
 
     expect(existsSync("prisma/test.db")).toBe(true);
-    expect(readFileSync("prisma/test.db").includes(marker)).toBe(true);
-    if (existsSync("prisma/dev.db")) expect(readFileSync("prisma/dev.db").includes(marker)).toBe(false);
+    // The database runs in WAL mode: recent writes live in the -wal file until a checkpoint moves them into the main file.
+    const bytesOf = (file: string) => [file, `${file}-wal`].filter((f) => existsSync(f)).map((f) => readFileSync(f));
+    expect(bytesOf("prisma/test.db").some((b) => b.includes(marker))).toBe(true);
+    expect(bytesOf("prisma/dev.db").some((b) => b.includes(marker))).toBe(false);
   });
 
   test("3. The test DB starts from migrations + seed exactly like a fresh dev DB: seed data present, no fixture actors at seed time", async () => {
@@ -58,14 +61,19 @@ test.describe("Test/dev database separation", () => {
 test.describe("Territorial Control empty state", () => {
   test.use({ isMobile: false });
 
-  test("With no territorial data the legend says so instead of showing an empty or bogus legend", async ({ page }) => {
-    await page.route("**/api/territorial-control**", (route) =>
-      route.fulfill({ contentType: "application/json", body: JSON.stringify({ type: "FeatureCollection", features: [] }) }),
-    );
+  test("With no territorial datasets the selector says so, draws nothing and requests no geometry", async ({ page }) => {
+    let geometryRequests = 0;
+    await page.route("**/api/territorial-control/datasets", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ datasets: [] }) }));
+    await page.route("**/api/territorial-control?**", (route) => {
+      geometryRequests++;
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ type: "FeatureCollection", features: [] }) });
+    });
     await page.goto("/world");
     await page.getByTestId("territorial-toggle").click();
-    await expect(page.getByTestId("territory-empty-state")).toHaveText("No territorial control data available.");
-    await expect(page.locator("[data-testid^=territory-legend-actor-]")).toHaveCount(0);
+    await expect(page.getByTestId("territory-no-datasets")).toHaveText("No territorial datasets are currently available.");
+    await expect(page.getByTestId("territory-dataset-list")).toHaveCount(0);
+    await expect(page.getByTestId("territory-legend")).toHaveCount(0);
+    expect(geometryRequests).toBe(0);
   });
 });
 
@@ -89,7 +97,7 @@ test.describe("Territorial Control actually renders when toggled", () => {
     await page.evaluate(() => {
       (window as unknown as { __vigilMap: { isStyleLoaded: () => boolean } }).__vigilMap.isStyleLoaded = () => false;
     });
-    await page.getByTestId("territorial-toggle").click();
+    await enableTerritory(page, `Render ${unique}`);
     await expect(page.getByTestId(`territory-legend-actor-Render Actor ${unique}`)).toBeVisible();
     const visibility = () => page.evaluate(() => (window as unknown as { __vigilMap: { getLayoutProperty: (l: string, p: string) => string } }).__vigilMap.getLayoutProperty("territory-fill", "visibility"));
     await expect.poll(visibility).toBe("visible");
@@ -98,8 +106,8 @@ test.describe("Territorial Control actually renders when toggled", () => {
     await expect
       .poll(() => page.evaluate(() => (window as unknown as { __vigilMap: { queryRenderedFeatures: (o: object) => unknown[] } }).__vigilMap.queryRenderedFeatures({ layers: ["territory-fill"] }).length))
       .toBeGreaterThan(0);
-    // Toggling back off hides it again.
-    await page.getByTestId("territorial-toggle").click();
+    // Turning the dataset off hides it again.
+    await disableTerritory(page);
     await expect.poll(visibility).toBe("none");
   });
 });

@@ -40,10 +40,13 @@ function toTerritoryDTO(row: TerritoryRow, asOf?: Date): TerritoryDTO | null {
     id: row.id,
     conflictId: row.conflictId,
     conflictName: row.conflict.name,
+    conflictSlug: row.conflict.slug,
     actorId: row.actorId,
     actorName: row.actor?.name ?? null,
     actorColor: row.actor?.color ?? "#8a8f98",
     status: asOf ? deriveDisplayStatus(row.status as AssignableTerritorialStatus, row.validFrom, asOf) : (row.status as AssignableTerritorialStatus),
+    territoryKind: (["control", "influence", "presence"].includes(row.territoryKind) ? row.territoryKind : "control") as TerritoryDTO["territoryKind"],
+    datasetId: row.datasetId,
     confidence: row.confidence,
     geometry,
     sourceName: row.sourceName,
@@ -58,6 +61,14 @@ function toTerritoryDTO(row: TerritoryRow, asOf?: Date): TerritoryDTO | null {
 }
 
 const WITH_RELATIONS = { conflict: true, actor: true } as const;
+
+/** Selects the territory of the given dataset ids. `conflict:<id>` selects a conflict's editorially drawn territory
+ * (rows with no registry dataset), which the public availability list exposes as an implicit dataset. */
+export function datasetWhere(ids: string[]) {
+  const conflictIds = ids.filter((i) => i.startsWith("conflict:")).map((i) => i.slice("conflict:".length));
+  const datasetIds = ids.filter((i) => !i.startsWith("conflict:"));
+  return { OR: [...(datasetIds.length ? [{ datasetId: { in: datasetIds } }] : []), ...(conflictIds.length ? [{ datasetId: null, conflictId: { in: conflictIds } }] : []), ...(ids.length === 0 ? [{ id: "__none__" }] : [])] };
+}
 
 export function listActorsForConflict(conflictId: string): Promise<ConflictActor[]> {
   return prisma.conflictActor.findMany({ where: { conflictId }, orderBy: { createdAt: "asc" } });
@@ -77,9 +88,11 @@ export async function createActor(conflictId: string, name: string): Promise<Con
  * A single indexed query, published-only — future/expired versions are
  * excluded purely by the validFrom/validTo bounds, never by re-checking
  * status client-side. */
-export async function listTerritoriesAt(timestamp: Date): Promise<TerritoryDTO[]> {
+export async function listTerritoriesAt(timestamp: Date, opts: { datasetIds?: string[] } = {}): Promise<TerritoryDTO[]> {
   const rows = await prisma.conflictTerritory.findMany({
     where: {
+      // AND, not spread: the time window below has its own OR, which would silently replace a dataset OR.
+      ...(opts.datasetIds ? { AND: [datasetWhere(opts.datasetIds)] } : {}),
       published: true,
       validFrom: { lte: timestamp },
       OR: [{ validTo: null }, { validTo: { gt: timestamp } }],
@@ -133,6 +146,9 @@ export interface TerritoryInput {
   validTo?: Date | null;
   /** Draft only: the active version this draft partially changes (a split). */
   splitFromId?: string | null;
+  /** What the source supports; defaults to "control". Presence / influence are never drawn as control. */
+  territoryKind?: "control" | "influence" | "presence";
+  datasetId?: string | null;
 }
 
 function toRow(input: TerritoryInput) {
@@ -147,6 +163,8 @@ function toRow(input: TerritoryInput) {
     validFrom: input.validFrom,
     validTo: input.validTo ?? null,
     splitFromId: input.splitFromId ?? null,
+    territoryKind: input.territoryKind ?? "control",
+    datasetId: input.datasetId ?? null,
   };
 }
 

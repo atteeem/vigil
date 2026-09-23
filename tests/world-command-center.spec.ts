@@ -112,7 +112,7 @@ function payload(over: Partial<CommandCenter> = {}, claims = false): CommandCent
       { key: "energy", label: "Energy", count: 0, items: [] },
       { key: "internet", label: "Internet", count: 0, items: [] },
     ],
-    conflicts: [{ slug: "ukraine", name: "Ukraine", severity: "extreme", severityScore: 100, lat: 49, lng: 32, recent: true, latestTitle: "Missile strike reported near Kharkiv" }],
+    conflicts: [{ id: "c-ukraine", slug: "ukraine", name: "Ukraine", severity: "extreme", severityScore: 100, lat: 49, lng: 32, recent: true, latestTitle: "Missile strike reported near Kharkiv" }],
     meta: { revision: "t", computeMs: 1, includePartyClaims: claims, partyClaimsHidden: claims ? 0 : 1, thresholds: { highTensionMinScore: 70, liveMaxMinutes: 120 } },
     ...over,
   };

@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
+import { enableTerritory } from "./helpers/territory";
 import { aggregateReportBuckets, formatReportCount, hotspotCellDegrees, reportCountOf, sumReportCounts } from "@/lib/map/report-counts";
 import { clusterEvents, formatClusterCount } from "@/lib/globe/event-clusters";
 import { eventsToGeoJSON } from "@/lib/map/events-to-geojson";
@@ -206,7 +207,7 @@ test.describe.serial("Report counts on the rendered map", () => {
     await page.waitForFunction(() => Boolean((window as unknown as { __vigilMap?: unknown }).__vigilMap));
     const read = `(map) => { map.jumpTo({ center: [${LNG}, ${LAT}], zoom: 11 }); return map.querySourceFeatures("events").filter((f) => !f.properties.cluster && String(f.properties.title).startsWith("RC event")).map((f) => f.properties.reportCount).sort(); }`;
     await expect.poll(async () => mapCall<number[]>(page, read)).toEqual([3, 5]);
-    await page.getByTestId("territorial-toggle").click();
+    await enableTerritory(page);
     await expect.poll(async () => mapCall<number[]>(page, read)).toEqual([3, 5]);
   });
 });

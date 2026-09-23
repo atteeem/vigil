@@ -35,10 +35,14 @@ export interface TerritoryDTO {
   id: string;
   conflictId: string;
   conflictName: string;
+  conflictSlug: string;
   actorId: string | null;
   actorName: string | null;
   actorColor: string;
   status: TerritorialStatus;
+  /** control | influence | presence: what the source supports (never inferred). */
+  territoryKind: "control" | "influence" | "presence";
+  datasetId: string | null;
   confidence: number;
   geometry: TerritorialGeometry;
   sourceName: string | null;
@@ -61,10 +65,13 @@ export interface TerritoryFeatureProperties {
   id: string;
   conflictId: string;
   conflictName: string;
+  conflictSlug: string;
   actorId: string | null;
   actorName: string | null;
   actorColor: string;
   status: TerritorialStatus;
+  kind: "control" | "influence" | "presence";
+  datasetId: string | null;
   confidence: number;
   sourceName: string | null;
   sourceUrl: string | null;

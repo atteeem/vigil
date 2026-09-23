@@ -13,6 +13,11 @@ export async function GET(request: Request) {
   if (at && Number.isNaN(timestamp.getTime())) {
     return NextResponse.json({ error: "'at' is not a valid timestamp" }, { status: 400 });
   }
-  const territories = await listTerritoriesAt(timestamp);
+  // Geometry is loaded ON DEMAND for the datasets the user turned on (availability metadata is a separate, cheap
+  // endpoint). Without `datasets` nothing is returned: no request ever ships every territory on Earth.
+  const datasetsParam = new URL(request.url).searchParams.get("datasets");
+  const datasetIds = datasetsParam ? datasetsParam.split(",").map((s) => s.trim()).filter(Boolean) : [];
+  if (datasetIds.length === 0) return NextResponse.json(territoriesToGeoJSON([]));
+  const territories = await listTerritoriesAt(timestamp, { datasetIds });
   return NextResponse.json(territoriesToGeoJSON(territories));
 }

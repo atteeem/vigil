@@ -135,6 +135,11 @@ function landPath(projection: HeatProjection, w: number, h: number): Path2D {
           prev = lng;
           return projectX(lng + offset, w);
         });
+        // A ring that winds once around a pole (Antarctica) ends a full turn away from where it started. Closing it
+        // with a straight line would leave the polar cap outside the shape (a hole around the pole); close it
+        // through the pole edge of the texture instead.
+        const windsPole = Math.abs(offset) >= 360 - 1e-6;
+        const poleY = ring.reduce((sum, pt) => sum + pt[1]!, 0) / ring.length < 0 ? h : 0;
         for (const dx of [-w, 0, w]) {
           ring.forEach((pt, i) => {
             const x = xs[i]! + dx;
@@ -142,6 +147,10 @@ function landPath(projection: HeatProjection, w: number, h: number): Path2D {
             if (i === 0) path.moveTo(x, y);
             else path.lineTo(x, y);
           });
+          if (windsPole) {
+            path.lineTo(xs[xs.length - 1]! + dx, poleY);
+            path.lineTo(xs[0]! + dx, poleY);
+          }
           path.closePath();
         }
       }

@@ -2,6 +2,8 @@ import type { EventType, Severity, VerificationStatus } from "./severity";
 
 export interface SourceRef {
   id: string;
+  /** The stored report (raw ingestion item) this link is: the unit report counts are made of. */
+  reportId?: string;
   name: string;
   sourceType: "Wire" | "Official" | "Local News" | "News" | "OSINT" | "Social" | "NGO";
   /** Trust-model classification (lib/types/db.ts SourceRole) — only set
@@ -61,6 +63,8 @@ export interface ConflictEvent {
   locationPrecision?: string | null;
   /** Hierarchical scope (global | country | region | city | point | unknown) and the named geography behind it. */
   locationScope?: string | null;
+  /** Unique published reports supporting this event (raw item ids). Report counts are counts of these ids. */
+  reportIds?: string[];
   city?: string | null;
   adminRegion?: string | null;
   locationName?: string | null;

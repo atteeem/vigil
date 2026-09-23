@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { disableTerritory, enableTerritory } from "./helpers/territory";
 
 // Real-browser coverage for Territorial Control Mode's public /world map
 // integration — the mode toggle, legend, click-to-inspect panel, and
@@ -101,11 +102,12 @@ async function waitForFeatureAt(page: Page, layerIds: string[], lng: number, lat
   );
 }
 
+// Territorial Control is now chosen dataset by dataset (see tests/helpers/territory.ts): "toggling" means ticking every
+// available dataset, or unticking them all.
 async function toggleTerritorial(page: Page) {
-  const btn = page.getByTestId("territorial-toggle");
-  const wasPressed = (await btn.getAttribute("aria-pressed")) === "true";
-  await btn.click();
-  await expect(btn).toHaveAttribute("aria-pressed", wasPressed ? "false" : "true");
+  const wasPressed = (await page.getByTestId("territorial-toggle").getAttribute("aria-pressed")) === "true";
+  if (wasPressed) await disableTerritory(page);
+  else await enableTerritory(page);
 }
 
 test("1. Toggling Territorial Control on/off shows and hides the legend", async ({ page, isMobile }) => {

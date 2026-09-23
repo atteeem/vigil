@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, Pencil, Upload, ArrowRightLeft, Scissors } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { TerritorialCoverage } from "@/components/admin/territorial-coverage";
 import { TerritoryEditorMap, type EditorOverlay } from "@/components/admin/territory-editor-map";
 import type { ConflictDTO, TerritorialChangeCandidateDTO } from "@/lib/types/db";
 import type { ConflictActorDTO, TerritorialGeometry, TerritoryDTO } from "@/lib/types/territorial-control";
@@ -484,6 +485,8 @@ export default function AdminTerritorialControlPage() {
           <Plus className="h-3.5 w-3.5" /> New Territory
         </Button>
       </div>
+
+      <TerritorialCoverage />
 
       {notice && (
         <p className="mb-3 rounded-lg border border-border/60 p-2 text-xs text-ink-dim" data-testid="territory-notice">

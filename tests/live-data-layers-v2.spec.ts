@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
+import { enableTerritory } from "./helpers/territory";
 import { parseFaaNas } from "@/lib/hazards/providers/faa-nas";
 import { parseFaaNotams, parseQLineCircle } from "@/lib/hazards/providers/faa-notam";
 import { assessChokepoint, parsePortDisruptions } from "@/lib/hazards/providers/portwatch";
@@ -426,8 +427,7 @@ test.describe.serial("World map UI (v2 layers)", () => {
     await expect(page.locator("[data-hazard-layers]").first()).toHaveAttribute("data-hazard-layers", "internet,earthquakes");
     await page.getByTestId("hazard-toggle-earthquakes").uncheck();
     await page.getByTestId("hazard-toggle-internet").uncheck();
-    await page.getByTestId("territorial-toggle").click();
-    await expect(page.getByTestId("territorial-toggle")).toHaveAttribute("aria-pressed", "true");
+    await enableTerritory(page);
     await expect(page.locator("[data-hazard-layers]").first()).toHaveAttribute("data-hazard-layers", "");
   });
 

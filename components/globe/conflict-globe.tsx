@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 import type { Conflict, ConflictEvent } from "@/lib/types";
 import { SEVERITY_HEX } from "@/lib/utils/severity";
 import { getLandFeatures } from "@/lib/globe/land-geo";
-import { reportCountOf } from "@/lib/map/report-counts";
+import { buildConflictAggregates } from "@/lib/map/intelligence-markers";
 import { useHeatField } from "@/hooks/use-heat-field";
 import { selectHeatConflicts } from "@/lib/heat/public-inputs";
 import { HeatLegend } from "@/components/heat/heat-legend";
@@ -155,6 +155,21 @@ export function ConflictGlobe({
   }, []);
 
   const isMobile = size.width < 640;
+
+  // The base sphere is a Phong material lit by a directional light, which paints a soft white specular highlight on
+  // the pole nearest the light (a grey smudge across the top of the globe). The globe is a flat data surface, not a
+  // shiny ball: no specular term.
+  useEffect(() => {
+    if (!ready || !globeRef.current) return;
+    // The base sphere is the Phong-lit mesh of radius 100 inside the globe group (react-globe.gl exposes its material only as a prop).
+    globeRef.current.scene().traverse((o: unknown) => {
+      const mesh = o as unknown as { isMesh?: boolean; geometry?: { parameters?: { radius?: number } }; material?: { isMeshPhongMaterial?: boolean; specular?: { set(c: number): void }; shininess: number } };
+      if (mesh.isMesh && mesh.geometry?.parameters?.radius === 100 && mesh.material?.isMeshPhongMaterial) {
+        mesh.material.specular?.set(0x000000);
+        mesh.material.shininess = 0;
+      }
+    });
+  }, [ready]);
 
   // Debug/test handle to the three.js scene (same pattern as window.__vigilMap on the flat map).
   useEffect(() => {
@@ -336,11 +351,8 @@ export function ConflictGlobe({
   // conflict's events (independent of the Events layer toggle and of any
   // territorial data), so the default globe's dots carry a report count too.
   const conflictReportCounts = useMemo(() => {
-    const totals = new Map<string, number>();
-    for (const e of events) {
-      if (e.conflictId) totals.set(e.conflictId, (totals.get(e.conflictId) ?? 0) + reportCountOf(e));
-    }
-    return totals;
+    // Unique published reports per conflict (the same canonical aggregation as the flat map).
+    return new Map([...buildConflictAggregates(events)].map(([id, a]) => [id, a.reportCount]));
   }, [events]);
   const eventClusters = useMemo(
     () => clusterEvents(eventPoints, clusterRadiusForAltitude(cameraAltitude)),
@@ -412,7 +424,9 @@ export function ConflictGlobe({
           // border lines below still render in both modes).
           polygonsData={isSatellite ? [] : landFeatures}
           polygonCapColor={() => LAND_FILL_COLOR}
-          polygonSideColor={() => "rgba(20, 24, 30, 0.35)"}
+          // No side walls: three-globe extrudes every land polygon down to the CENTRE of the globe (radius 0) when a side
+          // colour is set, which is ~60% of all the land triangles, none of it ever visible from outside.
+          polygonSideColor={() => null as unknown as string}
           // No stroke on the fill: the fill's edge IS the coastline, and the
           // border layer below draws interior borders only (see
           // lib/globe/country-borders.ts) — so there is exactly one line
@@ -530,14 +544,14 @@ function makeHotspotEl(
     (conflict.severity === "severe" || conflict.severity === "extreme");
 
   wrapper.innerHTML = `
-    <span style="position:relative;display:flex;align-items:center;justify-content:center;width:${18 * scale}px;height:${18 * scale}px;opacity:${dimmed ? 0.35 : 1};">
+    <span style="position:relative;display:flex;align-items:center;justify-content:center;width:${24 * scale}px;height:${24 * scale}px;opacity:${dimmed ? 0.35 : 1};">
       ${
         shouldPulse
           ? `<span style="position:absolute;inset:-6px;border-radius:9999px;background:${color};opacity:0.35;animation:pulse-soft 2.4s ease-in-out infinite;"></span>`
           : ""
       }
       <span style="position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;border-radius:9999px;background:${color};box-shadow:0 0 0 2px rgba(8,10,13,0.8);">
-        ${reports > 0 ? `<span style="font:700 ${formatClusterCount(reports).length > 2 ? 8 : 10}px system-ui, sans-serif;color:#F3F5F7;text-shadow:0 1px 2px rgba(8,10,13,0.9);">${formatClusterCount(reports)}</span>` : ""}
+        ${reports > 0 ? `<span style="font:800 ${formatClusterCount(reports).length > 2 ? 10 : 13}px system-ui, sans-serif;color:#FFFFFF;text-shadow:0 0 3px rgba(8,10,13,0.95),0 1px 2px rgba(8,10,13,0.95);">${formatClusterCount(reports)}</span>` : ""}
       </span>
     </span>
   `;
@@ -572,12 +586,12 @@ function makeClusterEl(cluster: EventCluster, layer: MapLayer): HTMLElement {
   const color = SEVERITY_HEX[cluster.severity];
   // Big enough to hold the label; grows a little with the number of events
   // grouped but caps out — a cluster of hundreds shouldn't dwarf the globe.
-  const size = Math.max(16 + (label.length - 1) * 4, 16 + Math.min(cluster.count - 1, 20) * 0.6);
+  const size = Math.max(24 + (label.length - 1) * 5, 24 + Math.min(cluster.count - 1, 20) * 0.6);
 
   wrapper.innerHTML = `
     <span style="position:relative;display:flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;opacity:${dimmed ? 0.35 : 1};">
       <span style="position:absolute;inset:0;border-radius:9999px;background:${color};box-shadow:0 0 0 2px rgba(8,10,13,0.8);"></span>
-      <span style="position:relative;font:700 ${label.length > 2 ? 8 : 10}px system-ui, sans-serif;color:#F3F5F7;text-shadow:0 1px 2px rgba(8,10,13,0.9);">${label}</span>
+      <span style="position:relative;font:800 ${label.length > 2 ? 10 : 13}px system-ui, sans-serif;color:#FFFFFF;text-shadow:0 0 3px rgba(8,10,13,0.95),0 1px 2px rgba(8,10,13,0.95);">${label}</span>
     </span>
   `;
 

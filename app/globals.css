@@ -3,6 +3,14 @@
    produced garbage utilities that broke the whole stylesheet. Keep them out of the scan. */
 @source not "../public/fonts";
 @source not "../public/basemaps";
+/* Database files (dev/test/scratch copies) are binary too. */
+@source not "../prisma";
+/* Scratch / alternate Next build directories (Turbopack caches are binary). */
+@source not "../.next-visual";
+@source not "../.next-test";
+@source not "../.next-smoke";
+@source not "../.next-build";
+@source not "../scripts";
 @import "maplibre-gl/dist/maplibre-gl.css";
 
 @theme {

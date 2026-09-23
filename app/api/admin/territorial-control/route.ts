@@ -25,6 +25,8 @@ interface CreateBody {
   validTo?: string | null;
   /** Partial change: the active version this draft carves its area out of when published. */
   splitFromId?: string | null;
+  territoryKind?: string;
+  datasetId?: string | null;
 }
 
 export async function POST(request: Request) {
@@ -60,6 +62,8 @@ export async function POST(request: Request) {
     validFrom,
     validTo,
     splitFromId: body.splitFromId ?? null,
+    territoryKind: ["control", "influence", "presence"].includes(body.territoryKind ?? "") ? (body.territoryKind as TerritoryInput["territoryKind"]) : "control",
+    datasetId: body.datasetId ?? null,
   };
   try {
     const created = await createTerritoryDraft(input);

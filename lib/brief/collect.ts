@@ -77,14 +77,19 @@ const evidenceText = (e: EvidenceSummary) => `${e.independentSources} independen
 // ---------------------------------------------------------------------------------------------
 // Conflict events and their material updates
 // ---------------------------------------------------------------------------------------------
-type EventRow = Awaited<ReturnType<typeof loadEvents>>[number];
-const loadEvents = (where: object, take: number) =>
-  prisma.event.findMany({
-    where: { published: true, origin: "conflict_news", ...where },
-    include: { conflict: { select: { id: true, slug: true, name: true, shortName: true, fightingCountries: true, participantCountries: true, supporterCountries: true, geographyBasis: true } }, sources: { include: { rawIngestionItem: { include: { source: true } } } }, militaryUnitLinks: { select: { unitId: true } }, history: { where: { field: { in: HISTORY_FIELDS } }, orderBy: { createdAt: "asc" } } },
-    orderBy: { occurredAt: "desc" },
-    take,
-  });
+type EventRow = Awaited<ReturnType<typeof loadChunk>>[number];
+// The include tree (sources -> reports -> source, history) makes the database look up related rows with one `IN (...)` per
+// level; with a few thousand events that exceeds SQLite's bound-parameter limit ("query parameter limit exceeded"),
+// which broke every brief once thousands of reports had been published. Select the ids first, then load them in chunks.
+const EVENT_CHUNK = 300;
+const eventInclude = { conflict: { select: { id: true, slug: true, name: true, shortName: true, fightingCountries: true, participantCountries: true, supporterCountries: true, geographyBasis: true } }, sources: { include: { rawIngestionItem: { include: { source: true } } } }, militaryUnitLinks: { select: { unitId: true } }, history: { where: { field: { in: HISTORY_FIELDS } }, orderBy: { createdAt: "asc" as const } } };
+async function loadEvents(where: object, take: number) {
+  const ids = (await prisma.event.findMany({ where: { published: true, origin: "conflict_news", ...where }, select: { id: true }, orderBy: { occurredAt: "desc" }, take })).map((e) => e.id);
+  const byId = new Map<string, Awaited<ReturnType<typeof loadChunk>>[number]>();
+  for (let i = 0; i < ids.length; i += EVENT_CHUNK) for (const e of await loadChunk(ids.slice(i, i + EVENT_CHUNK))) byId.set(e.id, e);
+  return ids.map((id) => byId.get(id)).filter((e): e is NonNullable<typeof e> => !!e);
+}
+const loadChunk = (ids: string[]) => prisma.event.findMany({ where: { id: { in: ids } }, include: eventInclude });
 
 function reportsFor(e: EventRow, to: Date) {
   const links = e.sources.filter((s) => s.createdAt <= to);

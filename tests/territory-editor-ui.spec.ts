@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
+import { enableTerritory } from "./helpers/territory";
 import { planarArea, sameArea } from "@/lib/territory/geometry";
 import type { TerritorialGeometry } from "@/lib/types/territorial-control";
 
@@ -441,7 +442,7 @@ test.describe("Public map", () => {
 
     await page.goto("/world");
     await page.waitForFunction(() => Boolean((window as unknown as { __vigilMap?: unknown }).__vigilMap));
-    await page.getByTestId("territorial-toggle").click();
+    await enableTerritory(page);
     await expect(page.getByTestId(`territory-legend-actor-${w.a.name}`)).toBeVisible();
     await expect(page.getByTestId(`territory-legend-actor-${w.b.name}`)).toBeVisible();
     await page.evaluate(() => (window as unknown as { __vigilMap: { jumpTo: (o: object) => void } }).__vigilMap.jumpTo({ center: [-55, -25], zoom: 5 }));

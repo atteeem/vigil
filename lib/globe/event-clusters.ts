@@ -1,7 +1,7 @@
-import { hasPoint } from "@/lib/types/event";
+import { buildEventMarkers } from "@/lib/map/intelligence-markers";
 import type { ConflictEvent, Severity } from "@/lib/types";
 import { maxSeverity } from "@/lib/utils/severity";
-import { formatReportCount, reportCountOf } from "@/lib/map/report-counts";
+import { formatReportCount } from "@/lib/map/report-counts";
 
 export interface EventCluster {
   lat: number;
@@ -34,7 +34,9 @@ export interface EventCluster {
  * partition. */
 export function clusterEvents(events: ConflictEvent[], radiusDegrees: number): EventCluster[] {
   const clusters: EventCluster[] = [];
-  for (const e of events.filter(hasPoint)) {
+  // The same canonical markers the flat map draws: each carries its UNIQUE report count.
+  for (const m of buildEventMarkers(events)) {
+    const e = { id: m.id, lat: m.latitude, lng: m.longitude, severity: m.severity, reportCount: m.reportCount };
     const existing = clusters.find(
       (c) => Math.abs(c.lat - e.lat) <= radiusDegrees && Math.abs(c.lng - e.lng) <= radiusDegrees,
     );
@@ -43,11 +45,11 @@ export function clusterEvents(events: ConflictEvent[], radiusDegrees: number): E
       existing.lat = (existing.lat * n + e.lat) / (n + 1);
       existing.lng = (existing.lng * n + e.lng) / (n + 1);
       existing.count = n + 1;
-      existing.reportCount += reportCountOf(e);
+      existing.reportCount += e.reportCount;
       existing.ids.push(e.id);
       existing.severity = maxSeverity(existing.severity, e.severity) as Severity;
     } else {
-      clusters.push({ lat: e.lat, lng: e.lng, count: 1, reportCount: reportCountOf(e), severity: e.severity, ids: [e.id] });
+      clusters.push({ lat: e.lat, lng: e.lng, count: 1, reportCount: e.reportCount, severity: e.severity, ids: [e.id] });
     }
   }
   return clusters;

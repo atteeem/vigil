@@ -62,6 +62,7 @@ export interface GlobalSignal {
 }
 
 export interface MarkerConflict {
+  id: string;
   slug: string;
   name: string;
   severity: string;
@@ -70,6 +71,8 @@ export interface MarkerConflict {
   lng: number;
   recent: boolean;
   latestTitle: string | null;
+  /** Unique published reports associated with the conflict in the currently displayed state (set by the map page). */
+  reportCount?: number;
 }
 
 export interface CommandCenter {

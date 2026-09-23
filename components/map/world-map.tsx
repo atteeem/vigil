@@ -35,7 +35,7 @@ import { createHazardIconImageData, HAZARD_ICON_IDS } from "@/lib/map/hazard-ico
 import { EMPTY_HAZARD_SOURCES, hazardsToSources, type HazardSourceData } from "@/lib/map/hazards-to-geojson";
 import type { HazardViewport } from "@/hooks/use-hazards";
 import type { MarkerConflict } from "@/lib/world/types";
-import { hasPoint } from "@/lib/types/event";
+import { buildEventMarkers } from "@/lib/map/intelligence-markers";
 
 // Simplified colored-dot markers ("medium zoom") give way to full
 // category icons ("high zoom") at this threshold — see Map Requirements.md
@@ -126,18 +126,28 @@ const EMPTY_FEATURE_COLLECTION: GeoJSON.FeatureCollection = { type: "FeatureColl
 // outline for "recently_changed", so the distinction survives even for a
 // colorblind viewer or an actor-less (uncertain) polygon with no actor
 // color to lean on.
+// What the source supports drives the look, and control is never confused with presence or influence: CONTROL is a
+// filled area, INFLUENCE a faint wash with a dashed edge, PRESENCE no fill at all, only a dotted edge.
+const TERRITORY_KIND = ["coalesce", ["get", "kind"], "control"] as const;
 const TERRITORY_FILL_OPACITY: DataDrivenPropertyValueSpecification<number> = [
-  "match",
-  ["get", "status"],
-  "controlled",
-  0.35,
-  "contested",
-  0.22,
-  "uncertain",
-  0.12,
-  "recently_changed",
-  0.35,
-  0.2,
+  "case",
+  ["==", TERRITORY_KIND as unknown as ExpressionSpecification, "presence"],
+  0,
+  ["==", TERRITORY_KIND as unknown as ExpressionSpecification, "influence"],
+  0.1,
+  [
+    "match",
+    ["get", "status"],
+    "controlled",
+    0.35,
+    "contested",
+    0.22,
+    "uncertain",
+    0.12,
+    "recently_changed",
+    0.35,
+    0.2,
+  ],
 ];
 const TERRITORY_OUTLINE_WIDTH: DataDrivenPropertyValueSpecification<number> = [
   "match",
@@ -149,11 +159,12 @@ const TERRITORY_OUTLINE_WIDTH: DataDrivenPropertyValueSpecification<number> = [
   2,
 ];
 const TERRITORY_OUTLINE_OPACITY: DataDrivenPropertyValueSpecification<number> = [
-  "match",
-  ["get", "status"],
-  "uncertain",
-  0.55,
-  0.9,
+  "case",
+  ["==", TERRITORY_KIND as unknown as ExpressionSpecification, "presence"],
+  0,
+  ["==", TERRITORY_KIND as unknown as ExpressionSpecification, "influence"],
+  0.3,
+  ["match", ["get", "status"], "uncertain", 0.55, 0.9],
 ];
 
 const TERRITORY_LAYER_IDS = [
@@ -161,6 +172,8 @@ const TERRITORY_LAYER_IDS = [
   "territory-contested-hatch",
   "territory-outline",
   "territory-outline-dashed",
+  "territory-outline-influence",
+  "territory-outline-presence",
   "territory-recently-changed-highlight",
 ];
 
@@ -205,7 +218,7 @@ function addEventLayers(
     id: "territory-contested-hatch",
     type: "fill",
     source: "territory",
-    filter: ["==", ["get", "status"], "contested"],
+    filter: ["all", ["==", ["get", "status"], "contested"], ["==", TERRITORY_KIND as unknown as ExpressionSpecification, "control"]],
     layout: { visibility: "none" },
     paint: { "fill-pattern": hatchId, "fill-opacity": 0.6 },
   });
@@ -222,7 +235,7 @@ function addEventLayers(
     id: "territory-outline-dashed",
     type: "line",
     source: "territory",
-    filter: ["in", ["get", "status"], ["literal", ["contested", "uncertain"]]],
+    filter: ["all", ["in", ["get", "status"], ["literal", ["contested", "uncertain"]]], ["==", TERRITORY_KIND as unknown as ExpressionSpecification, "control"]],
     layout: { visibility: "none" },
     paint: {
       "line-color": "#f3f5f7",
@@ -231,11 +244,14 @@ function addEventLayers(
       "line-dasharray": ["match", ["get", "status"], "uncertain", ["literal", [1, 2]], ["literal", [3, 2]]],
     },
   });
+  // Influence / presence edges: distinct textures so they cannot be read as control.
+  map.addLayer({ id: "territory-outline-influence", type: "line", source: "territory", filter: ["==", TERRITORY_KIND as unknown as ExpressionSpecification, "influence"], layout: { visibility: "none" }, paint: { "line-color": "#f3f5f7", "line-width": 1.6, "line-opacity": 0.85, "line-dasharray": ["literal", [4, 2.5]] } });
+  map.addLayer({ id: "territory-outline-presence", type: "line", source: "territory", filter: ["==", TERRITORY_KIND as unknown as ExpressionSpecification, "presence"], layout: { visibility: "none", "line-cap": "round" }, paint: { "line-color": "#f3f5f7", "line-width": 2, "line-opacity": 0.9, "line-dasharray": ["literal", [0.4, 2.2]] } });
   map.addLayer({
     id: "territory-recently-changed-highlight",
     type: "line",
     source: "territory",
-    filter: ["==", ["get", "status"], "recently_changed"],
+    filter: ["all", ["==", ["get", "status"], "recently_changed"], ["==", TERRITORY_KIND as unknown as ExpressionSpecification, "control"]],
     layout: { visibility: "none" },
     paint: { "line-color": "#ffd60a", "line-width": 2, "line-opacity": 0.9, "line-dasharray": ["literal", [2, 1.5]] },
   });
@@ -265,7 +281,7 @@ function addEventLayers(
       "circle-opacity": 0.22,
       "circle-stroke-width": 1.5,
       "circle-stroke-color": "#4CC2FF",
-      "circle-radius": ["step", ["get", "point_count"], 16, 8, 22, 24, 30],
+      "circle-radius": ["step", ["get", "point_count"], 18, 8, 24, 24, 32],
     },
   });
   map.addLayer({
@@ -276,10 +292,11 @@ function addEventLayers(
     layout: {
       "text-field": REPORT_LABEL_EXPRESSION(["get", "reports"]),
       "text-font": ["Noto Sans Regular"],
-      "text-size": 12,
+      "text-size": 14,
       "text-allow-overlap": true,
+      "text-ignore-placement": true,
     },
-    paint: { "text-color": "#F3F5F7" },
+    paint: { "text-color": "#FFFFFF", "text-halo-color": "rgba(8,10,13,0.8)", "text-halo-width": 1.3 },
   });
   // Location-precision uncertainty: an event whose position is only
   // approximate / area-level / unknown gets a soft, oversized halo instead
@@ -310,7 +327,7 @@ function addEventLayers(
     maxzoom: ICON_DETAIL_ZOOM,
     paint: {
       // Big enough to hold the report-count label drawn on top of it.
-      "circle-radius": ["interpolate", ["linear"], ["get", "importance"], 40, 8, 100, 11],
+      "circle-radius": ["interpolate", ["linear"], ["get", "importance"], 40, 10, 100, 13],
       "circle-color": SEVERITY_COLOR_MATCH,
       "circle-stroke-width": 1.5,
       "circle-stroke-color": "rgba(8,10,13,0.85)",
@@ -370,12 +387,12 @@ function addEventLayers(
     layout: {
       "text-field": REPORT_LABEL_EXPRESSION(["get", "reportCount"]),
       "text-font": ["Noto Sans Regular"],
-      "text-size": 10,
+      "text-size": 13,
       "text-allow-overlap": true,
       "text-ignore-placement": true,
       "text-offset": ["step", ["zoom"], ["literal", [0, 0]], ICON_DETAIL_ZOOM, ["literal", [1.3, -1.3]]],
     },
-    paint: { "text-color": "#F3F5F7", "text-halo-color": "rgba(8,10,13,0.85)", "text-halo-width": 1.2 },
+    paint: { "text-color": "#FFFFFF", "text-halo-color": "rgba(8,10,13,0.85)", "text-halo-width": 1.4 },
   });
 
   // Heatmap mode: unobtrusive count at each hotspot bucket's centre.
@@ -417,12 +434,12 @@ const HAZARD_CLICK_LAYERS = ["hz-quake-circle", "hz-thermal-point", "hz-fire-poi
 const QUAKE_RADIUS: DataDrivenPropertyValueSpecification<number> = ["interpolate", ["linear"], ["coalesce", ["get", "value"], 2.5], 2.5, 4, 4, 7, 5, 11, 6, 18, 7, 28, 8, 38];
 const AREA_FILTER: ExpressionSpecification = ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]];
 
-const CONFLICT_MARKER_LAYERS = ["conflict-halo", "conflict-core", "conflict-label"];
+const CONFLICT_MARKER_LAYERS = ["conflict-halo", "conflict-core", "conflict-count", "conflict-label"];
 
 function conflictMarkersToGeoJSON(list: readonly MarkerConflict[]): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
-    features: list.map((c) => ({ type: "Feature", geometry: { type: "Point", coordinates: [c.lng, c.lat] }, properties: { slug: c.slug, name: c.name, severity: c.severity, score: c.severityScore, recent: c.recent ? 1 : 0 } })),
+    features: list.map((c) => ({ type: "Feature", geometry: { type: "Point", coordinates: [c.lng, c.lat] }, properties: { slug: c.slug, name: c.name, severity: c.severity, score: c.severityScore, recent: c.recent ? 1 : 0, reports: c.reportCount ?? 0 } })),
   };
 }
 
@@ -437,7 +454,9 @@ function addConflictMarkerLayers(map: MapLibreMap, list: readonly MarkerConflict
   // Beneath the hazard layers (which sit beneath the event clusters) so hazards and events stay on top and clickable.
   const before = map.getStyle()?.layers?.find((l) => l.id.startsWith("hz-"))?.id ?? (map.getLayer("clusters") ? "clusters" : undefined);
   map.addLayer({ id: "conflict-halo", type: "circle", source: "active-conflicts", maxzoom: 7, paint: { "circle-radius": ["interpolate", ["linear"], ["get", "score"], 30, 9, 70, 14, 100, 20], "circle-color": SEVERITY_MATCH, "circle-opacity": 0.14, "circle-stroke-color": SEVERITY_MATCH, "circle-stroke-opacity": 0.7, "circle-stroke-width": ["case", ["==", ["get", "recent"], 1], 2.5, 1] } }, before);
-  map.addLayer({ id: "conflict-core", type: "circle", source: "active-conflicts", maxzoom: 7, paint: { "circle-radius": 3.5, "circle-color": SEVERITY_MATCH, "circle-stroke-color": "#0B0E12", "circle-stroke-width": 1 } }, before);
+  // The conflict's own report count sits INSIDE its marker: the dot grows to hold the number when there are reports.
+  map.addLayer({ id: "conflict-core", type: "circle", source: "active-conflicts", maxzoom: 7, paint: { "circle-radius": ["case", [">", ["get", "reports"], 0], 12, 4], "circle-color": SEVERITY_MATCH, "circle-stroke-color": "#0B0E12", "circle-stroke-width": 1.5 } }, before);
+  map.addLayer({ id: "conflict-count", type: "symbol", source: "active-conflicts", maxzoom: 7, filter: [">", ["get", "reports"], 0], layout: { "text-field": REPORT_LABEL_EXPRESSION(["get", "reports"]), "text-font": ["Noto Sans Regular"], "text-size": 13, "text-allow-overlap": true, "text-ignore-placement": true }, paint: { "text-color": "#FFFFFF", "text-halo-color": "rgba(8,10,13,0.75)", "text-halo-width": 1.3 } }, before);
   map.addLayer({ id: "conflict-label", type: "symbol", source: "active-conflicts", minzoom: 2.5, maxzoom: 7, layout: { "text-field": ["get", "name"], "text-font": ["Noto Sans Medium"], "text-size": 11, "text-offset": [0, 1.6], "text-anchor": "top", "text-optional": true, "symbol-sort-key": ["-", 100, ["get", "score"]] }, paint: { "text-color": "#F3F5F7", "text-halo-color": "rgba(8,10,13,0.9)", "text-halo-width": 1.3 } }, before);
 }
 
@@ -520,7 +539,7 @@ function refreshReportHeatLabels(map: MapLibreMap, events: ConflictEvent[]) {
   const source = map.getSource("report-heat-labels") as GeoJSONSource | undefined;
   if (!source) return;
   const buckets = aggregateReportBuckets(
-    events.filter(hasPoint).map((e) => ({ id: e.id, lat: e.lat, lng: e.lng, sources: e.sources, sourceCount: e.sourceCount })),
+    buildEventMarkers(events).map((m) => ({ id: m.id, lat: m.latitude, lng: m.longitude, sourceCount: m.reportCount })),
     map.getZoom(),
   );
   source.setData({

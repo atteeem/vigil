@@ -10,6 +10,7 @@ import { useHazards, type HazardViewport } from "@/hooks/use-hazards";
 import { useLiveEvents } from "@/hooks/use-live-events";
 import { usePublicOverview } from "@/hooks/use-public-overview";
 import { useTerritorialControl } from "@/hooks/use-territorial-control";
+import { useTerritorialDatasets } from "@/hooks/use-territorial-datasets";
 import { useFollowState } from "@/hooks/use-watcher";
 import { GlobeLoading } from "@/components/globe/globe-loading";
 import { DevelopmentCard } from "@/components/brief/development-card";
@@ -36,7 +37,10 @@ export function CountryMap({ code, name, lat, lng, zoom, neighbourCodes }: { cod
   const focus = useMemo(() => ({ lat, lng, zoom }), [lat, lng, zoom]);
   const events = useLiveEvents();
   const overview = usePublicOverview();
-  const { featureCollection } = useTerritorialControl(null, null);
+  // Only datasets that cover THIS country are offered; their geometry loads when the toggle is on.
+  const datasets = useTerritorialDatasets();
+  const relevantIds = useMemo(() => (datasets.data ?? []).filter((d) => d.countryCodes.includes(code)).map((d) => d.id), [datasets.data, code]);
+  const { featureCollection } = useTerritorialControl(null, null, territorial ? relevantIds : []);
   const { data: hazards } = useHazards(show ? layers : [], null, viewport);
 
   // Nearby context, bounded: events in this country, its neighbours or within ~1,500 km of its centre.
@@ -48,7 +52,7 @@ export function CountryMap({ code, name, lat, lng, zoom, neighbourCodes }: { cod
     const p = new URLSearchParams();
     if (layers.length) p.set("layers", layers.join(","));
     p.set("focus", `${lat.toFixed(3)},${lng.toFixed(3)},${zoom}`);
-    if (territorial) p.set("territory", "1");
+    if (territorial && relevantIds.length > 0) p.set("territory", "1");
     p.set("country", code);
     return `/world?${p.toString()}`;
   })();
@@ -91,7 +95,7 @@ export function CountryMap({ code, name, lat, lng, zoom, neighbourCodes }: { cod
               basemapMode={basemapMode}
               onSelectEvent={(e) => router.push(`/event/${e.slug}`)}
               territorialFeatures={featureCollection}
-              showTerritorial={territorial}
+              showTerritorial={territorial && relevantIds.length > 0}
               hazards={hazards}
               hazardLayers={layers}
               onSelectHazard={(id) => router.push(`/hazard/${id}`)}

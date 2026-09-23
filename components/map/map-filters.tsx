@@ -33,7 +33,9 @@ export function MapFilters({
   basemapMode,
   onBasemapMode,
   showTerritorial,
-  onToggleTerritorial,
+  territoryOpen,
+  territoryCount,
+  onToggleTerritoryPanel,
   hazardLayers = [],
   onToggleHazardLayer,
   hazardHealth,
@@ -53,8 +55,12 @@ export function MapFilters({
   // mutually-exclusive viewMode value (see world-map.tsx's own comment):
   // it composes with either Markers or Heatmap, so ON + Heatmap is spec's
   // "Both" mode.
+  // The button opens the dataset selector (only datasets with published geometry are offered); `showTerritorial` is
+  // true while at least one dataset is switched on.
   showTerritorial: boolean;
-  onToggleTerritorial: (v: boolean) => void;
+  territoryOpen: boolean;
+  territoryCount: number;
+  onToggleTerritoryPanel: () => void;
   // Natural-hazard layers (Live Global Data Layers): a compact expandable group, all off by default.
   hazardLayers?: readonly HazardLayer[];
   onToggleHazardLayer?: (layer: HazardLayer) => void;
@@ -117,8 +123,10 @@ export function MapFilters({
           </button>
         </div>
         <button
-          onClick={() => onToggleTerritorial(!showTerritorial)}
+          onClick={onToggleTerritoryPanel}
           aria-pressed={showTerritorial}
+          aria-expanded={territoryOpen}
+          aria-controls="territory-selector"
           data-testid="territorial-toggle"
           className={cn(
             "flex items-center gap-1.5 rounded-full border p-1 px-3 py-1.5 text-xs font-medium transition-colors",
@@ -126,6 +134,7 @@ export function MapFilters({
           )}
         >
           <Flag className="h-3.5 w-3.5" /> Territorial Control
+          {territoryCount > 0 && <span className="rounded-full bg-accent/20 px-1.5 text-[10px] font-semibold" data-testid="territory-count">{territoryCount}</span>}
         </button>
         {onToggleHazardLayer && <HazardLayerPanel enabled={hazardLayers} onToggle={onToggleHazardLayer} health={hazardHealth} />}
       </div>

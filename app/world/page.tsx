@@ -20,6 +20,8 @@ import { useWorldEvents } from "@/hooks/use-world-events";
 import { useTerritorialControl } from "@/hooks/use-territorial-control";
 import { TimelineControls } from "@/components/map/timeline-controls";
 import { TerritoryLegend } from "@/components/map/territory-legend";
+import { TerritorySelector } from "@/components/map/territory-selector";
+import { useTerritorialDatasets } from "@/hooks/use-territorial-datasets";
 import { TerritoryDetailPanel } from "@/components/map/territory-detail-panel";
 import type { TerritoryFeatureProperties } from "@/lib/types/territorial-control";
 import { HAZARD_LAYERS, type HazardLayer } from "@/lib/hazards/types";
@@ -37,6 +39,7 @@ import { PulsePanel } from "@/components/world/pulse-panel";
 import { WorldRail } from "@/components/world/world-rail";
 import { ConflictContextPanel, CountryContextPanel } from "@/components/world/context-panels";
 import type { TopEntity, WorldItem } from "@/lib/world/types";
+import { buildConflictAggregates } from "@/lib/map/intelligence-markers";
 
 const WorldMap = dynamic(() => import("@/components/map/world-map").then((m) => m.WorldMap), {
   ssr: false,
@@ -49,7 +52,23 @@ export default function WorldPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>("24H");
   const [viewMode, setViewMode] = useState<ViewMode>("markers");
   const [selected, setSelected] = useState<ConflictEvent | null>(null);
-  const [showTerritorial, setShowTerritorial] = useState(false);
+  // Territorial Control: nothing is drawn or fetched until the user ticks a dataset in the selector. `territoryRequest` is a
+  // deep link / brief item asking for a conflict's dataset(s) (or all, when null) once the availability list has loaded.
+  const [territoryIds, setTerritoryIds] = useState<string[]>([]);
+  const [territoryOpen, setTerritoryOpen] = useState(false);
+  const [territoryRequest, setTerritoryRequest] = useState<{ slug: string | null } | null>(null);
+  const territoryDatasets = useTerritorialDatasets();
+  const showTerritorial = territoryIds.length > 0;
+  const requestTerritory = useCallback((slug: string | null) => setTerritoryRequest({ slug }), []);
+  useEffect(() => {
+    if (!territoryRequest || !territoryDatasets.data) return;
+    const wanted = territoryDatasets.data.filter((d) => !territoryRequest.slug || d.conflictSlug === territoryRequest.slug).map((d) => d.id);
+    /* eslint-disable react-hooks/set-state-in-effect -- applying a one-time request once the availability list has loaded */
+    if (wanted.length) setTerritoryIds((prev) => [...new Set([...prev, ...wanted])]);
+    setTerritoryRequest(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [territoryRequest, territoryDatasets.data]);
+  const toggleTerritoryDataset = useCallback((id: string) => setTerritoryIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])), []);
   const [selectedTerritory, setSelectedTerritory] = useState<TerritoryFeatureProperties | null>(null);
   // Natural-hazard layers: independent toggles (all off by default), remembered per browser.
   const [hazardLayers, setHazardLayers] = useState<HazardLayer[]>([]);
@@ -83,7 +102,7 @@ export default function WorldPage() {
     // Briefing links: a conflict event to select, and/or Territorial Control switched on.
     const ev = p.get("event");
     if (ev) setPendingEventId(ev);
-    if (p.get("territory") === "1") setShowTerritorial(true);
+    if (p.get("territory") === "1") setTerritoryRequest({ slug: p.get("conflict") });
     const cc = p.get("country");
     if (cc && getCountryByCode(cc)) setFromCountry(cc.toUpperCase());
   }, []);
@@ -125,7 +144,7 @@ export default function WorldPage() {
   // territorial polygons too (spec §5 "do not create a second timeline
   // system") — Live and historical/playback both flow through this one
   // hook exactly like useWorldEvents above.
-  const { featureCollection: territorialFeatures } = useTerritorialControl(timeline.asOf, timeline.previewNextAsOf);
+  const { featureCollection: territorialFeatures } = useTerritorialControl(timeline.asOf, timeline.previewNextAsOf, territoryIds);
   // Hazards ride the SAME asOf as events and territory — no second timeline.
   const { data: hazards } = useHazards(hazardLayers, timeline.asOf, viewport, timeline.previewNextAsOf);
 
@@ -218,7 +237,7 @@ export default function WorldPage() {
     if (timeline.isPlaying) timeline.pause();
     const layers = t.layers.filter((l): l is HazardLayer => (HAZARD_LAYERS as readonly string[]).includes(l));
     if (layers.length) setHazardLayers((prev) => [...new Set([...prev, ...layers])]);
-    if (t.territory) setShowTerritorial(true);
+    if (t.territory) requestTerritory(d.conflictSlug);
     if (t.lat != null && t.lng != null) setFocus({ lat: t.lat, lng: t.lng, zoom: t.zoom ?? 6 });
     if (timeline.isHistorical && t.at) timeline.selectCustomTimestamp(new Date(t.at));
     if (t.hazardId) selectHazard(t.hazardId);
@@ -236,7 +255,7 @@ export default function WorldPage() {
     setHighlightId(i.id);
     const layers = i.layers.filter((l): l is HazardLayer => (HAZARD_LAYERS as readonly string[]).includes(l));
     if (layers.length) setHazardLayers((prev) => [...new Set([...prev, ...layers])]);
-    if (i.territory) setShowTerritorial(true);
+    if (i.territory) requestTerritory(i.conflictSlug);
     if (i.lat != null && i.lng != null) setFocus({ lat: i.lat, lng: i.lng, zoom: i.zoom ?? (i.hazardId || i.eventId ? 6 : 5), animate });
     if (i.hazardId) selectHazard(i.hazardId);
     else if (i.eventId) {
@@ -297,6 +316,11 @@ export default function WorldPage() {
       return true;
     });
   }, [allEvents, typeFilter, region, timeRange, timeline.isHistorical]);
+
+  // Conflict markers carry the unique published reports of their conflict in the CURRENT state (timeline, period and
+  // filters), from the same canonical aggregation the event markers and the globe use.
+  const conflictAggregates = useMemo(() => buildConflictAggregates(filteredEvents), [filteredEvents]);
+  const markerConflicts = useMemo(() => cc.data?.conflicts.map((c) => ({ ...c, reportCount: conflictAggregates.get(c.id)?.reportCount ?? 0 })), [cc.data, conflictAggregates]);
 
   return (
     <main className="relative flex h-screen w-full flex-col overflow-hidden pt-16 sm:pt-[68px]">
@@ -365,7 +389,7 @@ export default function WorldPage() {
             focus={focus}
             hazardLayers={hazardLayers}
             onSelectHazard={selectHazard}
-            activeConflicts={cc.data?.conflicts}
+            activeConflicts={markerConflicts}
             onSelectConflict={(slug) => {
               manual();
               selectConflict(slug);
@@ -413,7 +437,9 @@ export default function WorldPage() {
                 basemapMode={basemapMode}
                 onBasemapMode={setBasemapMode}
                 showTerritorial={showTerritorial}
-                onToggleTerritorial={setShowTerritorial}
+                territoryOpen={territoryOpen}
+                territoryCount={territoryIds.length}
+                onToggleTerritoryPanel={() => setTerritoryOpen((v) => !v)}
                 hazardLayers={hazardLayers}
                 onToggleHazardLayer={toggleHazardLayer}
                 hazardHealth={hazards?.meta.health}
@@ -425,6 +451,11 @@ export default function WorldPage() {
               </Link>
             )}
             <WhatChangedPanel timeRange={timeRange} asOf={timeline.asOf} onSelect={openDevelopment} />
+            {territoryOpen && (
+              <div id="territory-selector" className="w-full max-w-2xl">
+                <TerritorySelector datasets={territoryDatasets.data} loading={territoryDatasets.isPending} error={territoryDatasets.isError} selectedIds={territoryIds} onToggle={toggleTerritoryDataset} onClose={() => setTerritoryOpen(false)} />
+              </div>
+            )}
             {showTerritorial && (
               <div className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-border bg-surface/80 p-3 backdrop-blur-xl">
                 <TerritoryLegend featureCollection={territorialFeatures} />

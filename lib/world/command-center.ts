@@ -45,7 +45,7 @@ export async function getCommandCenter(opts: { includePartyClaims?: boolean } = 
   }
   const markers: MarkerConflict[] = scored
     .filter(({ c }) => c.locationKnown && Number.isFinite(c.lat) && Number.isFinite(c.lng))
-    .map(({ c, score }) => ({ slug: c.slug, name: c.shortName || c.name, severity: c.severity, severityScore: score, lat: c.lat, lng: c.lng, recent: recentBySlug.has(c.slug), latestTitle: latestBySlug.get(c.slug) ?? null }));
+    .map(({ c, score }) => ({ id: c.id, slug: c.slug, name: c.shortName || c.name, severity: c.severity, severityScore: score, lat: c.lat, lng: c.lng, recent: recentBySlug.has(c.slug), latestTitle: latestBySlug.get(c.slug) ?? null }));
 
   const live = liveState(freshness.lastIngestionAt, now);
   return {
