@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { closeWorldControls, openWorldControls } from "./helpers/world-controls";
 
 test.describe("Profile / local account (/profile)", () => {
   test("create account, edit name, change default map, survive reload, sign out", async ({ page }) => {
@@ -42,6 +43,7 @@ test.describe("Profile / local account (/profile)", () => {
 
     // Default map mode actually drives /world.
     await page.goto("/world");
+    await openWorldControls(page, "layers");
     await expect(
       page.getByRole("radiogroup", { name: "Basemap" }).getByRole("radio", { name: "Satellite" }),
     ).toHaveAttribute("aria-checked", "true");

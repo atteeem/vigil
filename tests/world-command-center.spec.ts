@@ -1,3 +1,4 @@
+import { SCORE_COPY } from "@/lib/copy/scores";
 import { test, expect, type Page } from "@playwright/test";
 import { buildSignals, buildTicker, HIGH_TENSION_MIN_SCORE, liveState, rankEntities } from "@/lib/world/derive";
 import type { CommandCenter, WorldItem } from "@/lib/world/types";
@@ -131,6 +132,9 @@ async function mockWorld(page: Page, opts: { claims?: boolean; data?: CommandCen
   return seen;
 }
 
+// The canonical confidence wording (components/world/confidence-badge.tsx builds the same string).
+const CONFIDENCE_TOOLTIP = `${SCORE_COPY.confidence.question} It does not represent severity.`;
+
 const center = async (page: Page) => {
   await page.waitForFunction(() => !!(window as unknown as { __vigilMap?: unknown }).__vigilMap, undefined, { timeout: 30_000 });
   return page.evaluate(() => {
@@ -191,7 +195,7 @@ test.describe("World Command Center UI", () => {
     const rows = page.getByTestId("pulse-row");
     await expect(rows).toHaveCount(4);
     await expect(rows.first().getByTestId("pulse-badge")).toHaveText("VERIFIED");
-    await expect(rows.first().getByTestId("confidence-badge")).toHaveAttribute("title", "Confidence reflects evidence/corroboration. It does not represent severity.");
+    await expect(rows.first().getByTestId("confidence-badge")).toHaveAttribute("title", CONFIDENCE_TOOLTIP);
     await page.getByTestId("pulse-tab-hazard").click();
     await expect(rows).toHaveCount(1);
     await page.getByTestId("pulse-tab-all").click();
@@ -213,7 +217,7 @@ test.describe("World Command Center UI", () => {
     await expect(page.getByTestId("right-rail").getByTestId("ctx-severity")).toHaveText("100");
     await expect(page.getByTestId("right-rail").getByTestId("ctx-impact")).toHaveText("78");
     await expect(page.getByTestId("right-rail").getByTestId("ctx-confidence")).toHaveText("74");
-    await expect(ctx).toContainText("Confidence reflects evidence/corroboration. It does not represent severity.");
+    await expect(ctx).toContainText(CONFIDENCE_TOOLTIP);
     await expect(page.getByTestId("right-rail").getByTestId("ctx-open-full")).toHaveAttribute("href", "/conflict/ukraine");
     await ctx.getByRole("button", { name: "Close" }).click();
     await expect(page.getByTestId("world-rail")).toBeVisible();

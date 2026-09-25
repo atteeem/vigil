@@ -1006,7 +1006,7 @@ export function WorldMap({
   return (
     <div className={className} style={{ position: "relative" }} data-heat-signature={heatField?.signature} data-heat-peak={heatField ? Math.round(heatField.peak) : undefined} data-hazard-layers={hazardLayerKey} data-hazard-count={hazards ? hazards.features.length : 0}>
       <div ref={containerRef} className="h-full w-full" role="application" aria-label="Operational conflict map" />
-      {viewMode === "heatmap" && <HeatLegend className="absolute bottom-20 left-3 z-10 sm:bottom-7" />}
+      {viewMode === "heatmap" && <HeatLegend className="absolute bottom-32 left-3 z-10 sm:bottom-7" />}
       {basemapNotice && (
         <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-xs rounded-lg border border-border bg-surface/90 px-3 py-2 text-xs text-ink-faint backdrop-blur" data-testid="basemap-notice" title={basemapNotice.detail}>
           {basemapNotice.text}

@@ -478,7 +478,7 @@ export default function WorldPage() {
               // Phones: one compact row of controls; everything else opens in a sheet so the map keeps the screen.
               <>
                 <div className="pointer-events-auto no-scrollbar flex w-[calc(100%-2.75rem)] items-center gap-1.5 self-start overflow-x-auto" data-testid="mobile-map-controls" role="toolbar" aria-label="Map controls">
-                  <button type="button" onClick={() => setMobileTimelineOpen((v) => !v)} aria-expanded={mobileTimelineOpen} data-testid="mobile-timeline-toggle" className={cn(CHIP, timeline.isHistorical ? "border-accent/50 text-accent" : "text-ink")}>
+                  <button type="button" onClick={() => setMobileTimelineOpen((v) => !v)} aria-expanded={mobileTimelineOpen || timeline.isHistorical} data-testid="mobile-timeline-toggle" className={cn(CHIP, timeline.isHistorical ? "border-accent/50 text-accent" : "text-ink")}>
                     <History className="h-3.5 w-3.5" aria-hidden />
                     {timeline.isHistorical && timeline.asOf ? `${timeline.asOf.toISOString().slice(5, 16).replace("T", " ")} UTC` : "Live"}
                   </button>
@@ -494,7 +494,8 @@ export default function WorldPage() {
                     <HelpCircle className="h-3.5 w-3.5" aria-hidden /> Legend
                   </button>
                 </div>
-                {mobileTimelineOpen && (
+                {/* Viewing the past is never hidden on a phone: the panel (with "Viewing …" and Return to Live) stays open. */}
+                {(mobileTimelineOpen || timeline.isHistorical) && (
                   <div className="pointer-events-auto w-full rounded-2xl border border-border bg-surface/90 p-3 backdrop-blur-xl" data-testid="mobile-timeline-panel">
                     <TimelineControls
                 preset={timeline.preset}

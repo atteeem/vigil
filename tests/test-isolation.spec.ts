@@ -59,7 +59,8 @@ test.describe("Test/dev database separation", () => {
 });
 
 test.describe("Territorial Control empty state", () => {
-  test.use({ isMobile: false });
+  // Desktop layout (the phone layout moves the selector and legend into sheets; covered by mobile-world-sheets.spec.ts).
+  test.use({ isMobile: false, viewport: { width: 1280, height: 800 } });
 
   test("With no territorial datasets the selector says so, draws nothing and requests no geometry", async ({ page }) => {
     let geometryRequests = 0;
@@ -78,7 +79,8 @@ test.describe("Territorial Control empty state", () => {
 });
 
 test.describe("Territorial Control actually renders when toggled", () => {
-  test.use({ isMobile: false });
+  // Desktop layout (the phone layout moves the selector and legend into sheets; covered by mobile-world-sheets.spec.ts).
+  test.use({ isMobile: false, viewport: { width: 1280, height: 800 } });
 
   test("The toggle is applied even while the map reports its style as still loading (it used to be silently dropped, leaving the legend on and the polygons hidden)", async ({ page, request }) => {
     const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;

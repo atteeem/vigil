@@ -1,8 +1,10 @@
 import { test, expect } from "@playwright/test";
+import { openWorldControls } from "./helpers/world-controls";
 
 test.describe("Map/feed filters (/world)", () => {
   test("time range filter changes the event count", async ({ page }) => {
     await page.goto("/world");
+    await openWorldControls(page, "filters");
     const timeGroup = page.getByRole("radiogroup", { name: "Time" });
     await timeGroup.getByRole("radio", { name: "1H" }).click();
     await page.waitForTimeout(200);
@@ -17,6 +19,7 @@ test.describe("Map/feed filters (/world)", () => {
 
   test("event type filter narrows the feed", async ({ page }) => {
     await page.goto("/world");
+    await openWorldControls(page, "filters");
     await page.getByRole("radiogroup", { name: "Time" }).getByRole("radio", { name: "7D" }).click();
     const allCount = await page.getByText(/events in range/).textContent();
 
@@ -29,6 +32,7 @@ test.describe("Map/feed filters (/world)", () => {
 
   test("heatmap toggle switches the map display mode", async ({ page }) => {
     await page.goto("/world");
+    await openWorldControls(page, "layers");
     const heatmapBtn = page.getByRole("button", { name: "Heatmap" });
     const markersBtn = page.getByRole("button", { name: "Markers" });
     await expect(markersBtn).toHaveAttribute("aria-pressed", "true");

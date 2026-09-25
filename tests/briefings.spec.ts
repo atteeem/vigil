@@ -545,7 +545,8 @@ test.describe.serial("Brief UI", () => {
     await expect(page.getByTestId("for-you-brief").getByTestId("brief-body")).toBeVisible({ timeout: 60_000 });
   });
 
-  test("/world What changed panel lists developments for the selected range and selecting one enables the layer and selects the record", async ({ page }) => {
+  test("/world What changed panel lists developments for the selected range and selecting one enables the layer and selects the record", async ({ page, isMobile }) => {
+    test.skip(isMobile, "phones reach recent developments through Pulse; the range brief panel is desktop / tablet only");
     await page.goto("/world");
     await page.getByTestId("what-changed-button").click();
     await expect(page.getByTestId("what-changed-headline")).toContainText("significant development", { timeout: 60_000 });

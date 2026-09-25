@@ -38,7 +38,7 @@ export function BottomSheet({
         <>
           <motion.div
             className="fixed inset-0 z-[55] bg-black/50 sm:hidden"
-            initial={{ opacity: 0 }}
+            initial={reduce ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             // A closing sheet must never swallow taps meant for the map underneath.
             exit={{ opacity: 0, pointerEvents: "none" }}
@@ -54,7 +54,8 @@ export function BottomSheet({
               "fixed inset-x-0 bottom-0 z-[56] rounded-t-3xl border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_32px_rgba(0,0,0,0.45)] sm:hidden",
               className,
             )}
-            initial={{ y: "100%" }}
+            // Reduced motion: mount straight at the resting position (no first-frame offset to animate from).
+            initial={reduce ? false : { y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%", pointerEvents: "none" }}
             transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 340, damping: 34 }}

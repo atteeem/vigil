@@ -313,7 +313,8 @@ test.describe("Homepage and For You use the ranked real data", () => {
   test("For You explains the ranking with real reasons; the own-country war leads", async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem("vigil-preferences", JSON.stringify({ state: { baseCountryCode: "UA" }, version: 3 })));
     await page.goto("/for-you");
-    const first = page.locator("a[href^='/conflict/']").first();
+    // The ranked list (the "From what you follow" feed above it also links conflicts).
+    const first = page.getByTestId("for-you-top-conflicts").locator("a[href^='/conflict/']").first();
     await expect(first).toHaveAttribute("href", "/conflict/russia-ukraine", { timeout: 20_000 });
     await expect(first.getByTestId("for-you-reasons")).toContainText("Active war inside your country");
   });
