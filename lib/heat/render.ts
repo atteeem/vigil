@@ -115,7 +115,7 @@ function projectY(projection: HeatProjection, lat: number, h: number): number {
   return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * h;
 }
 
-function landPath(projection: HeatProjection, w: number, h: number): Path2D {
+function buildLandPath(projection: HeatProjection, w: number, h: number): Path2D {
   const path = new Path2D();
   for (const f of getLandFeatures()) {
     const polygons = f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.coordinates;
@@ -161,6 +161,18 @@ function landPath(projection: HeatProjection, w: number, h: number): Path2D {
 
 const pathCache = new Map<string, Path2D>();
 
+/** The land polygons as one antimeridian-safe canvas path for a projection and texture size (cached). Shared by the
+ * heat clip and the globe's surface texture (lib/globe/surface-texture.ts), so land and heat line up exactly. */
+export function landPath(projection: HeatProjection, w: number, h: number): Path2D {
+  const key = `${projection}:${w}x${h}`;
+  let path = pathCache.get(key);
+  if (!path) {
+    path = buildLandPath(projection, w, h);
+    pathCache.set(key, path);
+  }
+  return path;
+}
+
 export interface HeatCanvasOptions {
   projection: HeatProjection;
   /** Output width in px; height is width/2 (equirect) or width (mercator). */
@@ -186,12 +198,7 @@ export function renderHeatCanvas(field: HeatField, { projection, width }: HeatCa
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(small, 0, 0, width, height);
   // Clip to land: oceans stay transparent.
-  const key = `${projection}:${width}`;
-  let path = pathCache.get(key);
-  if (!path) {
-    path = landPath(projection, width, height);
-    pathCache.set(key, path);
-  }
+  const path = landPath(projection, width, height);
   ctx.globalCompositeOperation = "destination-in";
   ctx.fillStyle = "#000";
   ctx.fill(path, "evenodd");

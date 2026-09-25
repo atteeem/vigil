@@ -101,6 +101,15 @@ function validateRing(ring: unknown, label: string, errors: string[]): void {
     errors.push(`${label}: the ring is not closed (the last point must equal the first).`);
     return;
   }
+  // A ring that steps across the antimeridian (e.g. 179 -> -179) is, to every planar renderer (MapLibre, the editor),
+  // a line across the whole world: its fill becomes a world-spanning band. Such an area must be stored as two parts
+  // split at +/-180 (a MultiPolygon), never as one ring that wraps.
+  for (let i = 1; i < ring.length; i++) {
+    if (Math.abs((ring[i] as Position)[0] - (ring[i - 1] as Position)[0]) > 180) {
+      errors.push(`${label}: the ring crosses the antimeridian (longitude ${(ring[i - 1] as Position)[0]} to ${(ring[i] as Position)[0]}); split it at 180 into a MultiPolygon.`);
+      return;
+    }
+  }
   const distinct = new Set((ring as Ring).slice(0, -1).map((p) => `${p[0]},${p[1]}`));
   if (distinct.size < 3) {
     errors.push(`${label}: a ring needs at least 3 distinct points.`);

@@ -137,6 +137,8 @@ test.describe("Globe border geometry (lib/globe/country-borders.ts)", () => {
     const src = readFileSync("components/globe/conflict-globe.tsx", "utf8");
     expect(src).toContain("pathColor={() => BORDER_COLOR}");
     expect(src).not.toMatch(/pathColor=\{[^}]*(disputed|territor|heat)/i);
-    expect(src).toContain("polygonStrokeColor={() => null}");
+    // The land fill is part of the surface texture (lib/globe/surface-texture.ts), so there is no polygon stroke to
+    // double the coastline: the border layer is the only line layer.
+    expect(src).not.toContain("polygonStrokeColor");
   });
 });

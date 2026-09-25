@@ -102,4 +102,8 @@ export interface ConflictEvent {
 /** An event that has a map point. Country-level, global and unknown-location reports do not (lat/lng are null)
  * and are never drawn as point markers, clustered, or fed to the heat surface. */
 export type PointEvent = ConflictEvent & { lat: number; lng: number };
-export const hasPoint = (e: ConflictEvent): e is PointEvent => e.lat != null && e.lng != null && Number.isFinite(e.lat) && Number.isFinite(e.lng);
+/** Scopes whose source establishes no place finer than a country: never a point, even if a legacy row carries
+ * coordinates (a country centroid is not where anything happened). */
+export const NO_POINT_SCOPES: readonly string[] = ["country", "global", "unknown"];
+export const hasPoint = (e: ConflictEvent): e is PointEvent =>
+  e.lat != null && e.lng != null && Number.isFinite(e.lat) && Number.isFinite(e.lng) && !(e.locationScope && NO_POINT_SCOPES.includes(e.locationScope));

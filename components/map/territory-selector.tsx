@@ -76,6 +76,7 @@ export function TerritorySelector({ datasets, loading, error, selectedIds, onTog
                       </span>
                       {d.actors.length > 0 && <span className="mt-0.5 block text-[11px] text-ink-dim">Actors: {d.actors.join(", ")}</span>}
                       {d.coverageDescription && <span className="mt-0.5 block text-[11px] text-ink-faint">Coverage: {d.coverageDescription}</span>}
+                      {(d.license || d.attribution) && <span className="mt-0.5 block text-[11px] text-ink-faint" data-testid="territory-dataset-attribution">{d.attribution ?? `Licence: ${d.license}`}</span>}
                       {notControl && <span className="mt-0.5 block text-[11px] text-ink-faint">Reported {d.kind} only: this is not territorial control.</span>}
                       {d.sourceUrl && (
                         <a href={d.sourceUrl} target="_blank" rel="noreferrer noopener" onClick={(e) => e.stopPropagation()} className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-accent hover:underline">

@@ -110,6 +110,11 @@ test.describe("geometry is loaded on demand", () => {
       expect(props.validFrom).toBeTruthy();
       expect(props.confidence).toBe(0.7);
       expect(props.conflictSlug).toBeTruthy();
+      // The dataset's own provenance travels with each area (an attribution licence must be shown where it is drawn).
+      expect(props.datasetName).toMatch(/^Dataset /);
+      expect(props.datasetProvider).toBe("Test provider");
+      expect(props.datasetLicense).toBe("CC BY");
+      expect(props.datasetAttribution).toBe("Test provider");
     }
     expect((await datasets(request)).find((d) => d.id === presence.dataset.id)).toMatchObject({ datasetType: "PRESENCE", kind: "presence" });
   });
@@ -180,7 +185,7 @@ test.describe("the selector", () => {
     const point = await page.evaluate(() => (window as unknown as { __vigilMap: { project: (c: [number, number]) => { x: number; y: number } } }).__vigilMap.project([130, 12]));
     const box = (await page.locator(".maplibregl-canvas").boundingBox())!;
     await page.mouse.click(box.x + point.x, box.y + point.y);
-    const panel = page.getByTestId("territory-detail-panel");
+    const panel = page.getByTestId("right-rail").getByTestId("territory-detail-panel");
     await expect(panel).toBeVisible();
     await expect(panel.getByTestId("territory-kind-badge")).toHaveText("Control");
     await expect(panel).toContainText(`Actor ${d.key}`);

@@ -76,7 +76,7 @@ export function TerritoryDetailPanel({ territory }: { territory: TerritoryFeatur
 
       {(territory.sourceName || territory.sourceUrl) && (
         <div className="mt-4 border-t border-border/60 pt-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Source</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Source / provenance</div>
           {territory.sourceUrl ? (
             <a
               href={territory.sourceUrl}
@@ -84,11 +84,21 @@ export function TerritoryDetailPanel({ territory }: { territory: TerritoryFeatur
               rel="noreferrer noopener"
               className="mt-1 flex items-center gap-1 text-sm text-accent hover:underline"
             >
-              {territory.sourceName ?? territory.sourceUrl} <ExternalLink className="h-3 w-3" />
+              {territory.sourceName ?? territory.sourceUrl} <ExternalLink className="h-3 w-3" /> <span className="sr-only">Open source</span>
             </a>
           ) : (
             <p className="mt-1 text-sm text-ink-dim">{territory.sourceName}</p>
           )}
+        </div>
+      )}
+      {territory.datasetName && (
+        <div className="mt-3 text-xs text-ink-faint" data-testid="territory-dataset-provenance">
+          <div>
+            Dataset: <span className="text-ink-dim">{territory.datasetName}</span>
+            {territory.datasetProvider && <> · {territory.datasetProvider}</>}
+          </div>
+          {territory.datasetLicense && <div data-testid="territory-dataset-license">Licence: {territory.datasetLicense}</div>}
+          {territory.datasetAttribution && <div className="mt-0.5 italic">{territory.datasetAttribution}</div>}
         </div>
       )}
       {!territory.sourceName && !territory.sourceUrl && (

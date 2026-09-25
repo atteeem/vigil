@@ -6,7 +6,6 @@ import type { GlobeMethods } from "react-globe.gl";
 import dynamic from "next/dynamic";
 import type { Conflict, ConflictEvent } from "@/lib/types";
 import { SEVERITY_HEX } from "@/lib/utils/severity";
-import { getLandFeatures } from "@/lib/globe/land-geo";
 import { buildConflictAggregates } from "@/lib/map/intelligence-markers";
 import { useHeatField } from "@/hooks/use-heat-field";
 import { selectHeatConflicts } from "@/lib/heat/public-inputs";
@@ -17,7 +16,7 @@ import type { MapLayer, GlobeViewMode, GlobeLayerVisibility, ContentSensitivity 
 import type { GlobePath, CountryLabel } from "@/lib/globe/country-borders";
 import type { CityLabel } from "@/lib/globe/city-labels";
 import { cityLabelTierForAltitude } from "@/lib/globe/city-labels";
-import { LAND_FILL_COLOR, BORDER_COLOR } from "@/lib/globe/globe-colors";
+import { BORDER_COLOR } from "@/lib/globe/globe-colors";
 import { GlobeLoading, GlobeUnavailable } from "./globe-loading";
 
 function detectWebGL(): boolean {
@@ -92,6 +91,9 @@ type GlobeLabel = ({ kind: "country" } & CountryLabel) | ({ kind: "city" } & Cit
 export interface ConflictGlobeProps {
   conflicts: Conflict[];
   events?: ConflictEvent[];
+  /** Canonical unique-report counts per conflict id (GET /api/report-counts). When given, conflict hotspots show these;
+   * the local aggregate over `events` is only a fallback for callers without it. */
+  conflictReportCounts?: Record<string, number>;
   selectedSlug?: string | null;
   onSelectConflict: (conflict: Conflict) => void;
   layer: MapLayer;
@@ -104,6 +106,7 @@ export interface ConflictGlobeProps {
 export function ConflictGlobe({
   conflicts,
   events = [],
+  conflictReportCounts: canonicalCounts,
   selectedSlug,
   onSelectConflict,
   layer,
@@ -122,8 +125,10 @@ export function ConflictGlobe({
   const [countryLabels, setCountryLabels] = useState<CountryLabel[]>([]);
   const [cityLabels, setCityLabels] = useState<CityLabel[]>([]);
   const [cameraAltitude, setCameraAltitude] = useState(2.15);
-  const heatMeshRef = useRef<{ material: { map: { needsUpdate: boolean; dispose: () => void }; dispose: () => void }; geometry: { dispose: () => void } } | null>(null);
-  const heatCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  // The globe's single surface texture (ocean + land + heat) and the material that carries it (lib/globe/surface-texture.ts).
+  const surfaceRef = useRef<{ canvas: HTMLCanvasElement | null; heatCanvas: HTMLCanvasElement | null; texture: { needsUpdate: boolean; dispose: () => void; image: unknown } | null }>({ canvas: null, heatCanvas: null, texture: null });
+  const [globeMaterial, setGlobeMaterial] = useState<object | undefined>(undefined);
+  const [satelliteImage, setSatelliteImage] = useState<HTMLImageElement | null>(null);
 
   useEffect(() => {
     // One-time client-only capability probe: must run after mount since
@@ -131,7 +136,6 @@ export function ConflictGlobe({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setWebglOk(detectWebGL());
   }, []);
-  const landFeatures = useMemo(() => getLandFeatures(), []);
 
   useEffect(() => {
     // Deferred, not blocking: the homepage's own first paint (globe
@@ -156,21 +160,6 @@ export function ConflictGlobe({
 
   const isMobile = size.width < 640;
 
-  // The base sphere is a Phong material lit by a directional light, which paints a soft white specular highlight on
-  // the pole nearest the light (a grey smudge across the top of the globe). The globe is a flat data surface, not a
-  // shiny ball: no specular term.
-  useEffect(() => {
-    if (!ready || !globeRef.current) return;
-    // The base sphere is the Phong-lit mesh of radius 100 inside the globe group (react-globe.gl exposes its material only as a prop).
-    globeRef.current.scene().traverse((o: unknown) => {
-      const mesh = o as unknown as { isMesh?: boolean; geometry?: { parameters?: { radius?: number } }; material?: { isMeshPhongMaterial?: boolean; specular?: { set(c: number): void }; shininess: number } };
-      if (mesh.isMesh && mesh.geometry?.parameters?.radius === 100 && mesh.material?.isMeshPhongMaterial) {
-        mesh.material.specular?.set(0x000000);
-        mesh.material.shininess = 0;
-      }
-    });
-  }, [ready]);
-
   // Debug/test handle to the three.js scene (same pattern as window.__vigilMap on the flat map).
   useEffect(() => {
     if (!ready || !globeRef.current) return;
@@ -180,63 +169,80 @@ export function ConflictGlobe({
     };
   }, [ready]);
 
-  // Continuous conflict-intensity surface. The SAME field the flat map paints
-  // (hooks/use-heat-field), rasterized equirectangularly and wrapped on a
-  // sphere just above the land fill (0.006) and below the borders (0.0065):
-  // one texture on one sphere, so there are no cells or seams to see.
+  // Continuous conflict-intensity surface: the SAME field the flat map paints (hooks/use-heat-field), rasterized
+  // equirectangularly and composited INTO the globe's one surface texture together with the land fill (or the
+  // Satellite photo) — never a second sphere floating above it (see lib/globe/surface-texture.ts for why).
   // Only conflicts with a real location can be pinned; ended conflicts are not shown.
   const heatConflicts = useMemo(() => selectHeatConflicts(conflicts), [conflicts]);
   // Reference time = the real clock at the moment this data arrived (never a fixed date).
   const heatNowIso = useMemo(() => new Date().toISOString(), [events]); // eslint-disable-line react-hooks/exhaustive-deps
   const heatField = useHeatField({ enabled: globeLayers.heat !== false, conflicts: heatConflicts, events, nowIso: heatNowIso, live: true });
+  const isSatellite = viewMode === "satellite";
+
+  // Satellite photo as a plain image (same origin), painted into the surface rather than handed to three-globe.
   useEffect(() => {
-    if (!ready || !globeRef.current || !heatField) return;
+    if (!isSatellite) return;
     let cancelled = false;
-    Promise.all([import("three"), import("@/lib/heat/render")]).then(([THREE, render]) => {
-      const globe = globeRef.current;
-      if (cancelled || !globe) return;
-      const canvas = render.renderHeatCanvas(heatField, { projection: "equirect", width: isMobile ? 1024 : 2048 }, heatCanvasRef.current ?? undefined);
-      heatCanvasRef.current = canvas;
-      const existing = heatMeshRef.current;
-      if (existing) {
-        existing.material.map.needsUpdate = true;
-        return;
+    const img = new Image();
+    img.src = isMobile ? SATELLITE_IMAGE_URL_MOBILE : SATELLITE_IMAGE_URL;
+    img
+      .decode()
+      .then(() => !cancelled && setSatelliteImage(img))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isSatellite, isMobile]);
+
+  useEffect(() => {
+    if (!ready || !globeRef.current) return;
+    if (isSatellite && !satelliteImage) return;
+    let cancelled = false;
+    Promise.all([import("three"), import("@/lib/heat/render"), import("@/lib/globe/surface-texture")]).then(([THREE, render, surface]) => {
+      if (cancelled || !globeRef.current) return;
+      const s = surfaceRef.current;
+      s.canvas ??= document.createElement("canvas");
+      s.heatCanvas = heatField ? render.renderHeatCanvas(heatField, { projection: "equirect", width: isMobile ? 1024 : 2048 }, s.heatCanvas ?? undefined) : null;
+      surface.paintGlobeSurface(s.canvas, surface.surfaceTextureWidth(isMobile), { satellite: isSatellite ? satelliteImage : null, heat: s.heatCanvas });
+      if (s.texture && s.texture.image === s.canvas && (s.texture as unknown as { __w?: number }).__w === s.canvas.width) {
+        s.texture.needsUpdate = true;
+      } else {
+        s.texture?.dispose();
+        const texture = new THREE.CanvasTexture(s.canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = 8;
+        Object.assign(texture, { __w: s.canvas.width }); // a resized canvas needs a new GPU texture, not an update
+        s.texture = texture;
       }
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.colorSpace = THREE.SRGBColorSpace;
-      texture.anisotropy = 8;
-      const mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(globe.getGlobeRadius() * 1.0062, 96, 96),
-        new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false }),
-      );
-      // three-globe rotates its own group by -90deg about Y so longitude 0 faces +Z; match it.
-      mesh.rotation.y = -Math.PI / 2;
-      mesh.renderOrder = 1;
-      mesh.name = "heat-surface";
-      globe.scene().add(mesh);
-      heatMeshRef.current = mesh;
+      const map = s.texture as unknown as InstanceType<typeof THREE.CanvasTexture>;
+      setGlobeMaterial((prev) => {
+        const p = prev as { map?: unknown; isMeshPhongMaterial?: boolean; dispose?: () => void } | undefined;
+        if (p && p.map === map && !!p.isMeshPhongMaterial === isSatellite) return prev;
+        p?.dispose?.();
+        if (!isSatellite) return new THREE.MeshBasicMaterial({ map }); // Intel: a flat data surface, unlit
+        // Satellite: lit photo with relief, but no specular highlight (it read as a grey smudge on the lit pole).
+        const m = new THREE.MeshPhongMaterial({ map, specular: 0x000000, shininess: 0 });
+        new THREE.TextureLoader().load(isMobile ? SATELLITE_BUMP_URL_MOBILE : SATELLITE_BUMP_URL, (bump: InstanceType<typeof THREE.Texture>) => {
+          m.bumpMap = bump;
+          m.bumpScale = 1;
+          m.needsUpdate = true;
+        });
+        return m;
+      });
+      // Test/debug handle (tests/globe-artifacts.spec.ts), next to window.__vigilGlobe: the painted surface and heat.
+      (window as unknown as { __vigilGlobeSurface?: unknown }).__vigilGlobeSurface = { surface: s.canvas, heat: s.heatCanvas };
     });
     return () => {
       cancelled = true;
     };
-  }, [ready, heatField, isMobile]);
-  // Remove the surface when the layer is switched off, the canvas size class
-  // changes (mobile/desktop), or the globe unmounts.
-  useEffect(() => {
-    const dropMesh = () => {
-      const mesh = heatMeshRef.current as unknown as { removeFromParent: () => void } & NonNullable<typeof heatMeshRef.current>;
-      if (!mesh) return;
-      mesh.removeFromParent();
-      mesh.material.map.dispose();
-      mesh.material.dispose();
-      mesh.geometry.dispose();
-      heatMeshRef.current = null;
-      heatCanvasRef.current = null;
-    };
-    if (!heatField) dropMesh();
-    return dropMesh;
-    // isMobile: a different texture size needs a fresh texture.
-  }, [heatField === null, isMobile]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, heatField, isMobile, isSatellite, satelliteImage]);
+
+  useEffect(
+    () => () => {
+      surfaceRef.current.texture?.dispose();
+    },
+    [],
+  );
 
   useEffect(() => {
     const el = containerRef.current;
@@ -335,28 +341,24 @@ export function ConflictGlobe({
   }, [ready]);
 
   const arcs = layer === "energy" ? ENERGY_ARCS : layer === "trade" ? TRADE_ARCS : [];
-  const isSatellite = viewMode === "satellite";
 
   const conflictHotspots = useMemo(
     () => (globeLayers.conflicts ? heatConflicts : []),
     [heatConflicts, globeLayers.conflicts],
   );
-  const eventPoints = useMemo(() => {
-    if (!globeLayers.events) return [];
-    // Most-recent-first (mock data is generated pre-sorted); cap harder on
-    // mobile to keep the point mesh cheap for "excellent mobile performance".
-    return events.slice(0, isMobile ? 25 : 70);
-  }, [events, globeLayers.events, isMobile]);
+  // Most-recent-first; cap harder on mobile to keep the marker overlay cheap. The cap applies to point markers AFTER
+  // report attribution over every event (lib/globe/event-clusters.ts), so counts match the flat map exactly.
+  const maxEventMarkers = isMobile ? 25 : 70;
   // A conflict hotspot's number is the SUM of supporting reports across that
   // conflict's events (independent of the Events layer toggle and of any
   // territorial data), so the default globe's dots carry a report count too.
   const conflictReportCounts = useMemo(() => {
-    // Unique published reports per conflict (the same canonical aggregation as the flat map).
+    if (canonicalCounts) return new Map(Object.entries(canonicalCounts));
     return new Map([...buildConflictAggregates(events)].map(([id, a]) => [id, a.reportCount]));
-  }, [events]);
+  }, [events, canonicalCounts]);
   const eventClusters = useMemo(
-    () => clusterEvents(eventPoints, clusterRadiusForAltitude(cameraAltitude)),
-    [eventPoints, cameraAltitude],
+    () => (globeLayers.events ? clusterEvents(events, clusterRadiusForAltitude(cameraAltitude), maxEventMarkers) : []),
+    [events, globeLayers.events, cameraAltitude, maxEventMarkers],
   );
   // Conflict hotspots and event clusters share one HTML-overlay layer
   // (three-globe only exposes a single htmlElementsData set) — tagged so
@@ -416,24 +418,12 @@ export function ConflictGlobe({
           atmosphereAltitude={0.18}
           showGlobe
           onGlobeReady={() => setReady(true)}
-          globeImageUrl={isSatellite ? (isMobile ? SATELLITE_IMAGE_URL_MOBILE : SATELLITE_IMAGE_URL) : null}
-          bumpImageUrl={isSatellite ? (isMobile ? SATELLITE_BUMP_URL_MOBILE : SATELLITE_BUMP_URL) : null}
-          // Continental landmass fill is Intel mode's own stylized
-          // rendering; Satellite mode's photographic texture already shows
-          // land, so the fill layer is switched off there (political
-          // border lines below still render in both modes).
-          polygonsData={isSatellite ? [] : landFeatures}
-          polygonCapColor={() => LAND_FILL_COLOR}
-          // No side walls: three-globe extrudes every land polygon down to the CENTRE of the globe (radius 0) when a side
-          // colour is set, which is ~60% of all the land triangles, none of it ever visible from outside.
-          polygonSideColor={() => null as unknown as string}
-          // No stroke on the fill: the fill's edge IS the coastline, and the
-          // border layer below draws interior borders only (see
-          // lib/globe/country-borders.ts) — so there is exactly one line
-          // layer and no second coast outline.
-          polygonStrokeColor={() => null}
-          polygonAltitude={0.006}
-          polygonsTransitionDuration={0}
+          // Ocean, land fill (or the Satellite photo) and heat are ONE texture on the sphere itself — no raised land
+          // polygons and no second heat shell, so nothing can depth-fight or stand proud of the silhouette
+          // (lib/globe/surface-texture.ts). Until it is painted the default black sphere shows.
+          globeImageUrl={null}
+          bumpImageUrl={null}
+          globeMaterial={globeMaterial as never}
           // Spec "normal globe borders": subtle country outlines on the
           // stylized Intel globe specifically — Satellite mode's
           // photographic imagery doesn't need line-art borders overlaid,
@@ -444,12 +434,10 @@ export function ConflictGlobe({
           // One neutral color for every border (BORDER_COLOR) — nothing here
           // reads territorial-control, disputed or heat styling.
           pathColor={() => BORDER_COLOR}
-          // Above the landmass fill (0.006) so borders actually render on
-          // top of it instead of being occluded by it, but still well
-          // below htmlElements/markers (0.012) and labels (~0.0105-0.011)
-          // — spec "borders must render beneath heatmaps, conflict
-          // layers, markers, and future territorial-control overlays".
-          pathPointAlt={() => 0.0065}
+          // Just above the surface (0.15 units; the sphere's own facets sit below radius 100, so the line never dips
+          // under them) and below labels and markers. Kept this low on purpose: anything raised further is visible
+          // past the limb from the far hemisphere.
+          pathPointAlt={() => 0.0015}
           // Deliberately NOT setting pathStroke: a numeric stroke switches
           // three-globe to its "fat line" renderer (a Line2 + brand-new
           // LineMaterial + LineGeometry per path, instanced-geometry-backed
@@ -468,7 +456,8 @@ export function ConflictGlobe({
           labelsData={combinedLabels}
           labelLat={(d: object) => (d as GlobeLabel).lat}
           labelLng={(d: object) => (d as GlobeLabel).lng}
-          labelText={(d: object) => (d as GlobeLabel).name}
+          // The label typeface has ASCII glyphs only ("Côte d'Ivoire" rendered as "C?te d'Ivoire"): fold accents.
+          labelText={(d: object) => asciiLabel((d as GlobeLabel).name)}
           // Country names read as a large, brighter label spanning a
           // region; city names are smaller point labels, subtler still at
           // deeper tiers (2/3) so the busiest, closest-zoom tier doesn't
@@ -483,17 +472,19 @@ export function ConflictGlobe({
             (d as GlobeLabel).kind === "country" ? "rgba(243,245,247,0.8)" : "rgba(226,232,240,0.72)"
           }
           labelDotRadius={(d: object) => ((d as GlobeLabel).kind === "country" ? 0.25 : 0.16)}
-          // Below htmlElements/markers (0.012), and both label kinds sit
-          // above the landmass/border layers so text never renders
-          // underneath the fill — city labels a hair below country labels
-          // so a same-spot country name always wins the z-fight.
-          labelAltitude={(d: object) => ((d as GlobeLabel).kind === "country" ? 0.011 : 0.0105)}
+          // Above the borders (0.0015), below htmlElements/markers — city labels a hair below country labels
+          // so a same-spot country name always wins.
+          // Flat text lying just above the surface: raised higher, far-side labels near the limb are seen edge-on as
+          // thin grey spikes past the silhouette.
+          labelAltitude={(d: object) => ((d as GlobeLabel).kind === "country" ? 0.0025 : 0.0022)}
           labelResolution={2}
           labelsTransitionDuration={0}
           htmlElementsData={globeMarkers}
           htmlLat={(d: object) => (d as GlobeMarker).lat}
           htmlLng={(d: object) => (d as GlobeMarker).lng}
-          htmlAltitude={0.012}
+          // On the surface: three-globe hides an element once its anchor passes the horizon, and the higher the anchor
+          // the further past the limb it stays visible (at 0.012 far-side markers floated outside the silhouette).
+          htmlAltitude={0.001}
           htmlElement={(d: object) => {
             const marker = d as GlobeMarker;
             return marker.kind === "conflict"
@@ -512,6 +503,8 @@ export function ConflictGlobe({
     </div>
   );
 }
+
+const asciiLabel = (name: string) => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
 function makeHotspotEl(
   conflict: Conflict,

@@ -32,24 +32,26 @@ export interface EventCluster {
  * pass, not a globally optimal clustering) — acceptable for a "how many
  * reports are roughly here" marker, not for anything requiring a precise
  * partition. */
-export function clusterEvents(events: ConflictEvent[], radiusDegrees: number): EventCluster[] {
+export function clusterEvents(events: readonly ConflictEvent[], radiusDegrees: number, maxMarkers = Infinity): EventCluster[] {
   const clusters: EventCluster[] = [];
-  // The same canonical markers the flat map draws: each carries its UNIQUE report count.
-  for (const m of buildEventMarkers(events)) {
-    const e = { id: m.id, lat: m.latitude, lng: m.longitude, severity: m.severity, reportCount: m.reportCount };
+  // The same canonical markers the flat map draws: each carries its UNIQUE report count. Reports are attributed over
+  // the WHOLE event set first and only then capped to the newest `maxMarkers` point markers, so a cap never shifts a
+  // report onto a different marker than the flat map shows it on.
+  for (const m of buildEventMarkers(events).slice(0, maxMarkers)) {
+    const e = { id: m.id, ids: m.eventIds, events: m.eventCount, lat: m.latitude, lng: m.longitude, severity: m.severity, reportCount: m.reportCount };
     const existing = clusters.find(
       (c) => Math.abs(c.lat - e.lat) <= radiusDegrees && Math.abs(c.lng - e.lng) <= radiusDegrees,
     );
     if (existing) {
       const n = existing.count;
-      existing.lat = (existing.lat * n + e.lat) / (n + 1);
-      existing.lng = (existing.lng * n + e.lng) / (n + 1);
-      existing.count = n + 1;
+      existing.lat = (existing.lat * n + e.lat * e.events) / (n + e.events);
+      existing.lng = (existing.lng * n + e.lng * e.events) / (n + e.events);
+      existing.count = n + e.events;
       existing.reportCount += e.reportCount;
-      existing.ids.push(e.id);
+      existing.ids.push(...e.ids);
       existing.severity = maxSeverity(existing.severity, e.severity) as Severity;
     } else {
-      clusters.push({ lat: e.lat, lng: e.lng, count: 1, reportCount: e.reportCount, severity: e.severity, ids: [e.id] });
+      clusters.push({ lat: e.lat, lng: e.lng, count: e.events, reportCount: e.reportCount, severity: e.severity, ids: [...e.ids] });
     }
   }
   return clusters;

@@ -31,8 +31,9 @@ export interface ReconstructedEventState {
   locationName: string | null;
   countryCode: string | null;
   region: string | null;
-  latitude: number;
-  longitude: number;
+  /** null when the event has no point (country / global / unknown scope): never coerced to 0 or NaN. */
+  latitude: number | null;
+  longitude: number | null;
   occurredAt: string; // ISO
   severity: string;
   conflictId: string | null;
@@ -101,6 +102,12 @@ export interface ReconstructableSource {
  * `timestamp` is simply every such entry with `createdAt <= timestamp`,
  * not a rollback.
  */
+const coord = (v: string | null | undefined): number | null => {
+  if (v === null || v === undefined || v === "" || v === "null") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
 export function reconstructEventState(
   event: Event,
   history: EventHistory[],
@@ -116,8 +123,8 @@ export function reconstructEventState(
     locationName: event.locationName,
     countryCode: event.countryCode,
     region: event.region,
-    latitude: String(event.latitude),
-    longitude: String(event.longitude),
+    latitude: event.latitude === null ? null : String(event.latitude),
+    longitude: event.longitude === null ? null : String(event.longitude),
     occurredAt: event.occurredAt.toISOString(),
     severity: event.severity,
     conflictId: event.conflictId,
@@ -159,8 +166,8 @@ export function reconstructEventState(
     locationName: state.locationName ?? null,
     countryCode: state.countryCode ?? null,
     region: state.region ?? null,
-    latitude: Number(state.latitude),
-    longitude: Number(state.longitude),
+    latitude: coord(state.latitude),
+    longitude: coord(state.longitude),
     occurredAt: state.occurredAt!,
     severity: state.severity!,
     conflictId: state.conflictId ?? null,

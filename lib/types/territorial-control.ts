@@ -43,6 +43,12 @@ export interface TerritoryDTO {
   /** control | influence | presence: what the source supports (never inferred). */
   territoryKind: "control" | "influence" | "presence";
   datasetId: string | null;
+  datasetName: string | null;
+  datasetProvider: string | null;
+  datasetLicense: string | null;
+  datasetAttribution: string | null;
+  /** When the SOURCE dataset was last updated (an imported snapshot's date), distinct from when Vigil stored the row. */
+  datasetUpdatedAt?: string | null;
   confidence: number;
   geometry: TerritorialGeometry;
   sourceName: string | null;
@@ -72,6 +78,10 @@ export interface TerritoryFeatureProperties {
   status: TerritorialStatus;
   kind: "control" | "influence" | "presence";
   datasetId: string | null;
+  datasetName: string | null;
+  datasetProvider: string | null;
+  datasetLicense: string | null;
+  datasetAttribution: string | null;
   confidence: number;
   sourceName: string | null;
   sourceUrl: string | null;

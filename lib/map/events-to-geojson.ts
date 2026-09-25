@@ -15,6 +15,8 @@ export interface EventFeatureProps {
   scope: string;
   /** Supporting reports (uncapped) — summed by the cluster source, capped only for display. */
   reportCount: number;
+  /** Events this marker stands for (>1 for a city / region marker holding several events at one place). */
+  eventCount: number;
 }
 
 export function eventsToGeoJSON(
@@ -36,11 +38,12 @@ export function eventsToGeoJSON(
           slug: e.slug,
           title: e.title,
           eventType: e.eventType,
-          severity: e.severity,
+          severity: m.severity,
           importance: e.importance,
           precision: e.locationPrecision ?? "",
           scope: m.scope,
           reportCount: m.reportCount,
+          eventCount: m.eventCount,
         },
       };
     }),

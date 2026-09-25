@@ -39,7 +39,7 @@ import { PulsePanel } from "@/components/world/pulse-panel";
 import { WorldRail } from "@/components/world/world-rail";
 import { ConflictContextPanel, CountryContextPanel } from "@/components/world/context-panels";
 import type { TopEntity, WorldItem } from "@/lib/world/types";
-import { buildConflictAggregates } from "@/lib/map/intelligence-markers";
+import { useConflictReportCounts } from "@/hooks/use-conflict-report-counts";
 
 const WorldMap = dynamic(() => import("@/components/map/world-map").then((m) => m.WorldMap), {
   ssr: false,
@@ -318,9 +318,16 @@ export default function WorldPage() {
   }, [allEvents, typeFilter, region, timeRange, timeline.isHistorical]);
 
   // Conflict markers carry the unique published reports of their conflict in the CURRENT state (timeline, period and
-  // filters), from the same canonical aggregation the event markers and the globe use.
-  const conflictAggregates = useMemo(() => buildConflictAggregates(filteredEvents), [filteredEvents]);
-  const markerConflicts = useMemo(() => cc.data?.conflicts.map((c) => ({ ...c, reportCount: conflictAggregates.get(c.id)?.reportCount ?? 0 })), [cc.data, conflictAggregates]);
+  // filters). The number comes from the ONE canonical server aggregate (lib/public/report-counts.ts), which the homepage
+  // globe reads too — never from this page's bounded event feed, which is capped and would undercount.
+  const reportCounts = useConflictReportCounts({
+    window: timeline.isHistorical ? "45D" : timeRange,
+    asOf: timeline.asOf,
+    eventType: typeFilter === "all" ? null : typeFilter,
+    region: region === "Global" ? null : region,
+    dataVersion: `${allEvents.length}:${allEvents[0]?.id ?? ""}:${allEvents[0]?.sources.length ?? 0}`,
+  });
+  const markerConflicts = useMemo(() => cc.data?.conflicts.map((c) => ({ ...c, reportCount: reportCounts.data?.conflicts[c.id] ?? 0 })), [cc.data, reportCounts.data]);
 
   return (
     <main className="relative flex h-screen w-full flex-col overflow-hidden pt-16 sm:pt-[68px]">

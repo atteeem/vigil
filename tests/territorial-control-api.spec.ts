@@ -54,7 +54,12 @@ async function createDraft(request: APIRequestContext, overrides: Record<string,
 }
 
 async function publicListAt(request: APIRequestContext, at?: string) {
-  const res = await request.get(at ? `/api/territorial-control?at=${encodeURIComponent(at)}` : "/api/territorial-control");
+  // Geometry is served per selected dataset: select everything currently available (editorial territory is the
+  // implicit `conflict:<id>` dataset).
+  const ids = ((await (await request.get("/api/territorial-control/datasets")).json()).datasets as { id: string }[]).map((d) => d.id);
+  const params = new URLSearchParams({ datasets: ids.join(",") || "__none__" });
+  if (at) params.set("at", at);
+  const res = await request.get(`/api/territorial-control?${params}`);
   expect(res.ok()).toBe(true);
   const collection = await res.json();
   return collection.features as { id: string; properties: Record<string, unknown> }[];

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/client";
-import type { ConflictActor, ConflictTerritory, Conflict } from "@prisma/client";
+import type { ConflictActor, ConflictTerritory, Conflict, TerritorialDataset } from "@prisma/client";
 import { nextActorColor } from "@/lib/map/territorial-colors";
 import { deriveDisplayStatus, parseTerritorialGeometry } from "@/lib/data/territorial-control";
 import { splitGeometry, validateTerritorialGeometry } from "@/lib/territory/geometry";
@@ -20,7 +20,7 @@ export function toActorDTO(actor: ConflictActor): ConflictActorDTO {
   };
 }
 
-type TerritoryRow = ConflictTerritory & { conflict: Conflict; actor: ConflictActor | null };
+type TerritoryRow = ConflictTerritory & { conflict: Conflict; actor: ConflictActor | null; dataset?: Pick<TerritorialDataset, "name" | "provider" | "license" | "attribution" | "datasetType" | "lastUpdated"> | null };
 
 /** `asOf`, when given, drives the derived "recently_changed" DISPLAY
  * status (see lib/data/territorial-control.ts) — which rows are even in
@@ -47,6 +47,12 @@ function toTerritoryDTO(row: TerritoryRow, asOf?: Date): TerritoryDTO | null {
     status: asOf ? deriveDisplayStatus(row.status as AssignableTerritorialStatus, row.validFrom, asOf) : (row.status as AssignableTerritorialStatus),
     territoryKind: (["control", "influence", "presence"].includes(row.territoryKind) ? row.territoryKind : "control") as TerritoryDTO["territoryKind"],
     datasetId: row.datasetId,
+    // Dataset provenance travels with every area: an attribution licence (e.g. CC BY) must be visible where it is shown.
+    datasetName: row.dataset?.name ?? null,
+    datasetProvider: row.dataset?.provider ?? null,
+    datasetLicense: row.dataset?.license ?? null,
+    datasetAttribution: row.dataset?.attribution ?? null,
+    datasetUpdatedAt: row.dataset?.lastUpdated ? row.dataset.lastUpdated.toISOString() : null,
     confidence: row.confidence,
     geometry,
     sourceName: row.sourceName,
@@ -60,7 +66,7 @@ function toTerritoryDTO(row: TerritoryRow, asOf?: Date): TerritoryDTO | null {
   };
 }
 
-const WITH_RELATIONS = { conflict: true, actor: true } as const;
+const WITH_RELATIONS = { conflict: true, actor: true, dataset: { select: { name: true, provider: true, license: true, attribution: true, datasetType: true, lastUpdated: true } } } as const;
 
 /** Selects the territory of the given dataset ids. `conflict:<id>` selects a conflict's editorially drawn territory
  * (rows with no registry dataset), which the public availability list exposes as an implicit dataset. */

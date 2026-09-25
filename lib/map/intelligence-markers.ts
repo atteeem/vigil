@@ -30,13 +30,33 @@ export interface MapIntelligenceMarker {
 
 const scopeOf = (e: PointEvent): MarkerScope => (e.locationScope === "region" || e.locationPrecision === "region" ? "region" : e.locationScope === "city" || e.locationPrecision === "city" ? "city" : "point");
 
-/** One marker per event that has a map point, each carrying the unique reports attributed to it. */
+/** The map markers for a set of events, each carrying the unique reports attributed to it. A POINT event is its own
+ * marker. CITY and REGION events sit on the place's canonical coordinates (a render point, not an incident position),
+ * so every such event at the same place and scope is ONE marker: the place's unique reports. Drawing them one per
+ * event would stack identical markers (and their numbers) on top of each other once the map stops clustering.
+ * Order: the first event of a group (the newest, for a newest-first feed) names the marker and is what a click opens. */
 export function buildEventMarkers(events: readonly ConflictEvent[]): MapIntelligenceMarker[] {
   const attributed = attributeReports(events);
-  return events.filter(hasPoint).map((e) => {
+  const out: MapIntelligenceMarker[] = [];
+  const byPlace = new Map<string, MapIntelligenceMarker>();
+  for (const e of events.filter(hasPoint)) {
     const a = attributed.get(e.id)!;
-    return { id: e.id, latitude: e.lat, longitude: e.lng, scope: scopeOf(e), conflictId: e.conflictId ?? null, eventIds: [e.id], reportIds: a.reportIds, reportCount: a.reportCount, eventCount: 1, severity: e.severity, confidence: null };
-  });
+    const scope = scopeOf(e);
+    const key = scope === "point" ? null : `${scope}:${e.lat.toFixed(4)},${e.lng.toFixed(4)}`;
+    const existing = key ? byPlace.get(key) : undefined;
+    if (existing) {
+      existing.eventIds.push(e.id);
+      existing.reportIds.push(...a.reportIds);
+      existing.reportCount += a.reportCount;
+      existing.eventCount++;
+      existing.severity = maxSeverity(existing.severity, e.severity) as Severity;
+      continue;
+    }
+    const marker: MapIntelligenceMarker = { id: e.id, latitude: e.lat, longitude: e.lng, scope, conflictId: e.conflictId ?? null, eventIds: [e.id], reportIds: [...a.reportIds], reportCount: a.reportCount, eventCount: 1, severity: e.severity, confidence: null };
+    if (key) byPlace.set(key, marker);
+    out.push(marker);
+  }
+  return out;
 }
 
 export interface ConflictAggregate {

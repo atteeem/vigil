@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Newspaper, ArrowRight } from "lucide-react";
 import { ConflictGlobe } from "@/components/globe/conflict-globe";
+import { useConflictReportCounts } from "@/hooks/use-conflict-report-counts";
 import { GlobeControls } from "@/components/globe/globe-controls";
 import { GlobalStatusCard } from "@/components/home/global-status-card";
 import { RelevantToYouCard } from "@/components/home/relevant-to-you-card";
@@ -37,6 +38,9 @@ export default function HomePage() {
   const overview = usePublicOverview();
   const conflicts = overview.data?.conflicts ?? EMPTY_CONFLICTS;
   const events = overview.data?.events ?? EMPTY_EVENTS;
+  // Conflict hotspot numbers: the canonical server aggregate over the same 30-day window the globe shows (not a count
+  // of the capped event feed), identical to what /world's conflict markers read for the same state.
+  const reportCounts = useConflictReportCounts({ window: "30D", dataVersion: `${events.length}:${events[0]?.id ?? ""}` });
   const freshness = overview.data?.freshness ?? null;
   const loading = overview.status === "loading";
   const status = getGlobalStatus(conflicts);
@@ -51,6 +55,7 @@ export default function HomePage() {
           className="absolute inset-0 h-full w-full"
           conflicts={conflicts}
           events={events}
+          conflictReportCounts={reportCounts.data?.conflicts}
           selectedSlug={selectedSlug}
           onSelectConflict={(c) => setSelectedSlug(c.slug)}
           layer={layer}

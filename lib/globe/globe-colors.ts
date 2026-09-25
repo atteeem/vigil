@@ -18,6 +18,9 @@
 // globe's continental landmass fill.
 export const LAND_FILL_COLOR = "rgba(141, 150, 165, 0.4)";
 
+// The Intel globe's ocean (the bare sphere): black, as three-globe's default globe material always drew it.
+export const OCEAN_COLOR = "#000000";
+
 // A light, cool neutral — visible against both the dark ocean and the
 // gray-blue landmass fill above.
 export const BORDER_COLOR = "rgba(210, 218, 230, 0.65)";

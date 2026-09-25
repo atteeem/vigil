@@ -3,7 +3,11 @@
   "configurations": [
     {
       "name": "vigil-dev",
-      "url": "http://localhost:3000",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "DISABLE_INGESTION_SCHEDULER=1 npm run dev"
+      ],
       "port": 3000
     }
   ]

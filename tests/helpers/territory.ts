@@ -9,7 +9,12 @@ export async function enableTerritory(page: Page, only?: string) {
   const btn = page.getByTestId("territorial-toggle");
   if ((await btn.getAttribute("aria-expanded")) !== "true") await btn.click();
   const list = page.getByTestId("territory-dataset-list");
-  await expect(list).toBeVisible();
+  await expect(list.or(page.getByTestId("territory-no-datasets"))).toBeVisible();
+  if (!(await list.isVisible())) {
+    // Nothing published in this database: there is nothing to switch on.
+    await page.getByLabel("Close territorial control panel").click();
+    return;
+  }
   const boxes = list.locator('input[type="checkbox"]');
   const n = await boxes.count();
   for (let i = 0; i < n; i++) {

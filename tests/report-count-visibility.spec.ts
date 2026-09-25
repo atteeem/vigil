@@ -29,16 +29,17 @@ test.describe("report counts on the flat map", () => {
     const probe = await page.evaluate(async () => {
       const m = (window as unknown as { __vigilMap: MapHandle }).__vigilMap;
       await new Promise((r) => setTimeout(r, 1500));
-      const cluster = m.querySourceFeatures("events").filter((f) => f.properties.point_count && Math.abs(Number(f.properties.reports)) >= 3);
+      // Three CITY reports at Kharkiv are one city marker (reportCount 3), or part of a cluster summing >= 3 when zoomed out.
+      const feats = m.querySourceFeatures("events");
       return {
-        reports: cluster.map((f) => Number(f.properties.reports)),
-        drawn: m.queryRenderedFeatures({ layers: ["cluster-count"] }).length,
+        reports: feats.map((f) => Number(f.properties.point_count ? f.properties.reports : f.properties.reportCount)),
+        drawn: m.queryRenderedFeatures({ layers: ["cluster-count", "unclustered-report-count"] }).length,
         visibility: m.getLayoutProperty("cluster-count", "visibility"),
         // every event feature has a real point: the country-level report is not a feature at all
         titles: m.querySourceFeatures("events").map((f) => String(f.properties.title ?? "")),
       };
     });
-    expect(probe.visibility).toBe("visible");
+    expect(probe.visibility).toBe("visible"); // the count layers are on in marker mode
     expect(probe.reports.some((n) => n >= 3)).toBe(true);
     expect(probe.drawn).toBeGreaterThan(0);
     expect(probe.titles.some((t) => t.startsWith("Libya central bank"))).toBe(false);
@@ -46,7 +47,7 @@ test.describe("report counts on the flat map", () => {
 
   test("Heatmap mode: hotspot count labels are produced for located reports and stay separate from the intensity colour", async ({ page }) => {
     await page.goto("/world?focus=49.99,36.23,5");
-    await page.getByRole("radio", { name: "Heatmap" }).click();
+    await page.getByRole("button", { name: "Heatmap" }).click();
     await expect.poll(() => page.evaluate(() => (window as unknown as { __vigilMap: MapHandle }).__vigilMap.querySourceFeatures("report-heat-labels").length), { timeout: 30_000 }).toBeGreaterThan(0);
     const vis = await page.evaluate(() => (window as unknown as { __vigilMap: MapHandle }).__vigilMap.getLayoutProperty("report-heat-label", "visibility"));
     expect(vis).toBe("visible");

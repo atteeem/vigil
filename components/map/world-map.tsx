@@ -264,7 +264,7 @@ function addEventLayers(
     clusterRadius: 46,
     // A cluster's number is the SUM of its events' supporting reports, not
     // how many event points it swallowed (lib/map/report-counts.ts).
-    clusterProperties: { reports: ["+", ["get", "reportCount"]] },
+    clusterProperties: { reports: ["+", ["get", "reportCount"]], events: ["+", ["get", "eventCount"]] },
   });
   // Hotspot report-count labels for heatmap mode — pre-aggregated by
   // geographic bucket per zoom (see refreshReportHeatLabels), so the label
@@ -281,7 +281,7 @@ function addEventLayers(
       "circle-opacity": 0.22,
       "circle-stroke-width": 1.5,
       "circle-stroke-color": "#4CC2FF",
-      "circle-radius": ["step", ["get", "point_count"], 18, 8, 24, 24, 32],
+      "circle-radius": ["step", ["get", "events"], 18, 8, 24, 24, 32],
     },
   });
   map.addLayer({

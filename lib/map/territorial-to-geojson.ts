@@ -22,12 +22,17 @@ export function territoriesToGeoJSON(territories: TerritoryDTO[]): GeoJSON.Featu
         status: t.status,
         kind: t.territoryKind,
         datasetId: t.datasetId,
+        datasetName: t.datasetName ?? null,
+        datasetProvider: t.datasetProvider ?? null,
+        datasetLicense: t.datasetLicense ?? null,
+        datasetAttribution: t.datasetAttribution ?? null,
         confidence: t.confidence,
         sourceName: t.sourceName,
         sourceUrl: t.sourceUrl,
         validFrom: t.validFrom,
         validTo: t.validTo,
-        lastUpdated: t.updatedAt,
+        // The source's own last update for an imported dataset; the row's edit time for editorially drawn territory.
+        lastUpdated: t.datasetUpdatedAt ?? t.updatedAt,
       };
       return {
         type: "Feature",
