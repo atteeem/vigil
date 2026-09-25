@@ -20,6 +20,7 @@ import type { ConflictIntelligence, RelatedCountry } from "@/lib/conflicts/intel
 import { OTHER_IMPACT_MIN } from "@/lib/conflicts/constants";
 import { SEVERITY_TEXT_CLASS, severityFromScore } from "@/lib/utils/severity";
 import { cn } from "@/lib/utils";
+import { SCORE_COPY } from "@/lib/copy/scores";
 
 const VERDICT_TONE: Record<string, string> = { GOOD: "border-emerald-400/40 text-emerald-300", LIMITED: "border-yellow-400/40 text-yellow-200", STALE: "border-orange-400/40 text-orange-300" };
 
@@ -111,6 +112,7 @@ export function ConflictDetailClient({ intel }: { intel: ConflictIntelligence })
       <Section title="Severity · Impact · Confidence" testId="section-scores" aside={<span className="text-[11px] text-ink-faint">three separate measures; report volume feeds none of them</span>}>
         <div className="grid gap-3 md:grid-cols-3">
           <ScoreCard
+            scoreKey="severity"
             label="Severity"
             value={sev.value}
             sub={`${sev.label ?? ""} · intensity ${conflict.intensity} / 100 · `}
@@ -126,6 +128,7 @@ export function ConflictDetailClient({ intel }: { intel: ConflictIntelligence })
           />
           <ImpactScoreCard byCountry={intel.scores.impact.byCountry} explanation={intel.scores.impact.explanation} />
           <ScoreCard
+            scoreKey="confidence"
             label="Confidence"
             value={conf.value}
             sub={`${conf.rollup.corroborated} of ${conf.rollup.events30d - conf.rollup.partyOnly} incidents (30d) have 2+ independent source groups · `}
@@ -562,7 +565,9 @@ function ScoreCard({
   emptyText = "Unavailable",
   accent,
   explanation,
+  scoreKey,
 }: {
+  scoreKey: "severity" | "confidence";
   label: string;
   value: number | null;
   sub?: string;
@@ -576,6 +581,9 @@ function ScoreCard({
   return (
     <div className="rounded-xl border border-border bg-card/60 p-4" data-testid={testId} title={explanation}>
       <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-faint">{label}</p>
+      <p className="text-[11px] text-ink-dim" data-testid={`${testId}-question`}>
+        {SCORE_COPY[scoreKey].question}
+      </p>
       {value === null ? (
         <p className="mt-2 text-sm text-ink-faint">{emptyText}</p>
       ) : (

@@ -43,7 +43,8 @@ export function NavBar() {
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
-          <LiveIndicator />
+          {/* /world's status bar carries the same freshness indicator (with its counters); do not show it twice. */}
+          {pathname !== "/world" && <LiveIndicator />}
           <button
             onClick={() => setSearchOpen(true)}
             aria-label="Search"

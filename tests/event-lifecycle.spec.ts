@@ -76,7 +76,9 @@ test.describe.serial("Event lifecycle management (admin)", () => {
     // exists but isn't visible there.
     if (!isMobile) {
       await page.goto("/world");
-      await expect(page.getByText(title)).toBeVisible();
+      // The raw feed sits behind the Events tab (Pulse is the default left panel).
+      await page.getByTestId("left-tab-events").click();
+      await expect(page.getByTestId("left-column").getByText(title)).toBeVisible();
     }
   });
 
@@ -110,7 +112,9 @@ test.describe.serial("Event lifecycle management (admin)", () => {
 
     if (!isMobile) {
       await page.goto("/world");
-      await expect(page.getByText(title)).toBeVisible();
+      // The raw feed sits behind the Events tab (Pulse is the default left panel).
+      await page.getByTestId("left-tab-events").click();
+      await expect(page.getByTestId("left-column").getByText(title)).toBeVisible();
     }
   });
 

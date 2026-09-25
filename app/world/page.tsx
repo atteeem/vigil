@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { X } from "lucide-react";
+import { X, History, SlidersHorizontal, Layers, HelpCircle } from "lucide-react";
 import { MapFilters, type TypeFilter, type RegionFilter, type ViewMode } from "@/components/map/map-filters";
 import { EventCard } from "@/components/events/event-card";
 import { EventDetailPanel } from "@/components/events/event-detail-panel";
@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import type { ConflictEvent, TimeRange } from "@/lib/types";
 import { GlobeLoading } from "@/components/globe/globe-loading";
 import { useAppStore } from "@/hooks/use-app-store";
-import { useLiveEvents } from "@/hooks/use-live-events";
+import { useLiveEventsState } from "@/hooks/use-live-events";
 import { useWorldTimeline } from "@/hooks/use-world-timeline";
 import { useWorldEvents } from "@/hooks/use-world-events";
 import { useTerritorialControl } from "@/hooks/use-territorial-control";
@@ -40,6 +40,10 @@ import { WorldRail } from "@/components/world/world-rail";
 import { ConflictContextPanel, CountryContextPanel } from "@/components/world/context-panels";
 import type { TopEntity, WorldItem } from "@/lib/world/types";
 import { useConflictReportCounts } from "@/hooks/use-conflict-report-counts";
+import { useIsPhone } from "@/hooks/use-is-phone";
+import { MapLegendContent } from "@/components/map/map-legend";
+
+const CHIP = "inline-flex min-h-[36px] shrink-0 items-center gap-1 rounded-full border border-border bg-surface/90 px-2.5 text-[11px] sm:gap-1.5 sm:px-3 sm:text-xs font-medium text-ink-dim backdrop-blur-xl hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 
 const WorldMap = dynamic(() => import("@/components/map/world-map").then((m) => m.WorldMap), {
   ssr: false,
@@ -125,7 +129,7 @@ export default function WorldPage() {
   }, []);
   const basemapMode = useAppStore((s) => s.mapBasemapMode);
   const setBasemapMode = useAppStore((s) => s.setMapBasemapMode);
-  const liveEvents = useLiveEvents();
+  const { events: liveEvents, failed: eventsFailed, retry: retryEvents } = useLiveEventsState();
   // World Command Center: one aggregated read feeds the status bar, ticker, Pulse, right rail and conflict markers.
   const cc = useCommandCenter();
   const baseCountry = useAppStore((s) => s.baseCountryCode);
@@ -134,6 +138,15 @@ export default function WorldPage() {
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [leftTab, setLeftTab] = useState<"pulse" | "events">("pulse");
   const [drawer, setDrawer] = useState<null | "pulse" | "overview">(null);
+  const isPhone = useIsPhone();
+  const [mobileTimelineOpen, setMobileTimelineOpen] = useState(false);
+  const [mobileSheet, setMobileSheet] = useState<null | "filters" | "layers" | "legend">(null);
+  const [legendOpen, setLegendOpen] = useState(false);
+  const anySelection = !!(selected || selectedTerritory || selectedHazardId || selectedConflictSlug || selectedCountry);
+  useEffect(() => {
+    // A selection opens its own detail sheet; never stack it on a control sheet.
+    if (anySelection) setMobileSheet(null); // eslint-disable-line react-hooks/set-state-in-effect -- closing the control sheet when a detail sheet opens
+  }, [anySelection]);
 
   // Global Timeline / Historical Playback: `timeline.asOf` is null for
   // Live and a fixed past Date once a preset/custom timestamp is
@@ -349,6 +362,33 @@ export default function WorldPage() {
   });
   const markerConflicts = useMemo(() => cc.data?.conflicts.map((c) => ({ ...c, reportCount: reportCounts.data?.conflicts[c.id] ?? 0 })), [cc.data, reportCounts.data]);
 
+  const filterProps = {
+    typeFilter,
+    onTypeFilter: setTypeFilter,
+    region,
+    onRegion: setRegion,
+    timeRange,
+    onTimeRange: setTimeRange,
+    viewMode,
+    onViewMode: setViewMode,
+    basemapMode,
+    onBasemapMode: setBasemapMode,
+    showTerritorial,
+    territoryOpen,
+    territoryCount: territoryIds.length,
+    onToggleTerritoryPanel: () => setTerritoryOpen((v) => !v),
+    hazardLayers,
+    onToggleHazardLayer: toggleHazardLayer,
+    hazardHealth: hazards?.meta.health,
+  };
+  const activeFilterCount = Number(typeFilter !== "all") + Number(region !== "Global") + Number(timeRange !== "24H");
+  const layerCount = territoryIds.length + hazardLayers.length + Number(viewMode === "heatmap");
+  // One phone sheet at a time: opening a control sheet closes the Pulse / Overview panel and vice versa.
+  const openMobileSheet = (k: "filters" | "layers" | "legend") => {
+    setDrawer(null);
+    setMobileSheet(k);
+  };
+
   return (
     <main className="relative flex h-screen w-full flex-col overflow-hidden pt-16 sm:pt-[68px]">
       <StatusBar
@@ -357,7 +397,8 @@ export default function WorldPage() {
         error={cc.isError}
         liveView={{ active: live.active, paused: live.paused, disabled: liveQueue.length === 0, onToggle: () => (live.active ? live.stop() : live.start()), onPauseResume: () => (live.paused ? live.resume() : live.pause()) }}
       />
-      <Ticker items={cc.data?.ticker ?? []} loading={cc.isPending} error={cc.isError} onSelect={onManualItem} />
+      {/* The ticker repeats Pulse; phones keep the vertical space for the map. */}
+      {!isPhone && <Ticker items={cc.data?.ticker ?? []} loading={cc.isPending} error={cc.isError} onSelect={onManualItem} />}
       <div className="grid min-h-0 flex-1 grid-cols-1 sm:grid-cols-[1fr_300px] lg:grid-cols-[288px_1fr_320px] min-[1400px]:grid-cols-[320px_1fr_360px]">
         {/* Desktop left column: Pulse (meaningful developments) and the raw event feed */}
         <aside className="hidden min-h-0 flex-col overflow-hidden border-r border-border bg-surface/60 p-4 lg:flex" data-testid="left-column">
@@ -414,6 +455,7 @@ export default function WorldPage() {
             onSelectTerritory={selectTerritory}
             hazards={hazards}
             focus={focus}
+            holdCamera={live.active && live.paused}
             hazardLayers={hazardLayers}
             onSelectHazard={selectHazard}
             activeConflicts={markerConflicts}
@@ -431,9 +473,30 @@ export default function WorldPage() {
               timeline.isHistorical && "ring-2 ring-inset ring-accent/50",
             )}
           />
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 px-4 pt-4 sm:pt-3">
-            <div className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-border bg-surface/80 p-3 backdrop-blur-xl">
-              <TimelineControls
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 px-3 pt-2 sm:px-4 sm:pt-3">
+            {isPhone ? (
+              // Phones: one compact row of controls; everything else opens in a sheet so the map keeps the screen.
+              <>
+                <div className="pointer-events-auto no-scrollbar flex w-[calc(100%-2.75rem)] items-center gap-1.5 self-start overflow-x-auto" data-testid="mobile-map-controls" role="toolbar" aria-label="Map controls">
+                  <button type="button" onClick={() => setMobileTimelineOpen((v) => !v)} aria-expanded={mobileTimelineOpen} data-testid="mobile-timeline-toggle" className={cn(CHIP, timeline.isHistorical ? "border-accent/50 text-accent" : "text-ink")}>
+                    <History className="h-3.5 w-3.5" aria-hidden />
+                    {timeline.isHistorical && timeline.asOf ? `${timeline.asOf.toISOString().slice(5, 16).replace("T", " ")} UTC` : "Live"}
+                  </button>
+                  <button type="button" onClick={() => openMobileSheet("filters")} data-testid="mobile-filters-button" className={CHIP}>
+                    <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden /> Filters
+                    {activeFilterCount > 0 && <span className="rounded-full bg-accent/20 px-1.5 text-[10px] font-semibold text-accent">{activeFilterCount}</span>}
+                  </button>
+                  <button type="button" onClick={() => openMobileSheet("layers")} data-testid="mobile-layers-button" className={CHIP}>
+                    <Layers className="h-3.5 w-3.5" aria-hidden /> Layers
+                    {layerCount > 0 && <span className="rounded-full bg-accent/20 px-1.5 text-[10px] font-semibold text-accent">{layerCount}</span>}
+                  </button>
+                  <button type="button" onClick={() => openMobileSheet("legend")} data-testid="map-legend-button" className={CHIP}>
+                    <HelpCircle className="h-3.5 w-3.5" aria-hidden /> Legend
+                  </button>
+                </div>
+                {mobileTimelineOpen && (
+                  <div className="pointer-events-auto w-full rounded-2xl border border-border bg-surface/90 p-3 backdrop-blur-xl" data-testid="mobile-timeline-panel">
+                    <TimelineControls
                 preset={timeline.preset}
                 asOf={timeline.asOf}
                 rangeStart={timeline.rangeStart}
@@ -450,28 +513,43 @@ export default function WorldPage() {
                 onSetSpeed={timeline.setSpeed}
                 onScrubProgress={timeline.scrubToProgress}
               />
-            </div>
-            <div className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-border bg-surface/80 p-3 backdrop-blur-xl">
-              <MapFilters
-                typeFilter={typeFilter}
-                onTypeFilter={setTypeFilter}
-                region={region}
-                onRegion={setRegion}
-                timeRange={timeRange}
-                onTimeRange={setTimeRange}
-                viewMode={viewMode}
-                onViewMode={setViewMode}
-                basemapMode={basemapMode}
-                onBasemapMode={setBasemapMode}
-                showTerritorial={showTerritorial}
-                territoryOpen={territoryOpen}
-                territoryCount={territoryIds.length}
-                onToggleTerritoryPanel={() => setTerritoryOpen((v) => !v)}
-                hazardLayers={hazardLayers}
-                onToggleHazardLayer={toggleHazardLayer}
-                hazardHealth={hazards?.meta.health}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-border bg-surface/80 p-3 backdrop-blur-xl">
+                  <TimelineControls
+                preset={timeline.preset}
+                asOf={timeline.asOf}
+                rangeStart={timeline.rangeStart}
+                rangeEnd={timeline.rangeEnd}
+                isPlaying={timeline.isPlaying}
+                speed={timeline.speed}
+                onSelectPreset={timeline.selectPreset}
+                onSelectCustom={timeline.selectCustomTimestamp}
+                onReturnToLive={timeline.returnToLive}
+                onPlay={timeline.play}
+                onPause={timeline.pause}
+                onStepForward={timeline.stepForward}
+                onStepBackward={timeline.stepBackward}
+                onSetSpeed={timeline.setSpeed}
+                onScrubProgress={timeline.scrubToProgress}
               />
-            </div>
+                </div>
+                <div className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-border bg-surface/80 p-3 backdrop-blur-xl">
+                  <MapFilters {...filterProps} />
+                </div>
+              </>
+            )}
+            {eventsFailed && (
+              <div className="pointer-events-auto rounded-full border border-elevated/40 bg-surface/90 px-3 py-1.5 text-xs text-ink backdrop-blur-xl" role="alert" data-testid="map-data-error">
+                Map data is unavailable right now; showing the last loaded state.{" "}
+                <button type="button" onClick={retryEvents} className="font-medium text-accent hover:underline">
+                  Retry
+                </button>
+              </div>
+            )}
             {fromConflict && (
               <Link href={`/conflict/${fromConflict}`} className="pointer-events-auto rounded-full border border-border bg-surface/80 px-3 py-1.5 text-xs font-medium text-ink-dim backdrop-blur-xl hover:text-ink" data-testid="back-to-conflict">
                 ← {cc.data?.conflicts.find((x) => x.slug === fromConflict)?.name ?? "Conflict"} page
@@ -482,18 +560,37 @@ export default function WorldPage() {
                 ← {getCountryByCode(fromCountry)?.name} country page
               </Link>
             )}
-            <WhatChangedPanel timeRange={timeRange} asOf={timeline.asOf} onSelect={openDevelopment} />
-            {territoryOpen && (
+            {/* Phones reach recent developments through Pulse; the range brief stays on larger screens. */}
+            {!isPhone && <WhatChangedPanel timeRange={timeRange} asOf={timeline.asOf} onSelect={openDevelopment} />}
+            {!isPhone && territoryOpen && (
               <div id="territory-selector" className="w-full max-w-2xl">
                 <TerritorySelector datasets={territoryDatasets.data} loading={territoryDatasets.isPending} error={territoryDatasets.isError} selectedIds={territoryIds} onToggle={toggleTerritoryDataset} onClose={() => setTerritoryOpen(false)} />
               </div>
             )}
-            {showTerritorial && (
+            {!isPhone && showTerritorial && (
               <div className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-border bg-surface/80 p-3 backdrop-blur-xl">
                 <TerritoryLegend featureCollection={territorialFeatures} />
               </div>
             )}
           </div>
+          {!isPhone && (
+            <div className="absolute bottom-8 right-3 z-10 flex flex-col items-end gap-2">
+              {legendOpen && (
+                <div className="max-h-[60vh] w-72 overflow-y-auto rounded-2xl border border-border bg-surface/95 p-4 shadow-xl backdrop-blur-xl" role="region" aria-label="Map legend" data-testid="map-legend-panel">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Legend</span>
+                    <button type="button" onClick={() => setLegendOpen(false)} aria-label="Close legend" className="rounded p-1 text-ink-faint hover:text-ink">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <MapLegendContent />
+                </div>
+              )}
+              <button type="button" onClick={() => setLegendOpen((v) => !v)} aria-expanded={legendOpen} data-testid="map-legend-button" className={cn(CHIP, "shadow-lg")}>
+                <HelpCircle className="h-3.5 w-3.5" aria-hidden /> Legend
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Desktop selected-event/territory panel */}
@@ -542,7 +639,10 @@ export default function WorldPage() {
           side drawer on tablets). The right rail stays on tablets; on phones context opens in a bottom sheet. */}
       <div className="pointer-events-none fixed inset-x-0 bottom-20 z-30 flex justify-center gap-2 sm:bottom-4 lg:hidden">
         {(["pulse", "overview"] as const).map((k) => (
-          <button key={k} type="button" onClick={() => setDrawer(drawer === k ? null : k)} data-testid={`drawer-${k}`} aria-expanded={drawer === k} className="pointer-events-auto rounded-full border border-border bg-surface/90 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-ink backdrop-blur-xl">
+          <button key={k} type="button" onClick={() => {
+              setMobileSheet(null);
+              setDrawer(drawer === k ? null : k);
+            }} data-testid={`drawer-${k}`} aria-expanded={drawer === k} className="pointer-events-auto rounded-full border border-border bg-surface/90 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-ink backdrop-blur-xl">
             {k === "pulse" ? "Pulse" : "Overview"}
           </button>
         ))}
@@ -569,6 +669,30 @@ export default function WorldPage() {
       </BottomSheet>
       <BottomSheet open={!!selectedCountry} onClose={() => setSelectedCountry(null)} label="Country context">
         {selectedCountry && <CountryContextPanel code={selectedCountry} onClose={() => setSelectedCountry(null)} onSelectConflict={(slug) => selectConflict(slug)} />}
+      </BottomSheet>
+
+      {/* Phone map controls */}
+      <BottomSheet open={mobileSheet === "filters"} onClose={() => setMobileSheet(null)} label="Map filters">
+        <p className="mb-3 text-sm font-semibold text-ink">Filters</p>
+        <MapFilters {...filterProps} section="filters" />
+      </BottomSheet>
+      <BottomSheet open={mobileSheet === "layers"} onClose={() => setMobileSheet(null)} label="Map layers">
+        <p className="mb-3 text-sm font-semibold text-ink">Layers</p>
+        <MapFilters {...filterProps} section="layers" />
+        {territoryOpen && (
+          <div id="territory-selector" className="mt-3">
+            <TerritorySelector datasets={territoryDatasets.data} loading={territoryDatasets.isPending} error={territoryDatasets.isError} selectedIds={territoryIds} onToggle={toggleTerritoryDataset} onClose={() => setTerritoryOpen(false)} />
+          </div>
+        )}
+      </BottomSheet>
+      <BottomSheet open={mobileSheet === "legend"} onClose={() => setMobileSheet(null)} label="Map legend">
+        <p className="mb-3 text-sm font-semibold text-ink">Legend</p>
+        <MapLegendContent />
+        {showTerritorial && (
+          <div className="mt-4 border-t border-border pt-3">
+            <TerritoryLegend featureCollection={territorialFeatures} />
+          </div>
+        )}
       </BottomSheet>
 
       {/* Mobile bottom sheet */}

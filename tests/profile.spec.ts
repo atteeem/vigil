@@ -5,7 +5,7 @@ test.describe("Profile / local account (/profile)", () => {
     const email = `e2e-${Date.now()}@example.com`;
 
     await page.goto("/profile");
-    await expect(page.getByRole("heading", { name: "Vigil Profile" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Create Account" }).click();
     await page.getByPlaceholder("Display name").fill("E2E Tester");
@@ -49,7 +49,7 @@ test.describe("Profile / local account (/profile)", () => {
     // Sign out.
     await page.goto("/profile");
     await page.getByRole("button", { name: "Sign Out" }).click();
-    await expect(page.getByRole("heading", { name: "Vigil Profile" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Create Account" })).toBeVisible();
   });
 

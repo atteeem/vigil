@@ -306,7 +306,8 @@ test.describe("Homepage and For You use the ranked real data", () => {
     expect(shown.length).toBe(expected.length);
     expect(shown[0]).toBe(expected[0]);
     await expect(overview.getByTestId("significant-events")).toContainText(title);
-    await expect(overview.getByTestId("verified-updates")).toBeVisible(); // empty state or verified events — never filler
+    // "Latest verified updates" repeated Latest Activity and was removed from the Overview.
+    await expect(overview.getByTestId("verified-updates")).toHaveCount(0);
   });
 
   test("For You explains the ranking with real reasons; the own-country war leads", async ({ page }) => {

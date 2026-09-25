@@ -14,7 +14,14 @@ const POLL_INTERVAL_MS = 20_000;
  * logic, easily swapped for SSE later if the poll interval becomes a real
  * latency concern. */
 export function useLiveEvents(): ConflictEvent[] {
+  return useLiveEventsState().events;
+}
+
+/** The same poll plus its health: `failed` after a failed read (until the next success), `retry` polls at once. */
+export function useLiveEventsState(): { events: ConflictEvent[]; failed: boolean; retry: () => void } {
   const [events, setEvents] = useState<ConflictEvent[]>([]);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const signature = useRef("");
 
   useEffect(() => {
@@ -24,8 +31,12 @@ export function useLiveEvents(): ConflictEvent[] {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
       try {
         const res = await fetch("/api/events");
-        if (!res.ok) return;
+        if (!res.ok) {
+          if (!cancelled) setFailed(true);
+          return;
+        }
         const data = (await res.json()) as ConflictEvent[];
+        if (!cancelled) setFailed(false);
         // An unchanged payload keeps the previous array: no re-render, no heat/label recomputation, no setData.
         const sig = eventListSignature(data);
         if (!cancelled && sig !== signature.current) {
@@ -33,7 +44,8 @@ export function useLiveEvents(): ConflictEvent[] {
           setEvents(data);
         }
       } catch {
-        // Network hiccup — keep showing the last known set, try again next tick.
+        // Network hiccup — keep showing the last known set, say so, try again next tick.
+        if (!cancelled) setFailed(true);
       }
     }
     poll();
@@ -47,7 +59,7 @@ export function useLiveEvents(): ConflictEvent[] {
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, []);
+  }, [attempt]);
 
-  return events;
+  return { events, failed, retry: () => setAttempt((n) => n + 1) };
 }

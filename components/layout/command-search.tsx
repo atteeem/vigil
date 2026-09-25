@@ -37,12 +37,13 @@ interface Row {
   context: string | null;
   status: string | null;
   subtitle: string;
+  matched?: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   recent: Omit<RecentEntity, "at"> | null;
 }
 
-const toRow = (r: SearchResult): Row => ({ key: `${r.type}:${r.id}`, title: r.title, kind: r.kind, context: r.context, status: r.status, subtitle: r.subtitle, href: r.href, icon: ICON[r.type] ?? Search, recent: { type: r.type, key: r.id, title: r.title, kind: r.kind, href: r.href } });
+const toRow = (r: SearchResult): Row => ({ key: `${r.type}:${r.id}`, title: r.title, kind: r.kind, context: r.context, status: r.status, subtitle: r.subtitle, matched: r.matched, href: r.href, icon: ICON[r.type] ?? Search, recent: { type: r.type, key: r.id, title: r.title, kind: r.kind, href: r.href } });
 
 /** The one global search: Cmd/Ctrl+K or the header button; arrow keys, Enter and Esc; a full-width sheet on phones.
  * Queries the lightweight /api/public/search endpoint (debounced); nothing large is downloaded. */
@@ -52,6 +53,8 @@ export function CommandSearch() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -71,9 +74,12 @@ export function CommandSearch() {
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(`/api/public/search?q=${encodeURIComponent(q)}`, { signal: controller.signal });
-        if (res.ok) setResults((await res.json()) as SearchResult[]);
+        if (!res.ok) throw new Error(String(res.status));
+        setResults((await res.json()) as SearchResult[]);
+        setFailed(false);
       } catch {
-        /* aborted or offline: keep the previous list */
+        // Offline or a server error (never an abort): say so instead of showing a stale or empty list.
+        if (!controller.signal.aborted) setFailed(true);
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -82,7 +88,7 @@ export function CommandSearch() {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, attempt]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -155,6 +161,7 @@ export function CommandSearch() {
         key={row.key}
         type="button"
         role="option"
+        id={`search-option-${i}`}
         aria-selected={i === active}
         data-row-index={i}
         data-testid="search-result"
@@ -165,7 +172,14 @@ export function CommandSearch() {
       >
         <Icon className="mt-0.5 h-4 w-4 shrink-0 text-ink-dim" aria-hidden />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm text-ink">{row.title}</span>
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-sm text-ink">{row.title}</span>
+            {row.matched && (
+              <span className="shrink-0 rounded border border-border-strong px-1.5 text-[10px] text-ink-dim" data-testid="search-result-matched">
+                {row.matched}
+              </span>
+            )}
+          </span>
           <span className="block truncate text-[11px] text-ink-faint" data-testid="search-result-meta">
             {[row.kind, row.context, row.status].filter(Boolean).join(" · ")}
             {row.subtitle ? <span className="text-ink-faint/80">{` — ${row.subtitle}`}</span> : null}
@@ -210,8 +224,12 @@ export function CommandSearch() {
                 onKeyDown={onKeyDown}
                 placeholder="Search countries, conflicts, actors, places, airports…"
                 className="flex-1 bg-transparent text-base text-ink placeholder:text-ink-faint focus:outline-none sm:text-sm"
-                aria-label="Search"
+                aria-label="Search Vigil"
+                role="combobox"
+                aria-expanded="true"
+                aria-autocomplete="list"
                 aria-controls="search-results"
+                aria-activedescendant={`search-option-${active}`}
                 data-testid="search-input"
                 autoComplete="off"
                 spellCheck={false}
@@ -223,7 +241,15 @@ export function CommandSearch() {
               </button>
             </div>
             <div ref={listRef} id="search-results" role="listbox" className="min-h-0 flex-1 overflow-y-auto p-2" data-testid="search-results">
-              {q.length >= 2 && results && grouped.length === 0 && (
+              {q.length >= 2 && failed && (
+                <div className="px-3 py-6 text-center text-sm text-ink-dim" role="alert" data-testid="search-error">
+                  Search is unavailable right now.{" "}
+                  <button type="button" onClick={() => setAttempt((n) => n + 1)} className="text-accent hover:underline">
+                    Try again
+                  </button>
+                </div>
+              )}
+              {q.length >= 2 && !failed && results && grouped.length === 0 && (
                 <div className="px-3 py-6 text-center text-sm text-ink-faint" data-testid="search-empty">
                   No matching entities.
                 </div>

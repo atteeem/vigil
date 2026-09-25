@@ -16,6 +16,7 @@ import { getCountryRecord, resolveCountry } from "@/lib/countries/registry";
 import { SEVERITY_TEXT_CLASS, severityFromScore } from "@/lib/utils/severity";
 import type { ExposureDimension } from "@/lib/types";
 import { formatSigned, cn } from "@/lib/utils";
+import { SCORE_COPY } from "@/lib/copy/scores";
 
 // The country intelligence page: "What is happening in and around this country right now?" Everything comes from ONE
 // server-side aggregation (lib/countries/intelligence.ts, also GET /api/country/[code]/intelligence) over the existing
@@ -74,7 +75,7 @@ export default async function CountryPage({ params }: { params: Promise<{ code: 
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="mr-2 text-right" data-testid="header-exposure">
+          <div className="mr-2 text-right" data-testid="header-exposure" title={`Built from Impact: ${SCORE_COPY.impact.question}`}>
             <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-faint">Current exposure</p>
             <p className="flex items-baseline justify-end gap-1.5">
               <span className={cn("text-2xl font-semibold tabular-nums", SEVERITY_TEXT_CLASS[severity])} data-testid="overview-exposure">

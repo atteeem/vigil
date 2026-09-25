@@ -152,11 +152,12 @@ test.describe("Homepage and globe read the database", () => {
     expect(html).not.toContain("example.com");
     const overview = (await request.get("/api/public/overview").then((r) => r.json())) as PublicOverview;
     expect(overview.events.some((e) => e.title === title)).toBe(true);
-    await expect(page.getByTestId("home-data-summary")).toContainText("published events");
+    // Desktop shows the summary over the globe, phones below it; check the copy on this screen.
+    await expect(page.locator('[data-testid="home-data-summary"]:visible')).toContainText("published events");
     expect(overview.freshness.lastEventAt).not.toBeNull();
     // The line shows a real "last event" stamp, and a freshness label for source fetching.
-    await expect(page.getByTestId("freshness-last-event").first()).toBeVisible();
-    await expect(page.getByTestId("freshness-last-source-fetch").first()).toBeVisible();
+    await expect(page.locator('[data-testid="freshness-last-event"]:visible').first()).toBeVisible();
+    await expect(page.locator('[data-testid="freshness-last-source-fetch"]:visible').first()).toBeVisible();
   });
 
   test("the homepage globe pins only real located conflicts and feeds the heat field the same real inputs", async ({ page, request }) => {
@@ -181,11 +182,23 @@ test.describe("Homepage and globe read the database", () => {
     expect([signatureAt(before), signatureAt(Date.now()), signatureAt(before - 3_600_000), signatureAt(Date.now() + 3_600_000)]).toContain(shown);
   });
 
-  test("/world (live) shows database events only", async ({ page, request }) => {
+  test("/world (live) shows database events only", async ({ page, request, isMobile }) => {
     const title = `PD world event ${unique()}`;
     await publishManualEvent(request, title);
     await page.goto("/world");
-    await expect(page.getByText(title).first()).toBeVisible({ timeout: 30_000 });
+    if (!isMobile) {
+      // The raw feed lives behind the Events tab (Pulse, the meaningful developments, is the default view).
+      await page.getByTestId("left-tab-events").click();
+      await expect(page.getByTestId("left-column").getByText(title).first()).toBeVisible({ timeout: 30_000 });
+    } else {
+      // Phones have no list: the event is on the map itself (the events source), not a mock.
+      await expect
+        .poll(() => page.evaluate((t) => {
+          const src = (window as unknown as { __vigilMap?: { getSource(id: string): { serialize(): { data: unknown } } | undefined } }).__vigilMap?.getSource("events");
+          return !!src && JSON.stringify(src.serialize().data).includes(t);
+        }, title), { timeout: 30_000 })
+        .toBe(true);
+    }
     expect(await page.locator("body").innerText()).not.toContain("Naval incident reported near Eastern Saudi coast");
   });
 });

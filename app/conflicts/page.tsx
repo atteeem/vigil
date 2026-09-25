@@ -13,6 +13,7 @@ import type { Region, Severity } from "@/lib/types";
 import { REGIONS } from "@/lib/types";
 import { SEVERITY_LEVELS } from "@/lib/utils/severity";
 import { cn } from "@/lib/utils";
+import { SCORE_COPY } from "@/lib/copy/scores";
 
 type RegionFilter = "All" | Region;
 type StatusFilter = "live" | "active" | "reduced" | "dormant" | "ended" | "all";
@@ -94,7 +95,7 @@ export default function ConflictsPage() {
         </div>
       </div>
 
-      {directory.isPending && <LoadingLine className="mt-8" />}
+      {directory.isPending && <LoadingLine className="mt-8" label="Loading conflicts…" />}
       {directory.isError && <EmptyState className="mt-8" title="Conflicts could not be loaded" detail="Try again in a moment." testId="conflicts-error" />}
 
       {directory.data && (
@@ -118,7 +119,7 @@ export default function ConflictsPage() {
               </span>
               <span className="text-[11px] text-ink-dim">{c.lastEventAt ? <RelativeTime iso={c.lastEventAt} prefix="Latest incident " /> : "No published incident"}</span>
               <span className="flex gap-4 text-[11px] text-ink-faint sm:justify-end">
-                <span title="Evidence confidence (independent source groups); separate from severity" data-testid="conflict-confidence">
+                <span title={`Confidence: ${SCORE_COPY.confidence.question}`} data-testid="conflict-confidence">
                   Confidence <span className="font-semibold tabular-nums text-ink">{c.confidence ?? "—"}</span>
                 </span>
                 <span title="Unique published reports, last 7 days" data-testid="conflict-report-count">

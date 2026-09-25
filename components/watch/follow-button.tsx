@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { BellRing, Check } from "lucide-react";
 import { useFollowState, useWatcherMutations } from "@/hooks/use-watcher";
 import type { WatchEntityType } from "@/lib/alerts/types";
@@ -13,14 +14,25 @@ export function FollowButton({ entityType, entityKey, label, className }: { enti
   const watch = useFollowState(entityType, entityKey);
   const { follow, unfollow } = useWatcherMutations();
   const [error, setError] = useState<string | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  useEffect(() => {
+    if (!confirmed) return;
+    const t = setTimeout(() => setConfirmed(false), 6000);
+    return () => clearTimeout(t);
+  }, [confirmed]);
   const following = !!watch;
   const busy = follow.isPending || unfollow.isPending;
 
   async function toggle() {
     setError(null);
     try {
-      if (watch) await unfollow.mutateAsync(watch.id);
-      else await follow.mutateAsync({ entityType, entityKey, label });
+      if (watch) {
+        setConfirmed(false);
+        await unfollow.mutateAsync(watch.id);
+      } else {
+        await follow.mutateAsync({ entityType, entityKey, label });
+        setConfirmed(true);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update");
     }
@@ -41,7 +53,20 @@ export function FollowButton({ entityType, entityKey, label, className }: { enti
         {following ? <Check className="h-3.5 w-3.5" aria-hidden /> : <BellRing className="h-3.5 w-3.5" aria-hidden />}
         {following ? "Watching" : "Watch"}
       </button>
-      {error && <span className="mt-1 text-[11px] text-elevated">{error}</span>}
+      {error && <span className="mt-1 text-[11px] text-elevated" role="alert">{error}</span>}
+      {/* Only promises what exists: watched items feed For You and the in-app notification bell. */}
+      <span role="status" aria-live="polite" className={cn(!confirmed && "sr-only")}>
+        {confirmed && (
+          <span className="mt-1.5 block max-w-[260px] rounded-lg border border-accent/30 bg-surface px-2.5 py-1.5 text-[11px] leading-snug text-ink-dim shadow-lg" data-testid="watch-confirmation">
+            <span className="block font-semibold text-ink">Watching {label}</span>
+            Important developments will appear in{" "}
+            <Link href="/for-you" className="text-accent hover:underline">
+              For You
+            </Link>{" "}
+            and Notifications.
+          </span>
+        )}
+      </span>
     </span>
   );
 }

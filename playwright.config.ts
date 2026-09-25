@@ -21,6 +21,9 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${TEST_PORT}`,
     trace: "retain-on-failure",
+    // Every spec starts as a returning visitor (introduction and impact-country question already answered) so the
+    // first-run dialog does not cover the page; tests/onboarding.spec.ts starts from an empty state instead.
+    storageState: "tests/fixtures/onboarded-state.json",
   },
   projects: [
     { name: "Desktop", use: { ...devices["Desktop Chrome"] } },

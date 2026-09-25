@@ -3,10 +3,7 @@
 import { useRef, useState } from "react";
 import {
   UserRound,
-  Lock,
-  Bell,
-  RefreshCw,
-  Laptop2,
+  ArrowRight,
   LogIn,
   UserPlus,
   LogOut,
@@ -23,8 +20,13 @@ import { useAuthSession } from "@/hooks/use-auth-session";
 import { authProvider } from "@/lib/auth/local-auth-provider";
 import { isAcceptedImageType, resizeImageToDataUrl } from "@/lib/utils/image";
 import { MAP_BASEMAP_MODES, MAP_BASEMAP_MODE_LABEL } from "@/lib/map/style";
-import { REGIONS, TIME_RANGES } from "@/lib/types";
-import type { Region, TimeRange } from "@/lib/types";
+import { TIME_RANGES } from "@/lib/types";
+import type { TimeRange } from "@/lib/types";
+import Link from "next/link";
+import { SourceTrustList } from "@/components/sources/source-trust-help";
+import { IMPACT_COUNTRY_COPY, SCORE_COPY } from "@/lib/copy/scores";
+import { clearRecent } from "@/lib/discovery/recent";
+import { replayIntroduction } from "@/lib/discovery/onboarding";
 import { cn } from "@/lib/utils";
 
 const TIMEZONES: { value: string; label: string }[] = [
@@ -60,8 +62,6 @@ export default function ProfilePage() {
 
   const timezone = useAppStore((s) => s.timezone);
   const setTimezone = useAppStore((s) => s.setTimezone);
-  const preferredRegions = useAppStore((s) => s.preferredRegions);
-  const setPreferredRegions = useAppStore((s) => s.setPreferredRegions);
   const globeViewMode = useAppStore((s) => s.globeViewMode);
   const setGlobeViewMode = useAppStore((s) => s.setGlobeViewMode);
   const mapBasemapMode = useAppStore((s) => s.mapBasemapMode);
@@ -73,36 +73,31 @@ export default function ProfilePage() {
   const showPartyClaims = useAppStore((s) => s.showPartyClaims);
   const setShowPartyClaims = useAppStore((s) => s.setShowPartyClaims);
 
-  function toggleRegion(region: Region) {
-    setPreferredRegions(
-      preferredRegions.includes(region)
-        ? preferredRegions.filter((r) => r !== region)
-        : [...preferredRegions, region],
-    );
-  }
+  const [cleared, setCleared] = useState(false);
 
   return (
     <main className="mx-auto max-w-2xl px-4 pb-28 pt-24 sm:px-6 sm:pt-32">
       {account ? <AuthenticatedHeader account={account} onSignOut={() => setAccount(null)} /> : <LoggedOutHeader onAuthed={setAccount} />}
 
-      <div className="mt-6 space-y-4">
-        <Card className="p-5">
-          <SectionLabel>Home country</SectionLabel>
-          <p className="mb-3 text-xs text-ink-faint">
-            Used to compute your personalized Impact Score across the app.
-          </p>
-          <CountrySelector />
-        </Card>
+      <nav aria-label="Settings sections" className="no-scrollbar mt-6 flex gap-1.5 overflow-x-auto" data-testid="settings-nav">
+        {SECTIONS.map(([id, label]) => (
+          <a key={id} href={`#${id}`} className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs text-ink-dim hover:text-ink">
+            {label}
+          </a>
+        ))}
+      </nav>
 
-        <Card className="p-5">
+      <div className="mt-4 space-y-4">
+        <Card className="scroll-mt-24 p-5" id="general" data-testid="settings-general">
+          <SectionTitle>General</SectionTitle>
           <SectionLabel>Timezone</SectionLabel>
           <p className="mb-3 text-xs text-ink-faint">
-            Controls how absolute timestamps (event times, source publish
-            times) are displayed. Relative times (&quot;3 min ago&quot;) are unaffected.
+            Controls how absolute timestamps (event times, source publish times) are displayed. Relative times (&quot;3 min ago&quot;) are unaffected.
           </p>
           <select
             value={timezone}
             onChange={(e) => setTimezone(e.target.value)}
+            aria-label="Timezone"
             className="w-full rounded-xl border border-border-strong bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             {TIMEZONES.map((tz) => (
@@ -111,102 +106,35 @@ export default function ProfilePage() {
               </option>
             ))}
           </select>
-        </Card>
-
-        <Card className="p-5">
-          <SectionLabel>Preferred regions</SectionLabel>
-          <p className="mb-3 text-xs text-ink-faint">
-            Regions you follow most closely. Every region stays visible
-            everywhere — this only highlights your picks.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {REGIONS.map((region) => {
-              const active = preferredRegions.includes(region);
-              return (
-                <button
-                  key={region}
-                  onClick={() => toggleRegion(region)}
-                  aria-pressed={active}
-                  className={cn(
-                    "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                    active
-                      ? "border-accent/40 bg-accent-dim text-accent"
-                      : "border-border-strong text-ink-dim hover:text-ink",
-                  )}
-                >
-                  {region}
-                </button>
-              );
-            })}
+          <div className="mt-5">
+            <SectionLabel>Reduced motion</SectionLabel>
+            <label className="flex items-start gap-2 text-sm text-ink" htmlFor="reduced-motion">
+              <input
+                id="reduced-motion"
+                type="checkbox"
+                checked={contentSensitivity === "reduced"}
+                onChange={(e) => setContentSensitivity(e.target.checked ? "reduced" : "standard")}
+                className="mt-0.5 h-4 w-4 rounded border-border-strong accent-accent"
+                data-testid="reduced-motion"
+              />
+              <span>
+                Reduce motion
+                <span className="block text-xs text-ink-faint">No pulsing hotspots, and the map jumps instead of flying (Live View included). Your device&apos;s reduced-motion setting is always respected too.</span>
+              </span>
+            </label>
           </div>
         </Card>
 
-        <Card className="p-5">
-          <SectionLabel>Default globe view</SectionLabel>
-          <p className="mb-3 text-xs text-ink-faint">
-            Which homepage globe style loads by default. You can always
-            switch instantly from the globe itself.
-          </p>
-          <SegmentedControl
-            aria-label="Default globe view"
-            options={[
-              { value: "intel", label: "Intel" },
-              { value: "satellite", label: "Satellite" },
-            ]}
-            value={globeViewMode}
-            onChange={setGlobeViewMode}
-          />
+        <Card className="scroll-mt-24 p-5" id="impact-country" data-testid="settings-impact-country">
+          <SectionTitle>Impact country</SectionTitle>
+          <p className="mb-3 text-xs text-ink-faint">{IMPACT_COUNTRY_COPY.explain}</p>
+          <CountrySelector />
         </Card>
 
-        <Card className="p-5">
-          <SectionLabel>Default map mode</SectionLabel>
+        <Card className="scroll-mt-24 p-5" id="sources" data-testid="sources-settings">
+          <SectionTitle>Sources</SectionTitle>
           <p className="mb-3 text-xs text-ink-faint">
-            Which basemap the Live Map (<code>/world</code>) opens in by default.
-          </p>
-          <SegmentedControl
-            aria-label="Default map mode"
-            options={MAP_BASEMAP_MODES.map((m) => ({ value: m, label: MAP_BASEMAP_MODE_LABEL[m] }))}
-            value={mapBasemapMode}
-            onChange={setMapBasemapMode}
-          />
-        </Card>
-
-        <Card className="p-5">
-          <SectionLabel>Default time range</SectionLabel>
-          <p className="mb-3 text-xs text-ink-faint">
-            The time window selected by default on the homepage and
-            operational map.
-          </p>
-          <SegmentedControl
-            aria-label="Default time range"
-            options={TIME_RANGES.map((t: TimeRange) => ({ value: t, label: t }))}
-            value={timeRange}
-            onChange={setTimeRange}
-          />
-        </Card>
-
-        <Card className="p-5">
-          <SectionLabel>Content sensitivity</SectionLabel>
-          <p className="mb-3 text-xs text-ink-faint">
-            &quot;Reduced&quot; keeps the same information but calms high-severity
-            visual emphasis (e.g. pulsing globe hotspots).
-          </p>
-          <SegmentedControl
-            aria-label="Content sensitivity"
-            options={[
-              { value: "standard", label: "Standard" },
-              { value: "reduced", label: "Reduced" },
-            ]}
-            value={contentSensitivity}
-            onChange={setContentSensitivity}
-          />
-        </Card>
-
-        <Card className="p-5" data-testid="sources-settings">
-          <SectionLabel>Sources</SectionLabel>
-          <p className="mb-3 text-xs text-ink-faint">
-            Party and aligned claims are statements by a side in a conflict (a military, a state outlet, an aligned
-            channel). They are hidden from event source lists by default and are never counted as independent
+            Party and aligned claims are statements by a side in a conflict (a military, a state outlet, an aligned channel). They are hidden from event source lists by default and are never counted as independent
             confirmation. Turning this on shows them separately, labelled PARTY CLAIM. They stay stored either way.
           </p>
           <label className="flex items-center gap-2 text-sm text-ink" htmlFor="show-party-claims">
@@ -220,49 +148,109 @@ export default function ProfilePage() {
             />
             Show Party / Aligned Claims
           </label>
+          <div className="mt-4 border-t border-border pt-4">
+            <SectionLabel>Source labels</SectionLabel>
+            <SourceTrustList />
+          </div>
         </Card>
 
-        <Card className="p-5">
-          <SectionLabel>Theme</SectionLabel>
+        <Card className="scroll-mt-24 p-5" id="notifications" data-testid="settings-notifications">
+          <SectionTitle>Notifications</SectionTitle>
+          <p className="text-xs text-ink-faint">
+            In-app notifications (the bell in the header) come from what you watch. Choose what to watch, and how much each watch alerts you, on the Watchlist. There are no email or push notifications.
+          </p>
+          <Link href="/watchlist" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline">
+            Manage watches and alert levels <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+        </Card>
+
+        <Card className="scroll-mt-24 p-5" id="map" data-testid="settings-map">
+          <SectionTitle>Map</SectionTitle>
+          <SectionLabel>Default map mode</SectionLabel>
           <p className="mb-3 text-xs text-ink-faint">
-            Vigil is dark-mode only for Phase 1. More themes are planned.
+            Which basemap the Live Map (<code>/world</code>) opens in by default.
           </p>
           <SegmentedControl
-            aria-label="Theme"
-            options={[{ value: "dark", label: "Dark (default)" }]}
-            value="dark"
-            onChange={() => {}}
+            aria-label="Default map mode"
+            options={MAP_BASEMAP_MODES.map((m) => ({ value: m, label: MAP_BASEMAP_MODE_LABEL[m] }))}
+            value={mapBasemapMode}
+            onChange={setMapBasemapMode}
           />
+          <div className="mt-5">
+            <SectionLabel>Default globe view</SectionLabel>
+            <p className="mb-3 text-xs text-ink-faint">Which Overview globe style loads by default. You can always switch from the globe itself.</p>
+            <SegmentedControl
+              aria-label="Default globe view"
+              options={[
+                { value: "intel", label: "Intel" },
+                { value: "satellite", label: "Satellite" },
+              ]}
+              value={globeViewMode}
+              onChange={setGlobeViewMode}
+            />
+          </div>
+          <div className="mt-5">
+            <SectionLabel>Default Overview time range</SectionLabel>
+            <p className="mb-3 text-xs text-ink-faint">The time window the Overview globe opens with.</p>
+            <SegmentedControl
+              aria-label="Default time range"
+              options={TIME_RANGES.map((t: TimeRange) => ({ value: t, label: t }))}
+              value={timeRange}
+              onChange={setTimeRange}
+            />
+          </div>
         </Card>
 
-        <Card className="p-5">
-          <SectionLabel>Requires a synced account (coming later)</SectionLabel>
-          <p className="mb-3 text-xs text-ink-faint">
-            {account
-              ? "Your local account keeps these preferences on this device only. A real synced account (Supabase Auth, a later phase) will follow you anywhere."
-              : "These preferences are saved to this browser only. Creating a local account above doesn't change that yet — a real synced account (a later phase) will."}
+        <Card className="scroll-mt-24 p-5" id="privacy" data-testid="settings-privacy">
+          <SectionTitle>Privacy / local data</SectionTitle>
+          <p className="text-xs text-ink-faint">
+            Vigil needs no account and never asks for your location. Your settings, recent searches and introduction progress are stored in this browser only. Watches are stored on the server under a random
+            identifier for this browser, not your name.
           </p>
-          <ul className="space-y-2.5">
-            <FutureFeature
-              icon={RefreshCw}
-              label="Synced watchlists"
-              description="Save conflicts and countries to a list that follows your account."
-            />
-            <FutureFeature
-              icon={Laptop2}
-              label="Multi-device preferences"
-              description="These settings currently live only in this browser, not a synced account."
-            />
-            <FutureFeature
-              icon={Bell}
-              label="Alerts & notifications"
-              description="Push or email delivery (later). In-app alerts for followed conflicts, countries and places are already on the Watchlist."
-            />
-          </ul>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => { clearRecent(); setCleared(true); }} data-testid="clear-recent-searches">
+              Clear recent searches
+            </Button>
+            {cleared && <span className="text-xs text-ink-faint" role="status">Recent searches cleared.</span>}
+          </div>
+        </Card>
+
+        <Card className="scroll-mt-24 p-5" id="help" data-testid="settings-help">
+          <SectionTitle>Help / About</SectionTitle>
+          <div className="flex flex-col items-start gap-2">
+            <Button variant="outline" size="sm" onClick={() => { replayIntroduction(); window.scrollTo({ top: 0 }); }} data-testid="show-introduction">
+              Show introduction again
+            </Button>
+            <Link href="/methodology" className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline" data-testid="settings-methodology">
+              Methodology: how Vigil scores and sources <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+            </Link>
+          </div>
+          <dl className="mt-4 space-y-1.5 text-xs">
+            {(["severity", "impact", "confidence"] as const).map((k) => (
+              <div key={k}>
+                <dt className="inline font-semibold text-ink">{SCORE_COPY[k].label}: </dt>
+                <dd className="inline text-ink-dim">{SCORE_COPY[k].question}</dd>
+              </div>
+            ))}
+          </dl>
         </Card>
       </div>
     </main>
   );
+}
+
+const SECTIONS = [
+  ["general", "General"],
+  ["impact-country", "Impact country"],
+  ["sources", "Sources"],
+  ["notifications", "Notifications"],
+  ["map", "Map"],
+  ["privacy", "Privacy"],
+  ["help", "Help"],
+] as const;
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <h2 className="mb-3 text-base font-semibold text-ink">{children}</h2>;
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -270,33 +258,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-ink-faint">
       {children}
     </p>
-  );
-}
-
-function FutureFeature({
-  icon: Icon,
-  label,
-  description,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  description: string;
-}) {
-  return (
-    <li className="flex items-start gap-3 rounded-xl border border-border bg-surface/50 p-3">
-      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border-strong text-ink-faint">
-        <Icon className="h-3.5 w-3.5" />
-      </div>
-      <div className="flex-1">
-        <div className="flex items-center gap-1.5">
-          <p className="text-sm font-medium text-ink">{label}</p>
-          <span className="flex items-center gap-1 rounded-full border border-border-strong px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-ink-faint">
-            <Lock className="h-2.5 w-2.5" /> Needs account
-          </span>
-        </div>
-        <p className="mt-0.5 text-xs text-ink-faint">{description}</p>
-      </div>
-    </li>
   );
 }
 
@@ -316,7 +277,7 @@ function LoggedOutHeader({ onAuthed }: { onAuthed: (a: AccountLike) => void }) {
           <UserRound className="h-6 w-6 text-ink-faint" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-ink">Vigil Profile</h1>
+          <h1 className="text-xl font-semibold text-ink">Settings</h1>
           <p className="text-sm text-ink-dim">Preferences are currently stored on this device.</p>
         </div>
       </div>

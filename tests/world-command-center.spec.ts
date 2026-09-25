@@ -283,6 +283,19 @@ test.describe("World Command Center UI", () => {
     await expect(page.getByTestId("live-view-pause")).toHaveCount(0);
   });
 
+  test("reduced motion: Live View jumps between developments instead of flying", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await mockWorld(page);
+    await page.goto("/world");
+    await expect(page.getByTestId("ticker-item").first()).toBeVisible();
+    await center(page);
+    await page.getByTestId("live-view-button").click();
+    // A jump lands at once: no camera animation is running and the map is already on the first development.
+    await expect.poll(async () => (await center(page)).lat, { timeout: 2000 }).toBeCloseTo(49.99, 0);
+    expect(await page.evaluate(() => (window as unknown as { __vigilMap: { isMoving(): boolean } }).__vigilMap.isMoving())).toBe(false);
+    await page.getByTestId("live-view-button").click(); // stop
+  });
+
   test("deep links still focus the map and the rail stays inside the viewport at 1440 and 1280", async ({ page }) => {
     await mockWorld(page);
     for (const width of [1440, 1280]) {

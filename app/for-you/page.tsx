@@ -18,6 +18,7 @@ import { BriefPanel } from "@/components/brief/brief-view";
 import { useWatches } from "@/hooks/use-watcher";
 import { ForYouDevelopments } from "@/components/discovery/for-you-feed";
 import { OverviewWatching } from "@/components/home/overview-landing";
+import { SCORE_COPY } from "@/lib/copy/scores";
 
 export default function ForYouPage() {
   const baseCountryCode = useAppStore((s) => s.baseCountryCode);
@@ -75,7 +76,7 @@ export default function ForYouPage() {
           <span className="text-xs text-ink-faint">{formatSigned(exposure.change24h)} today</span>
         </div>
         <p className="mt-2 max-w-xl text-sm text-ink-dim">
-          Estimated exposure for {country.name} (your selected country), based on the current registry indicators for {activeCount} active conflict{activeCount === 1 ? "" : "s"}. Not a prediction.
+          Estimated exposure for {country.name} (your selected country), based on the current registry indicators for {activeCount} active conflict{activeCount === 1 ? "" : "s"}. Not a prediction. Built from Impact — {SCORE_COPY.impact.question.toLowerCase()}
         </p>
         <p className="mt-1" data-testid="for-you-freshness">
           <FreshnessStamp label="Last event" iso={overview.data.freshness.lastEventAt} staleAfterHours={STALE_SOURCE_HOURS} none="no published events" />

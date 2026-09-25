@@ -18,5 +18,7 @@ export interface SearchResult {
   status: string | null;
   /** Short secondary line (matched alias, dates, precision). */
   subtitle: string;
+  /** Why a result matched when it was not by its name: "Alias: SAF", "Code: FI". */
+  matched?: string;
   href: string;
 }
