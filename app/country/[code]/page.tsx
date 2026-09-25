@@ -1,22 +1,23 @@
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ExternalLink, Map as MapIcon } from "lucide-react";
 import { FollowButton } from "@/components/watch/follow-button";
 import { SetBaseCountryButton } from "@/components/home/set-base-country-button";
 import { ExposureCategoryCard } from "@/components/impact/exposure-category-card";
-import { DevelopmentCard } from "@/components/brief/development-card";
 import { BriefPanel } from "@/components/brief/brief-view";
 import { CountryMap, CountryWatchPanel, FreshnessChip, PartyClaimsPanel } from "@/components/country/country-client";
+import { CountryDevelopments, CountrySection } from "@/components/country/country-sections";
 import { RelativeTime } from "@/components/ui/relative-time";
-import { getCountryIntelligence, type ActorView, type CountryIntelligence } from "@/lib/countries/intelligence";
+import { getCountryIntelligence, type ActorView, type ConflictRowView, type DomainSection, type DevelopmentItem } from "@/lib/countries/intelligence";
 import { getCountryRecord, resolveCountry } from "@/lib/countries/registry";
 import { SEVERITY_TEXT_CLASS, severityFromScore } from "@/lib/utils/severity";
 import type { ExposureDimension } from "@/lib/types";
 import { formatSigned, cn } from "@/lib/utils";
 
-// The country intelligence page: "What is happening in and around this country right now?" Everything comes
-// from ONE server-side aggregation (lib/countries/intelligence.ts) over the existing conflict, impact,
-// briefing, hazard, infrastructure, actor and source systems. Sections without data are not rendered.
+// The country intelligence page: "What is happening in and around this country right now?" Everything comes from ONE
+// server-side aggregation (lib/countries/intelligence.ts, also GET /api/country/[code]/intelligence) over the existing
+// conflict, impact, briefing, territory, hazard, infrastructure, actor and source systems. It derives nothing itself.
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ code: string }> }): Promise<Metadata> {
@@ -24,60 +25,7 @@ export async function generateMetadata({ params }: { params: Promise<{ code: str
   return { title: c ? `${c.name} — Vigil` : "Country — Vigil" };
 }
 
-function Section({ id, title, children, aside, collapsed = false }: { id: string; title: string; children: React.ReactNode; aside?: React.ReactNode; collapsed?: boolean }) {
-  // Long intelligence sections collapse (native <details>): open by default for the primary ones.
-  return (
-    <details className="group mt-8" open={!collapsed} data-testid={`section-${id}`}>
-      <summary className="flex cursor-pointer list-none flex-wrap items-baseline justify-between gap-x-3 gap-y-1 [&::-webkit-details-marker]:hidden">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-faint">
-          {title}
-          <span className="ml-2 text-ink-faint/60 group-open:hidden" aria-hidden>
-            ＋
-          </span>
-        </h2>
-        {aside}
-      </summary>
-      <div className="mt-3">{children}</div>
-    </details>
-  );
-}
-
-function ActorGroup({ title, list, testId }: { title: string; list: ActorView[]; testId: string }) {
-  if (list.length === 0) return null;
-  return (
-    <div data-testid={testId}>
-      <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-ink-faint">{title}</p>
-      <ul className="space-y-1.5">
-        {list.map((a) => (
-          <li key={a.id} className="rounded-xl border border-border bg-card/60 px-3.5 py-2.5" data-testid="actor-row">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-              <Link href={a.href} className="text-sm font-medium text-ink hover:text-accent">
-                {a.name}
-              </Link>
-              {a.typeLabel && <span className="text-[11px] text-ink-faint">{a.typeLabel}</span>}
-              {a.country && <span className="text-[11px] text-ink-faint">{a.country}</span>}
-            </div>
-            <p className="mt-0.5 text-[11px] text-ink-faint">
-              {a.conflicts.length > 0 ? `${a.conflicts.join(", ")} · ` : ""}
-              {a.recentEvents30d > 0 ? `${a.recentEvents30d} sourced event${a.recentEvents30d === 1 ? "" : "s"} in 30 days` : "no sourced event in 30 days"}
-              {a.lastObservedAt ? <> · last observed <RelativeTime iso={a.lastObservedAt} /></> : ""}
-            </p>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function DevList({ items, testId }: { items: CountryIntelligence["developments"]; testId: string }) {
-  return (
-    <div className="space-y-2" data-testid={testId}>
-      {items.map((d) => (
-        <DevelopmentCard key={d.id} d={d} />
-      ))}
-    </div>
-  );
-}
+const COVERAGE_TONE: Record<string, string> = { GOOD: "border-emerald-400/40 text-emerald-300", LIMITED: "border-yellow-400/40 text-yellow-200", STALE: "border-orange-400/40 text-orange-300" };
 
 export default async function CountryPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
@@ -89,22 +37,21 @@ export default async function CountryPage({ params }: { params: Promise<{ code: 
   if (!data) notFound();
   const { country: c, overview, exposure } = data;
   const severity = severityFromScore(overview.exposureScore);
-  const infraCount = data.sections.aviation.length + data.sections.maritime.length + data.sections.energy.length + data.sections.internet.length;
-  const anyContext = data.territory.available;
+  const actorCount = data.actors.stateForces.length + data.actors.nonStateArmed.length + data.actors.international.length + data.actors.other.length;
 
   return (
-    <main className="mx-auto max-w-[1000px] px-4 pb-28 pt-24 sm:px-6 sm:pt-32" data-testid="country-page" data-country={c.code}>
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="text-4xl" aria-hidden>
+    <main className="mx-auto w-full max-w-[1080px] overflow-x-hidden px-4 pb-28 pt-24 sm:px-6 sm:pt-28" data-testid="country-page" data-country={c.code}>
+      {/* Header: identity, exposure, last update, actions */}
+      <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b border-border pb-4" data-testid="country-header">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="text-4xl leading-none" aria-hidden>
             {c.flag}
           </span>
-          <div>
-            <h1 className="text-2xl font-semibold text-ink sm:text-[30px]" data-testid="country-name">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold text-ink sm:text-[28px]" data-testid="country-name">
               {c.name}
             </h1>
-            <p className="text-sm text-ink-faint" data-testid="country-identity">
+            <p className="text-[13px] text-ink-faint" data-testid="country-identity">
               {c.region} · {c.subregion} · Capital {c.capital} · {c.code} / {c.alpha3}
             </p>
             {c.neighbours.length > 0 && (
@@ -123,263 +70,225 @@ export default async function CountryPage({ params }: { params: Promise<{ code: 
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <div className="mr-2 text-right" data-testid="header-exposure">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-ink-faint">Current exposure</p>
+            <p className="flex items-baseline justify-end gap-1.5">
+              <span className={cn("text-2xl font-semibold tabular-nums", SEVERITY_TEXT_CLASS[severity])} data-testid="overview-exposure">
+                {overview.exposureScore}
+              </span>
+              <span className={cn("text-xs font-semibold", SEVERITY_TEXT_CLASS[severity])}>{overview.exposureLabel}</span>
+            </p>
+            <p className="text-[10px] text-ink-faint" data-testid="last-meaningful-update">
+              Last meaningful update: {data.lastMeaningfulUpdate ? <RelativeTime iso={data.lastMeaningfulUpdate} /> : "none in 7 days"}
+            </p>
+          </div>
+          <FollowButton entityType="country" entityKey={c.code} label={c.name} />
           <Link href={`/brief/country/${c.code}`} className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-ink-dim hover:text-ink" data-testid="country-brief-link">
             Country brief
           </Link>
-          <FollowButton entityType="country" entityKey={c.code} label={c.name} />
+          <Link href={data.mapHref} className="inline-flex items-center gap-1 rounded-full border border-border-strong px-3 py-1.5 text-xs font-medium text-accent hover:bg-white/5" data-testid="header-open-world">
+            <MapIcon className="h-3.5 w-3.5" aria-hidden /> Open in World Map
+          </Link>
           <SetBaseCountryButton code={c.code} />
         </div>
-      </div>
+      </header>
 
-      {/* Overview: what is happening, how serious, what changed, why, how current */}
-      <section className="mt-6 rounded-2xl border border-border bg-card/70 p-5 sm:p-6" data-testid="country-overview">
-        <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-faint">Global Exposure</p>
-            <p className="mt-1 flex items-baseline gap-2">
-              <span className={cn("text-5xl font-semibold tabular-nums", SEVERITY_TEXT_CLASS[severity])} data-testid="overview-exposure">
-                {overview.exposureScore}
-              </span>
-              <span className="text-sm text-ink-dim">/ 100</span>
-              <span className={cn("text-sm font-semibold", SEVERITY_TEXT_CLASS[severity])}>{overview.exposureLabel}</span>
-            </p>
-            <p className="text-[11px] text-ink-faint">{formatSigned(exposure.change24h)} today · not a political-risk score</p>
-          </div>
-          <div className="grid flex-1 grid-cols-3 gap-3 text-center sm:max-w-md">
-            <Stat label="Domestic conflicts" value={overview.activeDomesticConflicts} testId="stat-domestic" />
-            <Stat label="High-impact nearby" value={overview.highImpactNearbyConflicts} testId="stat-nearby" />
-            <Stat label="Significant disruptions" value={overview.significantDisruptions} testId="stat-disruptions" />
-          </div>
+      {/* Overview */}
+      <section className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" data-testid="country-overview">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-faint">Impact {overview.exposureScore} · why</p>
+          <ul className="mt-1.5 space-y-1 text-[13px]" data-testid="exposure-drivers">
+            {data.exposureDrivers.map((d) => (
+              <li key={d.text} className="flex gap-2" data-testid="exposure-driver" data-kind={d.kind}>
+                <span className={cn("mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full", d.kind === "score" ? "bg-accent" : "bg-ink-faint")} aria-hidden />
+                <span className="text-ink-dim">
+                  {d.conflictSlug ? (
+                    <Link href={`/conflict/${d.conflictSlug}`} className="hover:text-ink">
+                      {d.text}
+                    </Link>
+                  ) : (
+                    d.text
+                  )}
+                  {d.kind === "context" && <span className="ml-1 text-[11px] text-ink-faint">(context, not a score input)</span>}
+                </span>
+              </li>
+            ))}
+            {data.exposureDrivers.length === 0 && <li className="text-ink-dim">No monitored conflict or recorded disruption currently raises exposure.</li>}
+          </ul>
+          <p className="mt-2 text-[11px] text-ink-faint">
+            {formatSigned(exposure.change24h)} today · {exposure.note}
+          </p>
         </div>
-        <p className="mt-4 text-sm font-medium text-ink" data-testid="overview-status">
-          {overview.statusLine}
-        </p>
-        {exposure.reasoning[0] && (
-          <p className="mt-1 text-[12px] text-ink-dim" data-testid="overview-why">
-            Why: {exposure.reasoning[0].conflictName} — impact {exposure.reasoning[0].impact}
-            {exposure.reasoning[0].reasons[0] ? ` (${exposure.reasoning[0].reasons[0]})` : ""}
-          </p>
-        )}
-        {overview.latestDevelopment && (
-          <p className="mt-2 text-[12px] text-ink-dim" data-testid="overview-latest">
-            Latest material development: <Link href={overview.latestDevelopment.deepLink} className="text-ink hover:text-accent">{overview.latestDevelopment.title}</Link> · <RelativeTime iso={overview.latestDevelopment.occurredAt} />
-          </p>
-        )}
-        <div className="mt-4 flex flex-wrap gap-1.5" data-testid="freshness">
-          {data.freshness.map((f) => (
-            <FreshnessChip key={f.key} keyName={f.key} label={f.label} at={f.at} stale={f.stale} />
-          ))}
+        <div className="grid min-w-0 grid-cols-3 gap-2 self-start text-center">
+          <Stat label="Domestic conflicts" value={overview.activeDomesticConflicts} testId="stat-domestic" />
+          <Stat label="Bordering conflicts" value={data.borderingConflicts.length} testId="stat-bordering" />
+          <Stat label="Disruptions (7d)" value={overview.significantDisruptions} testId="stat-disruptions" />
         </div>
       </section>
+      <p className="mt-3 text-sm font-medium text-ink" data-testid="overview-status">
+        {overview.statusLine}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-1.5" data-testid="freshness">
+        {data.freshness.map((f) => (
+          <FreshnessChip key={f.key} keyName={f.key} label={f.label} at={f.at} stale={f.stale} />
+        ))}
+      </div>
 
-      {/* Brief (same engine as /brief) */}
-      <Section
-        id="brief"
-        title="Brief"
-        aside={
-          <Link href={`/brief/country/${c.code}`} className="text-xs text-accent hover:underline" data-testid="full-country-brief">
-            View full country brief
-          </Link>
-        }
-      >
-        <BriefPanel scope={{ country: c.code }} initialWindow="6h" windows={["1h", "6h", "12h", "24h", "3d", "7d"]} compact allowSave={false} />
-      </Section>
+      {/* Current situation: deterministic statements only */}
+      <CountrySection id="situation" title="Current situation">
+        <ul className="space-y-1 text-sm text-ink" data-testid="current-situation">
+          {data.currentSituation.map((line) => (
+            <li key={line} className="flex gap-2" data-testid="situation-line">
+              <span className="text-ink-faint" aria-hidden>
+                –
+              </span>
+              {line}
+            </li>
+          ))}
+        </ul>
+      </CountrySection>
 
-      {/* Latest developments */}
-      {data.developments.length > 0 && (
-        <Section id="developments" title="Latest developments" aside={<span className="text-[11px] text-ink-faint">ranked by significance, impact on {c.name}, recency and confidence</span>}>
-          <DevList items={data.developments} testId="developments-list" />
-        </Section>
-      )}
-
-      {/* Conflict exposure and reasoning */}
-      <Section id="exposure" title="Conflict exposure">
-        <div className="rounded-2xl border border-border bg-card/70 p-5">
-          <p className="text-sm text-ink" data-testid="exposure-headline">
-            Overall exposure {exposure.score}
-            {exposure.leadConflict ? ` — led by ${exposure.leadConflict}` : " — no monitored conflict currently affects this country"}
-          </p>
-          <ul className="mt-3 space-y-2" data-testid="exposure-reasons">
+      {/* Conflict exposure */}
+      <CountrySection id="exposure" title="Conflict exposure" aside={<span className="text-[11px] text-ink-faint">severity, impact and confidence are separate; report volume feeds none of them</span>}>
+        <ConflictGroup title="Domestic" empty={`No active conflict recorded inside ${c.name}.`} rows={data.domesticConflictRows} testId="conflicts-domestic" />
+        <ConflictGroup title="Bordering" empty="No active conflict with fighting in a bordering country." rows={data.borderingConflicts} testId="conflicts-bordering" />
+        <ConflictGroup title="Other high-impact" empty="No other conflict reaches impact 40 for this country." rows={data.otherRelevantConflicts} testId="conflicts-other" />
+        <details className="mt-3">
+          <summary className="cursor-pointer text-[11px] text-ink-faint">Impact reasoning and exposure dimensions</summary>
+          <ul className="mt-2 space-y-1.5" data-testid="exposure-reasons">
             {exposure.reasoning.map((r) => (
-              <li key={r.conflictSlug} className="text-sm" data-testid="exposure-reason" data-impact={r.impact}>
+              <li key={r.conflictSlug} className="text-[13px]" data-testid="exposure-reason" data-impact={r.impact}>
                 <Link href={`/conflict/${r.conflictSlug}`} className="font-medium text-ink hover:text-accent">
                   {r.conflictName}: {r.impact}
                 </Link>
                 <span className="ml-2 text-[12px] text-ink-dim">{r.reasons.join(" · ")}</span>
-                {r.distanceKm != null && <span className="ml-2 text-[11px] text-ink-faint">~{r.distanceKm.toLocaleString("en-US")} km</span>}
               </li>
             ))}
-            {exposure.reasoning.length === 0 && <li className="text-sm text-ink-dim">No monitored conflict has a non-zero impact score for this country.</li>}
           </ul>
-          <p className="mt-3 text-[11px] text-ink-faint">{exposure.note}</p>
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" data-testid="exposure-dimensions">
-          {exposure.dimensions.map((d) => (
-            <div key={d.dimension} title={d.explanation}>
-              <ExposureCategoryCard dimension={d.dimension as ExposureDimension} value={d.value ?? 0} change24h={0} basis={d.basis} topConflictName={exposure.leadConflict ?? undefined} />
-            </div>
-          ))}
-        </div>
-      </Section>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5" data-testid="exposure-dimensions">
+            {exposure.dimensions.map((d) => (
+              <div key={d.dimension} title={d.explanation}>
+                <ExposureCategoryCard dimension={d.dimension as ExposureDimension} value={d.value ?? 0} change24h={0} basis={d.basis} topConflictName={exposure.leadConflict ?? undefined} />
+              </div>
+            ))}
+          </div>
+        </details>
+      </CountrySection>
 
-      {/* Domestic conflicts */}
-      {data.domesticConflicts.length > 0 && (
-        <Section id="domestic" title={`Active conflicts in ${c.name}`}>
-          <div className="space-y-2" data-testid="domestic-conflicts">
-            {data.domesticConflicts.map((d) => (
-              <Link key={d.slug} href={`/conflict/${d.slug}`} className="block rounded-xl border border-border bg-card/60 px-4 py-3 hover:border-border-strong" data-testid="domestic-conflict">
-                <div className="flex flex-wrap items-baseline gap-x-3">
-                  <span className="text-sm font-medium text-ink">{d.name}</span>
-                  <span className="text-[11px] uppercase tracking-wide text-ink-faint">
-                    {d.status} · {d.severityLabel}
-                    {d.fullScaleWar ? " · full-scale war" : ""}
-                  </span>
+      {/* Latest developments */}
+      <CountrySection id="developments" title="Latest developments">
+        <CountryDevelopments items={data.developmentFeed} generatedAt={data.generatedAt} />
+      </CountrySection>
+
+      {/* Territorial / security */}
+      <CountrySection id="territory" title="Territorial / security" secondary aside={<span className="text-[11px] text-ink-faint">reported / de facto control, not legal sovereignty</span>}>
+        {data.territoryDatasets.length === 0 && !data.territory.available ? (
+          <p className="text-sm text-ink-dim" data-testid="territory-none">
+            No verified territorial dataset available.
+          </p>
+        ) : (
+          <div className="space-y-2" data-testid="territory-context">
+            {data.territoryDatasets.map((d) => (
+              <div key={d.id} className="rounded-xl border border-border bg-card/50 px-3.5 py-2.5" data-testid="territory-dataset" data-kind={d.kind}>
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="text-sm font-medium text-ink">
+                    {d.name}
+                    <span className={cn("ml-2 rounded border px-1 py-px text-[10px] font-semibold uppercase", d.kind === "control" ? "border-stable/40 text-stable" : "border-dashed border-ink-faint text-ink-dim")} data-testid="territory-dataset-type">
+                      {d.typeLabel}
+                    </span>
+                  </p>
+                  <Link href={d.openOnMap} className="text-[11px] text-accent hover:underline" data-testid="territory-open-map">
+                    Open on Map
+                  </Link>
                 </div>
-                <p className="mt-1 text-[12px] text-ink-dim">
-                  {d.latestDevelopment ? <>Latest: {d.latestDevelopment.title} (<RelativeTime iso={d.latestDevelopment.occurredAt} />)</> : "No material development in the last 7 days"}
+                <p className="mt-0.5 text-[12px] text-ink-dim">
+                  {d.actors.length ? `Actors: ${d.actors.join(", ")}` : "No actor recorded"} · {d.areaCount} published area version{d.areaCount === 1 ? "" : "s"}
+                  {d.kind !== "control" && <span className="text-ink-faint"> · reported {d.kind}, not control</span>}
                 </p>
                 <p className="mt-0.5 text-[11px] text-ink-faint">
-                  {d.confidence != null ? `Confidence ${d.confidence}` : "Confidence n/a"} · {d.territorialData ? "territorial data available" : "no territorial data"} · last event {d.lastEventAt ? <RelativeTime iso={d.lastEventAt} /> : "none recorded"} · sources {d.sourceHealth ?? "unknown"}
-                  {d.latestSourceAt ? <> (<RelativeTime iso={d.latestSourceAt} />)</> : ""}
+                  {d.provider}
+                  {d.lastUpdated ? <> · updated <RelativeTime iso={d.lastUpdated} /></> : ""}
+                  {d.confidence != null ? ` · confidence ${Math.round(d.confidence * 100)}%` : ""}
+                  {d.license ? ` · ${d.license}` : ""}
+                  {d.sourceUrl && (
+                    <>
+                      {" · "}
+                      <a href={d.sourceUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-0.5 text-accent hover:underline">
+                        source <ExternalLink className="h-2.5 w-2.5" />
+                      </a>
+                    </>
+                  )}
                 </p>
-              </Link>
+              </div>
             ))}
-          </div>
-        </Section>
-      )}
-
-      {/* Nearby / high-impact conflicts */}
-      {data.nearbyConflicts.length > 0 && (
-        <Section id="nearby" title="Nearby and high-impact conflicts">
-          <div className="space-y-2" data-testid="nearby-conflicts">
-            {data.nearbyConflicts.map((n) => (
-              <Link key={n.conflictSlug} href={`/conflict/${n.conflictSlug}`} className="block rounded-xl border border-border bg-card/60 px-4 py-3 hover:border-border-strong" data-testid="nearby-conflict" data-impact={n.impact}>
-                <div className="flex flex-wrap items-baseline gap-x-3">
-                  <span className="text-sm font-medium text-ink">{n.conflictName}</span>
-                  <span className="text-[11px] uppercase tracking-wide text-ink-faint">
-                    impact {n.impact} · {n.status} · {n.severityLabel}
-                  </span>
-                </div>
-                <ul className="mt-1 text-[12px] text-ink-dim">
-                  {[...n.why, ...n.reasons.filter((r) => !n.why.includes(r))].slice(0, 5).map((w) => (
-                    <li key={w}>• {w}</li>
-                  ))}
-                </ul>
-              </Link>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      {/* Territorial / security context */}
-      {anyContext && (
-        <Section id="territory" title="Territorial and security context" collapsed>
-          <p className="mb-3 text-[11px] text-ink-faint">De facto / reported territorial control. This says nothing about legal sovereignty.</p>
-          <div className="space-y-4" data-testid="territory-context">
-            {data.territory.conflicts.map((t) => (
-              <div key={t.slug} className="rounded-xl border border-border bg-card/60 px-4 py-3" data-testid="territory-conflict">
-                <p className="text-sm font-medium text-ink">
-                  <Link href={`/conflict/${t.slug}`} className="hover:text-accent">
-                    {t.name}
-                  </Link>
-                </p>
-                <p className="mt-1 text-[12px] text-ink-dim">
-                  {t.summary.areas > 0 ? `${t.summary.areas} area${t.summary.areas === 1 ? "" : "s"} of recorded control` : "No published territorial-control polygons"}
-                  {t.summary.actors.length > 0 ? ` — ${t.summary.actors.slice(0, 4).map((a) => `${a.name} (${a.areas})`).join(", ")}` : ""}
-                  {t.summary.statuses.contested ? ` · ${t.summary.statuses.contested} contested` : ""}
-                </p>
-                {t.changes.length > 0 && (
+            {data.territory.conflicts.map((t) =>
+              t.changes.length > 0 || t.conflictingClaims.length > 0 ? (
+                <div key={t.slug} className="rounded-xl border border-border bg-card/50 px-3.5 py-2.5" data-testid="territory-conflict">
+                  <p className="text-sm font-medium text-ink">{t.name}: recent approved changes</p>
                   <ul className="mt-1 text-[12px] text-ink-dim">
                     {t.changes.map((ch) => (
                       <li key={ch.id}>• Approved: {ch.description}</li>
                     ))}
                   </ul>
-                )}
-                {t.conflictingClaims.map((g) => (
-                  <p key={g.location} className="mt-1 text-[12px] text-orange-300" data-testid="territory-conflicting">
-                    Conflicting claims over {g.location}: {g.claims.map((cl) => cl.actor?.name ?? "a party").join(" vs ")}
-                  </p>
-                ))}
-              </div>
-            ))}
+                  {t.conflictingClaims.map((g) => (
+                    <p key={g.location} className="mt-1 text-[12px] text-orange-300" data-testid="territory-conflicting">
+                      Conflicting claims over {g.location}: {g.claims.map((cl) => cl.actor?.name ?? "a party").join(" vs ")}
+                    </p>
+                  ))}
+                </div>
+              ) : null,
+            )}
           </div>
-        </Section>
-      )}
+        )}
+      </CountrySection>
 
       {/* Actors */}
-      {(data.actors.stateForces.length + data.actors.nonStateArmed.length + data.actors.international.length + data.actors.other.length > 0) && (
-        <Section id="actors" title="Actors" collapsed>
-          <div className="space-y-4" data-testid="actors">
+      <CountrySection id="actors" title="Relevant actors" secondary>
+        {actorCount === 0 ? (
+          <p className="text-sm text-ink-dim" data-testid="actors-none">
+            No actor in the knowledge layer is linked to {c.name} or its domestic conflicts.
+          </p>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2" data-testid="actors">
             <ActorGroup title="State forces" list={data.actors.stateForces} testId="actors-state" />
             <ActorGroup title="Non-state armed actors" list={data.actors.nonStateArmed} testId="actors-nonstate" />
             <ActorGroup title="International / external actors" list={data.actors.international} testId="actors-international" />
             <ActorGroup title="Other operating actors" list={data.actors.other} testId="actors-other" />
           </div>
-        </Section>
-      )}
+        )}
+      </CountrySection>
 
-      {/* Infrastructure and transport, only where there is something to say */}
-      {(data.sections.aviation.length > 0 || data.sections.maritime.length > 0) && (
-        <Section id="transport" title="Aviation and transport">
-          {data.sections.aviation.length > 0 && (
-            <div data-testid="section-aviation">
-              <p className="mb-1.5 text-xs text-ink-dim">{data.sections.aviation.filter((d) => !d.isResolution).length} significant aviation disruption{data.sections.aviation.filter((d) => !d.isResolution).length === 1 ? "" : "s"}</p>
-              <DevList items={data.sections.aviation} testId="aviation-list" />
-            </div>
-          )}
-          {data.sections.maritime.length > 0 && (
-            <div className="mt-4" data-testid="section-maritime">
-              <p className="mb-1.5 text-xs text-ink-dim">Maritime</p>
-              <DevList items={data.sections.maritime} testId="maritime-list" />
-            </div>
-          )}
-        </Section>
-      )}
-      {data.sections.energy.length > 0 && (
-        <Section id="energy" title="Energy">
-          <DevList items={data.sections.energy} testId="energy-list" />
-        </Section>
-      )}
-      {data.sections.internet.length > 0 && (
-        <Section id="internet" title="Internet">
-          <p className="mb-2 text-[11px] text-ink-faint">Observed connectivity anomalies from network measurements. A measurement does not establish an intentional shutdown or its cause.</p>
-          <DevList items={data.sections.internet} testId="internet-list" />
-        </Section>
-      )}
-      {data.sections.hazards.length > 0 && (
-        <Section id="hazards" title="Natural hazards">
-          <DevList items={data.sections.hazards} testId="hazards-list" />
-        </Section>
-      )}
-      {infraCount + data.sections.hazards.length === 0 && (
-        <p className="mt-8 text-xs text-ink-faint" data-testid="no-infrastructure-events">
-          No significant aviation, maritime, energy, internet or natural-hazard events recorded for {c.name} in the last 7 days.
-        </p>
-      )}
+      <DomainBlock id="transport" title="Transport / aviation" section={data.transport} note="Airport, airspace, port and chokepoint status at a strategic level. No aircraft or vessel tracking." />
+      <DomainBlock id="energy" title="Energy" section={data.energy} note="Operator-published unavailability and disruptions. No synthetic energy-risk score." />
+      <DomainBlock id="internet" title="Internet" section={data.internet} note="Observed connectivity anomalies from network measurements. An observed anomaly does not establish an intentional shutdown or its cause." />
+      <DomainBlock id="hazards" title="Natural hazards" section={data.hazards} note="Provider alerts (USGS, GDACS, EONET, NWS). A FIRMS thermal detection is a satellite heat signal, not a confirmed wildfire unless corroborated." />
 
-      {/* Sources, claims and coverage */}
-      <Section id="coverage" title="Source coverage" collapsed>
-        <div className="rounded-2xl border border-border bg-card/70 p-5" data-testid="coverage">
-          <PartyClaimsPanel independentReports={data.claims.independentReports} hidden={data.claims.partyClaimsHidden} claims={data.claims.partyClaims} />
-          <div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
-            <div data-testid="coverage-strong">
-              <p className="text-2xl font-semibold text-ink">{data.coverage.byTrust.strong}</p>
-              <p className="text-[11px] text-ink-faint">Independent / Strong Verification</p>
-            </div>
-            <div data-testid="coverage-perspective">
-              <p className="text-2xl font-semibold text-ink">{data.coverage.byTrust.perspective}</p>
-              <p className="text-[11px] text-ink-faint">Independent / Perspective</p>
-            </div>
-            <div data-testid="coverage-party">
-              <p className="text-2xl font-semibold text-ink">{data.coverage.byTrust.party_claim}</p>
-              <p className="text-[11px] text-ink-faint">Party / Aligned</p>
-            </div>
+      {/* Source coverage */}
+      <CountrySection id="coverage" title="Source coverage" secondary>
+        <div className="rounded-xl border border-border bg-card/50 p-4" data-testid="coverage">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={cn("rounded-full border px-2.5 py-0.5 text-xs font-semibold", COVERAGE_TONE[data.sourceCoverage.state])} data-testid="coverage-state">
+              {data.sourceCoverage.state} COVERAGE
+            </span>
+            <span className="text-[12px] text-ink-dim">{data.sourceCoverage.reasons.join(" ")}</span>
           </div>
-          <p className="mt-3 text-[12px] text-ink-dim">
-            {data.coverage.sourcesCovering} source{data.coverage.sourcesCovering === 1 ? "" : "s"} covering {c.name} · {data.coverage.specialistLocalSources} specialist / local · last fetch {data.coverage.lastFetchAt ? <RelativeTime iso={data.coverage.lastFetchAt} /> : "none recorded"}
-          </p>
+          <dl className="mt-3 grid grid-cols-3 gap-2 text-center sm:grid-cols-6" data-testid="coverage-counts">
+            <CoverageStat label="Dedicated" value={data.sourceCoverage.dedicated} sub={`${data.sourceCoverage.freshDedicated} fresh`} />
+            <CoverageStat label="Global" value={data.sourceCoverage.global} sub={`${data.sourceCoverage.freshGlobal} fresh`} />
+            <CoverageStat label="Official" value={data.sourceCoverage.official} />
+            <CoverageStat label="Independent" value={data.sourceCoverage.independent} />
+            <CoverageStat label="Party / aligned" value={data.sourceCoverage.partyAligned} />
+            <div className="rounded-lg border border-border/60 px-1 py-1.5">
+              <dd className="text-[12px] font-medium text-ink">{data.sourceCoverage.lastSuccessfulIngestion ? <RelativeTime iso={data.sourceCoverage.lastSuccessfulIngestion} /> : "never"}</dd>
+              <dt className="text-[10px] uppercase tracking-wide text-ink-faint">Last ingestion</dt>
+            </div>
+          </dl>
+          <p className="mt-2 text-[11px] text-ink-faint">The number of sources describes coverage, not truth. Party / aligned sources never count as independent confirmation.</p>
+          <div className="mt-3 border-t border-border/60 pt-3">
+            <PartyClaimsPanel independentReports={data.claims.independentReports} hidden={data.claims.partyClaimsHidden} claims={data.claims.partyClaims} />
+          </div>
           {data.coverage.staleFeeds.length > 0 && (
-            <p className="mt-1 text-[12px] text-yellow-200" data-testid="stale-feeds">
+            <p className="mt-2 text-[12px] text-yellow-200" data-testid="stale-feeds">
               Stale feeds: {data.coverage.staleFeeds.map((f) => f.name).join(", ")}
             </p>
           )}
@@ -394,31 +303,207 @@ export default async function CountryPage({ params }: { params: Promise<{ code: 
             </ul>
           )}
         </div>
-      </Section>
+      </CountrySection>
 
-      {/* Map */}
-      <Section id="map" title="Map">
+      {/* Country brief (same engine as /brief) */}
+      <CountrySection
+        id="brief"
+        title="Country brief"
+        secondary
+        aside={
+          <Link href={`/brief/country/${c.code}`} className="text-xs text-accent hover:underline" data-testid="full-country-brief">
+            View full country brief
+          </Link>
+        }
+      >
+        <BriefPanel scope={{ country: c.code }} initialWindow="24h" windows={["6h", "24h", "3d", "7d"]} compact allowSave={false} />
+      </CountrySection>
+
+      {/* Map: the /world map implementation, framed on the country */}
+      <CountrySection id="map" title="Country map" secondary>
         <CountryMap code={c.code} name={c.name} lat={c.lat} lng={c.lng} zoom={getCountryRecord(c.code)?.zoom ?? 5} neighbourCodes={c.neighbours.map((n) => n.code)} />
-      </Section>
+      </CountrySection>
 
-      {/* Watch / alerts */}
-      <Section id="watch" title="Watch and alerts">
-        <div className="rounded-2xl border border-border bg-card/70 p-5">
-          <div className="mb-3">
-            <FollowButton entityType="country" entityKey={c.code} label={c.name} />
-          </div>
-          <CountryWatchPanel code={c.code} name={c.name} />
+      {/* Watch */}
+      <CountrySection id="watch" title="Watch and alerts" secondary>
+        <div className="mb-3">
+          <FollowButton entityType="country" entityKey={c.code} label={c.name} />
         </div>
-      </Section>
+        <CountryWatchPanel code={c.code} name={c.name} />
+      </CountrySection>
     </main>
+  );
+}
+
+function ConflictGroup({ title, rows, empty, testId }: { title: string; rows: ConflictRowView[]; empty: string; testId: string }) {
+  return (
+    <div className="mt-3 first:mt-0" data-testid={testId}>
+      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+        {title} <span className="font-normal">({rows.length})</span>
+      </p>
+      {rows.length === 0 ? (
+        <p className="text-[13px] text-ink-dim">{empty}</p>
+      ) : (
+        <>
+        {/* Phones: one stacked row per conflict, every score labelled */}
+        <ul className="divide-y divide-border/60 rounded-xl border border-border sm:hidden" data-testid={`${testId}-mobile`}>
+          {rows.map((r) => (
+            <li key={r.slug} className="px-3 py-2.5" data-testid="conflict-row-mobile" data-slug={r.slug}>
+              <div className="flex items-baseline justify-between gap-2">
+                <Link href={`/conflict/${r.slug}`} className="text-sm font-medium text-ink hover:text-accent" data-testid={title === "Domestic" ? "domestic-conflict" : undefined}>
+                  {r.name}
+                </Link>
+                <span className={cn("text-sm font-semibold tabular-nums", SEVERITY_TEXT_CLASS[severityFromScore(r.impactScore)])}>impact {r.impactScore}</span>
+              </div>
+              <p className="mt-0.5 text-[11px] text-ink-faint">
+                <span className="capitalize">{r.status}</span>
+                {r.fullScaleWar ? " · full-scale war" : ""} · severity {r.severityScore ?? "—"} · confidence {r.confidenceScore ?? "—"} · {r.reportCount7d} reports 7d
+              </p>
+              <p className="mt-0.5 text-[12px] text-ink-dim">{r.impactReason}</p>
+              {r.latestDevelopment && (
+                <Link href={r.latestDevelopment.deepLink} className="mt-0.5 block text-[11px] text-ink-faint hover:text-ink">
+                  Latest: {r.latestDevelopment.title} · <RelativeTime iso={r.latestDevelopment.occurredAt} />
+                </Link>
+              )}
+            </li>
+          ))}
+        </ul>
+        <div className="hidden overflow-x-auto rounded-xl border border-border sm:block">
+          <table className="w-full min-w-[640px] text-left text-[12px]">
+            <thead className="bg-card/60 text-[10px] uppercase tracking-wide text-ink-faint">
+              <tr>
+                <th className="px-3 py-1.5 font-medium">Conflict</th>
+                <th className="px-2 py-1.5 font-medium">Status</th>
+                <th className="px-2 py-1.5 text-right font-medium">Severity</th>
+                <th className="px-2 py-1.5 text-right font-medium">Impact</th>
+                <th className="px-2 py-1.5 text-right font-medium">Confidence</th>
+                <th className="px-2 py-1.5 text-right font-medium">Reports 7d</th>
+                <th className="px-3 py-1.5 font-medium">Why / latest</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {rows.map((r) => (
+                <tr key={r.slug} data-testid="conflict-row" data-slug={r.slug} data-impact={r.impactScore}>
+                  <td className="px-3 py-2 align-top">
+                    <Link href={`/conflict/${r.slug}`} className="font-medium text-ink hover:text-accent" data-testid={title === "Domestic" ? "domestic-conflict" : undefined}>
+                      {r.name}
+                    </Link>
+                    {r.fullScaleWar && <span className="ml-1.5 text-[10px] uppercase text-orange-300">full-scale war</span>}
+                  </td>
+                  <td className="px-2 py-2 align-top capitalize text-ink-dim">{r.status}</td>
+                  <td className="px-2 py-2 text-right align-top tabular-nums text-ink" title={r.severityLabel}>
+                    {r.severityScore ?? "—"}
+                  </td>
+                  <td className={cn("px-2 py-2 text-right align-top font-semibold tabular-nums", SEVERITY_TEXT_CLASS[severityFromScore(r.impactScore)])} data-testid="conflict-impact">
+                    {r.impactScore}
+                  </td>
+                  <td className="px-2 py-2 text-right align-top tabular-nums text-ink-dim">{r.confidenceScore ?? "—"}</td>
+                  <td className="px-2 py-2 text-right align-top tabular-nums text-ink-dim" data-testid="conflict-reports">
+                    {r.reportCount7d}
+                  </td>
+                  <td className="px-3 py-2 align-top text-ink-dim">
+                    <span className="block">{r.impactReason}</span>
+                    {r.latestDevelopment && (
+                      <Link href={r.latestDevelopment.deepLink} className="mt-0.5 block text-[11px] text-ink-faint hover:text-ink">
+                        Latest: {r.latestDevelopment.title} · <RelativeTime iso={r.latestDevelopment.occurredAt} />
+                      </Link>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function DomainBlock({ id, title, section, note }: { id: string; title: string; section: DomainSection; note: string }) {
+  const cov = section.coverage;
+  return (
+    <CountrySection id={id} title={title} secondary aside={<span className={cn("text-[11px]", cov.state === "covered" ? "text-ink-faint" : "text-yellow-200")} data-testid={`${id}-coverage`} data-state={cov.state}>{cov.state === "covered" ? "monitored" : cov.state === "stale" ? "provider data stale" : "insufficient current data"}</span>}>
+      <p className="mb-2 text-[11px] text-ink-faint">{note}</p>
+      {section.items.length > 0 ? (
+        <DomainList items={section.items} testId={`${id}-list`} />
+      ) : (
+        <p className="text-[13px] text-ink-dim" data-testid={`${id}-empty`}>
+          {cov.state === "covered" ? "No significant disruption recorded in the last 7 days." : cov.note}
+        </p>
+      )}
+      {section.items.length > 0 && cov.state !== "covered" && <p className="mt-2 text-[11px] text-yellow-200">{cov.note}</p>}
+    </CountrySection>
+  );
+}
+
+function DomainList({ items, testId }: { items: DevelopmentItem[]; testId: string }) {
+  return (
+    <ul className="divide-y divide-border/60 rounded-xl border border-border bg-card/50" data-testid={testId}>
+      {items.map((d) => (
+        <li key={d.id} className="px-3.5 py-2" data-testid="domain-item">
+          <p className="text-[11px] text-ink-faint">
+            <RelativeTime iso={d.occurredAt} /> · {d.category} · confidence {d.confidenceLabel}
+            {d.sources[0] ? ` · ${d.sources[0].name}` : ""}
+          </p>
+          <Link href={d.deepLink} className="text-[13px] font-medium text-ink hover:text-accent">
+            {d.title}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ActorGroup({ title, list, testId }: { title: string; list: ActorView[]; testId: string }) {
+  if (list.length === 0) return null;
+  return (
+    <div data-testid={testId}>
+      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-ink-faint">{title}</p>
+      <ul className="divide-y divide-border/60 rounded-xl border border-border bg-card/50">
+        {list.map((a) => (
+          <li key={a.id} className="px-3 py-2" data-testid="actor-row">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <Link href={a.href} className="text-[13px] font-medium text-ink hover:text-accent">
+                {a.name}
+              </Link>
+              {a.typeLabel && <span className="text-[11px] text-ink-faint">{a.typeLabel}</span>}
+              {a.country && <span className="text-[11px] text-ink-faint">{a.country}</span>}
+            </div>
+            <p className="mt-0.5 text-[11px] text-ink-faint">
+              {a.relationships.length > 0 ? `${a.relationships.join("; ")} · ` : a.conflicts.length > 0 ? `Linked to ${a.conflicts.join(", ")} · ` : ""}
+              {a.recentEvents30d > 0 ? `${a.recentEvents30d} sourced event${a.recentEvents30d === 1 ? "" : "s"} in 30 days` : "no sourced event in 30 days"}
+              {a.lastObservedAt ? <> · last observed <RelativeTime iso={a.lastObservedAt} /></> : ""}
+            </p>
+            {(a.provenance || a.confidence != null) && (
+              <p className="text-[10px] text-ink-faint">
+                {a.provenance ? `Source: ${a.provenance}` : ""}
+                {a.confidence != null ? `${a.provenance ? " · " : ""}link confidence ${Math.round(a.confidence * 100)}%` : ""}
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
 function Stat({ label, value, testId }: { label: string; value: number; testId: string }) {
   return (
-    <div className="rounded-xl border border-border bg-surface/50 px-2 py-2" data-testid={testId}>
-      <p className="text-xl font-semibold tabular-nums text-ink">{value}</p>
+    <div className="rounded-lg border border-border bg-surface/50 px-1.5 py-1.5" data-testid={testId}>
+      <p className="text-lg font-semibold tabular-nums text-ink">{value}</p>
       <p className="text-[10px] uppercase leading-tight tracking-wide text-ink-faint">{label}</p>
     </div>
   );
 }
+
+function CoverageStat({ label, value, sub }: { label: string; value: number; sub?: string }) {
+  return (
+    <div className="rounded-lg border border-border/60 px-1 py-1.5">
+      <dd className="text-lg font-semibold tabular-nums text-ink">{value}</dd>
+      <dt className="text-[10px] uppercase tracking-wide text-ink-faint">{label}</dt>
+      {sub && <p className="text-[10px] text-ink-faint">{sub}</p>}
+    </div>
+  );
+}
+

@@ -5,6 +5,8 @@ import { computeCountryExposure, computeImpact } from "@/lib/data/impact";
 import { getCountryByCode, COUNTRIES } from "@/lib/reference/countries";
 import { MOCK_CONFLICTS } from "@/lib/dev-fixtures/mock-conflicts";
 import type { CountryIntelligence, CountrySummary } from "@/lib/countries/intelligence";
+import { domainCoverage } from "@/lib/countries/data-coverage";
+import { computeImpactScore } from "@/lib/scoring/impact";
 
 // Country Intelligence Pages. Registry / scoring tests are pure; page and API tests read the real database
 // through the real write paths (conflicts, events, structured-provider fixtures).
@@ -125,6 +127,39 @@ test.describe("Impact hard floors work for every country (pure)", () => {
     const tagged = computeCountryExposure(country("TD"), [{ ...untagged, primaryEffects: ["Energy"] }]).components;
     expect(tagged.find((c) => c.dimension === "energy")!.basis).toBe("estimated");
     expect(tagged.find((c) => c.dimension === "trade")!.basis).toBe("insufficient");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+test.describe("Country intelligence v1 rules (pure)", () => {
+  const base = { severityScore: 100, conflictStatus: "active" as const, userCountryPoint: { lat: 61.9, lng: 25.7 }, conflictPoint: { lat: 48.4, lng: 31.2 }, sameRegion: true, primaryEffects: [] };
+  test("fighting geography only: own-country war 100, bordering war >= 75, participant / supporter country gets no floor", () => {
+    expect(computeImpactScore({ ...base, userCountryCode: "UA", conflictCountryCodes: ["UA", "RU"] })).toMatchObject({ impactScore: 100, hardFloor: "own_country_war" });
+    const fi = computeImpactScore({ ...base, userCountryCode: "FI", conflictCountryCodes: ["UA", "RU"] });
+    expect(fi.hardFloor).toBe("bordering_war");
+    expect(fi.impactScore).toBeGreaterThanOrEqual(75);
+    // The United States supports / participates but has no fighting on its soil or border: no floor, below 75.
+    const us = computeImpactScore({ ...base, userCountryCode: "US", conflictCountryCodes: ["UA", "RU"], userCountryPoint: { lat: 39.8, lng: -98.6 }, sameRegion: false });
+    expect(us.hardFloor).toBeNull();
+    expect(us.impactScore).toBeLessThan(75);
+  });
+
+  test("a domestic conflict that is not a full-scale war still reaches the country fully (never ranked by centroid distance)", () => {
+    const far = { lat: 26, lng: 97 }; // conflict reference point far from the country centroid
+    const domestic = computeImpactScore({ ...base, severityScore: 60, userCountryCode: "MM", conflictCountryCodes: ["MM"], userCountryPoint: { lat: 19, lng: 96 }, conflictPoint: far, sameRegion: true });
+    expect(domestic.hardFloor).toBeNull();
+    expect(domestic.impactScore).toBe(Math.round(60 * 0.85));
+  });
+
+  test("provider coverage is per country and per domain: out of scope -> insufficient, never an implied all-clear", () => {
+    const now = new Date();
+    const fresh = [{ platform: "ioda", lastSuccessfulIngestion: new Date(now.getTime() - 3_600_000) }, { platform: "entsog_umm", lastSuccessfulIngestion: new Date(now.getTime() - 3_600_000) }, { platform: "faa_nas_status", lastSuccessfulIngestion: new Date(now.getTime() - 100 * 3_600_000) }];
+    expect(domainCoverage("internet", getCountryRecord("MM")!, fresh, now).state).toBe("covered");
+    expect(domainCoverage("energy", getCountryRecord("MM")!, fresh, now).state).toBe("insufficient"); // no energy provider covers Myanmar
+    expect(domainCoverage("energy", getCountryRecord("FI")!, fresh, now).state).toBe("covered"); // ENTSOG: European operators
+    expect(domainCoverage("transport", getCountryRecord("US")!, fresh, now).state).toBe("stale"); // FAA delivered, but 100 h ago
+    expect(domainCoverage("transport", getCountryRecord("BW")!, fresh, now)).toMatchObject({ state: "insufficient", providers: [] }); // landlocked, no aviation provider
+    expect(domainCoverage("internet", getCountryRecord("FI")!, [], now).state).toBe("insufficient"); // in scope but nothing ever delivered
   });
 });
 
@@ -271,11 +306,76 @@ test.describe.serial("Country intelligence API and aggregation", () => {
   });
 });
 
+test.describe.serial("Country intelligence v1 sections (API)", () => {
+  let war: { id: string; slug: string };
+  test.beforeAll(async ({ request }) => {
+    war = (await request.post("/api/admin/conflicts", { data: { slug: `ci-${unique()}`, name: "CI Zambia War", region: "Africa", status: "active", severity: "extreme", intensity: 95, lat: -13.1, lng: 27.8, fightingCountries: ["ZM"], participantCountries: ["ZM", "NO"], supporterCountries: ["SE"], fullScaleWar: true } }).then((r) => r.json())) as { id: string; slug: string };
+    const partySource = `CI ZM MoD ${unique()}`;
+    await request.post("/api/admin/sources", { data: { name: partySource, type: "manual", independenceClass: "official_military", claimPolicy: "party_claim", perspective: "Ministry of Defence", country: "ZM" } });
+    const publish = (over: Record<string, unknown>) => request.post("/api/admin/events", { data: { title: `CI zm ${unique()}`, summary: "Fighting.", eventType: "artillery", latitude: -15.4, longitude: 28.3, occurredAt: ago(2), severity: "severe", importance: 80, published: true, sourceName: `CI ZM Wire ${unique()}`, conflictId: war.id, countryCode: "ZM", ...over } });
+    await publish({ title: "CI Zambia shelling near Lusaka" });
+    await publish({ title: "CI Zambia ministry claims gains", sourceName: partySource });
+    // A country-level report: published through the normal intake with no place finer than the country.
+    const src = (await request.post("/api/admin/sources", { data: { name: `CI ZM News ${unique()}`, type: "manual", autoProcessing: true } }).then((r) => r.json())) as { id: string };
+    await request.post("/api/admin/incoming/manual", { data: { sourceId: src.id, originalTitle: `Zambia government declares national mourning ${unique()}`, originalText: "The government of Zambia declared three days of national mourning.", originalUrl: `https://news.example-source.test/zm-${unique()}` } });
+    await request.post("/api/admin/incoming/publish-bulk", { data: { filters: `status=pending&sourceId=${src.id}`, mode: "publish" } });
+  });
+
+  test("the canonical /api/country path aggregates everything; ISO3 works; domestic / bordering / other are separated with separate scores", async ({ request }) => {
+    const zm = (await request.get("/api/country/ZMB/intelligence").then((r) => r.json())) as CountryIntelligence;
+    expect(zm.country.code).toBe("ZM");
+    for (const k of ["exposureDrivers", "currentSituation", "domesticConflictRows", "borderingConflicts", "otherRelevantConflicts", "developmentFeed", "territoryDatasets", "actors", "transport", "energy", "internet", "hazards", "sourceCoverage", "brief"]) expect(zm, k).toHaveProperty(k);
+    const row = zm.domesticConflictRows.find((r) => r.slug === war.slug)!;
+    expect(row).toMatchObject({ impactScore: 100, fullScaleWar: true });
+    expect(row.severityScore).not.toBeNull();
+    expect(row.confidenceScore).not.toBeNull();
+    expect(row.reportCount7d).toBeGreaterThanOrEqual(2);
+    expect(zm.exposureDrivers[0]!.text).toMatch(/Full-scale war inside Zambia/);
+    expect(zm.currentSituation[0]).toMatch(/Active armed conflict recorded inside Zambia: CI Zambia War \(full-scale war\)/);
+    expect(zm.energy.coverage.state).toBe("insufficient"); // no energy provider covers Zambia: stated, not implied normal
+    expect(["GOOD", "LIMITED", "STALE"]).toContain(zm.sourceCoverage.state);
+    expect(zm.sourceCoverage.dedicated).toBeGreaterThanOrEqual(1);
+
+    // Bordering: Malawi borders Zambia -> the war is a BORDERING conflict with impact >= 75 and a bordering driver.
+    const mw = (await request.get("/api/country/MW/intelligence").then((r) => r.json())) as CountryIntelligence;
+    const b = mw.borderingConflicts.find((r) => r.slug === war.slug)!;
+    expect(b.impactScore).toBeGreaterThanOrEqual(75);
+    expect(mw.domesticConflictRows.some((r) => r.slug === war.slug)).toBe(false);
+    expect(mw.exposureDrivers.some((d) => d.kind === "score" && /directly bordering country: CI Zambia War/.test(d.text))).toBe(true);
+    expect(mw.currentSituation.some((l) => /Full-scale war in a directly bordering country: CI Zambia War \(Zambia\)/.test(l))).toBe(true);
+
+    // Participant (Norway) and supporter (Sweden): no domestic / bordering classification, no hard-floor driver.
+    for (const code of ["NO", "SE"]) {
+      const x = (await request.get(`/api/country/${code}/intelligence`).then((r) => r.json())) as CountryIntelligence;
+      expect([...x.domesticConflictRows, ...x.borderingConflicts].some((r) => r.slug === war.slug), code).toBe(false);
+      const other = x.otherRelevantConflicts.find((r) => r.slug === war.slug);
+      if (other) expect(other.impactScore).toBeLessThan(75);
+      expect(x.exposureDrivers.some((d) => d.conflictSlug === war.slug && /sets impact/.test(d.text))).toBe(false);
+    }
+  });
+
+  test("latest developments: the country-level report appears without a map point; party claims arrive flagged", async ({ request }) => {
+    const zm = (await request.get("/api/country/ZM/intelligence").then((r) => r.json())) as CountryIntelligence;
+    const countryLevel = zm.developmentFeed.find((d) => d.title.startsWith("Zambia government declares national mourning"))!;
+    expect(countryLevel).toBeTruthy();
+    expect(countryLevel.locationScope).toBe("country");
+    expect(countryLevel.mapHref).toMatch(/country=ZM/);
+    expect(countryLevel.mapHref).not.toMatch(/event=/); // no invented point to focus on
+    const claim = zm.developmentFeed.find((d) => d.title.includes("CI Zambia ministry claims gains"))!;
+    expect(claim.isPartyClaim).toBe(true);
+    const shelling = zm.developmentFeed.find((d) => d.title.includes("CI Zambia shelling near Lusaka"))!;
+    expect(shelling.isPartyClaim).toBe(false);
+    expect(shelling.reportCount).toBe(1);
+  });
+});
+
 // ---------------------------------------------------------------------------------------------
 async function openCountry(page: Page, path: string) {
   await page.goto(path);
   await expect(page.getByTestId("country-page")).toBeVisible({ timeout: 90_000 });
 }
+/** Secondary sections start collapsed on phones: expand them all (a no-op on wide screens). */
+const expandAll = (page: Page) => page.evaluate(() => document.querySelectorAll<HTMLDetailsElement>("details[data-testid^=section-]").forEach((d) => (d.open = true)));
 
 test.describe.serial("Country page UI", () => {
   let slug = "";
@@ -300,14 +400,16 @@ test.describe.serial("Country page UI", () => {
     await expect(page.getByTestId("overview-status")).toContainText("active conflict");
     await expect(page.getByTestId("stat-domestic")).toContainText(/[1-9]/);
     await expect(page.getByTestId("country-neighbours")).toContainText("Botswana");
-    await expect(page.getByTestId("domestic-conflict").filter({ hasText: "CI Namibia War" })).toBeVisible();
-    await expect(page.getByTestId("exposure-reason").first()).toBeVisible();
-    await expect(page.getByTestId("developments-list").getByTestId("development-card").filter({ hasText: "CI Namibia strike" })).toBeVisible();
+    await expect(page.getByTestId("domestic-conflict").filter({ hasText: "CI Namibia War", visible: true })).toBeVisible(); // table on desktop, stacked row on phones
+    await expect(page.getByTestId("exposure-reason").first()).toBeAttached(); // inside the collapsed reasoning disclosure
+    await expect(page.getByTestId("current-situation")).toContainText("Active armed conflict recorded inside Namibia");
+    await expect(page.getByTestId("dev-list").getByTestId("dev-item").filter({ hasText: "CI Namibia strike" })).toBeVisible();
     await expect(page.getByTestId("freshness-conflict_events")).toContainText("Latest conflict event");
     await expect(page.getByTestId("exposure-basis-security")).toContainText("Computed"); // every dimension states its basis
     await expect(page.getByTestId("exposure-basis-energy")).toContainText(/Estimated|No monitored conflict/);
-    await expect(page.getByTestId("section-transport")).toHaveCount(0); // nothing to say: no filler section
-    await expect(page.getByTestId("section-maritime")).toHaveCount(0); // landlocked
+    // Domains with no covering provider say so instead of implying normal conditions.
+    await expect(page.getByTestId("energy-coverage")).toHaveAttribute("data-state", "insufficient");
+    await expect(page.getByTestId("energy-empty")).toContainText("Insufficient current data");
     await expect(page.getByTestId("section-brief")).toBeVisible();
     await expect(page.getByTestId("full-country-brief")).toHaveAttribute("href", "/brief/country/NA");
   });
@@ -315,23 +417,31 @@ test.describe.serial("Country page UI", () => {
   test("country brief window switching uses the same brief engine", async ({ page }) => {
     await openCountry(page, "/country/NA");
     const brief = page.getByTestId("section-brief");
-    await expect(brief.getByTestId("brief-headline")).toContainText("Last 6 hours", { timeout: 60_000 });
+    // Secondary on phones: collapsed until opened.
+    if (!(await brief.evaluate((el) => (el as HTMLDetailsElement).open))) await brief.locator("summary").click();
+    await expect(brief.getByTestId("brief-headline")).toContainText("Last 24 hours", { timeout: 60_000 });
     await expect(brief.getByTestId("window-custom")).toHaveCount(0);
-    await brief.getByTestId("window-24h").click();
-    await expect(brief.getByTestId("brief-headline")).toContainText("Last 24 hours");
+    await brief.getByTestId("window-6h").click();
+    await expect(brief.getByTestId("brief-headline")).toContainText("Last 6 hours");
     await expect(brief.getByTestId("development-card").filter({ hasText: "CI Namibia strike" }).first()).toBeVisible();
   });
 
   test("party claims: hidden and counted by default; shown, labelled and separate when the setting is on", async ({ page }) => {
     await openCountry(page, "/country/NA");
-    await page.getByTestId("section-coverage").locator("summary").click();
     await expect(page.getByTestId("claims-hidden")).toContainText("party claim");
+    // Latest developments hide the claim too, and say so.
+    await page.getByTestId("dev-window-7D").click();
+    await expect(page.getByTestId("dev-list")).not.toContainText("CI Namibia claim");
+    await expect(page.getByTestId("dev-count")).toContainText("party / aligned claim");
     await expect(page.getByTestId("party-claims-list")).toHaveCount(0);
     const on = await page.context().newPage();
     await on.addInitScript(() => localStorage.setItem("vigil-preferences", JSON.stringify({ state: { showPartyClaims: true }, version: 3 })));
     await openCountry(on, "/country/NA");
-    await on.getByTestId("section-coverage").locator("summary").click();
+    const coverage = on.getByTestId("section-coverage");
+    if (!(await coverage.evaluate((el) => (el as HTMLDetailsElement).open))) await coverage.locator("summary").click(); // collapsed on phones
     await expect(on.getByTestId("claims-shown")).toBeVisible();
+    await on.getByTestId("dev-window-7D").click();
+    await expect(on.getByTestId("dev-list").getByTestId("dev-item").filter({ hasText: "CI Namibia claim" })).toContainText("party / aligned claim");
     const list = on.getByTestId("party-claims-list");
     await expect(list.getByTestId("development-card").first()).toContainText("PARTY CLAIM");
     await expect(list).toContainText("CI Namibia claim");
@@ -340,17 +450,21 @@ test.describe.serial("Country page UI", () => {
     await on.close();
   });
 
-  test("hazard, aviation and internet sections appear only where there is data; empty countries stay clean", async ({ page }) => {
+  test("hazard, transport and internet sections show provider data where it exists and state the coverage where it does not", async ({ page }) => {
     await openCountry(page, "/country/JP");
+    await expandAll(page);
     await expect(page.getByTestId("section-hazards")).toBeVisible();
     await expect(page.getByTestId("hazards-list")).toContainText("M6.9");
     await openCountry(page, "/country/US");
-    await expect(page.getByTestId("section-aviation")).toContainText("significant aviation disruption");
-    await expect(page.getByTestId("aviation-list")).toContainText("O'Hare");
+    await expandAll(page);
+    await expect(page.getByTestId("transport-list")).toContainText("O'Hare");
+    await expect(page.getByTestId("transport-coverage")).toHaveAttribute("data-state", "covered");
     await openCountry(page, "/country/IS");
-    await expect(page.getByTestId("section-domestic")).toHaveCount(0);
-    await expect(page.getByTestId("section-actors")).toHaveCount(0);
-    await expect(page.getByTestId("no-infrastructure-events")).toBeVisible();
+    await expandAll(page);
+    await expect(page.getByTestId("conflicts-domestic")).toContainText("No active conflict recorded inside Iceland");
+    await expect(page.getByTestId("actors-none")).toBeVisible();
+    await expect(page.getByTestId("territory-none")).toHaveText("No verified territorial dataset available.");
+    await expect(page.getByTestId("transport-coverage")).toHaveAttribute("data-state", "insufficient"); // no aviation provider covers Iceland
     await expect(page.getByTestId("overview-status")).toContainText("No active conflict recorded inside Iceland");
   });
 
@@ -367,6 +481,7 @@ test.describe.serial("Country page UI", () => {
   test("Follow country uses the existing watch system with major-only defaults and lists what it monitors", async ({ page, request }) => {
     await openCountry(page, "/country/NA");
     await page.getByTestId("section-watch").scrollIntoViewIfNeeded();
+    if (!(await page.getByTestId("section-watch").evaluate((el) => (el as HTMLDetailsElement).open))) await page.getByTestId("section-watch").locator("summary").click(); // collapsed on phones
     await expect(page.getByTestId("watch-rules")).toContainText("Airport closed");
     const button = page.getByTestId("section-watch").getByRole("button", { name: /follow/i }).first();
     await button.click();
@@ -389,13 +504,16 @@ test.describe.serial("Country page UI", () => {
     await expect(link).toHaveAttribute("href", "/country/NA", { timeout: 90_000 });
     await link.click();
     await expect(page).toHaveURL(/\/country\/NA$/);
+    await expect(page.getByTestId("country-page")).toBeVisible({ timeout: 90_000 });
+    await expandAll(page);
     const open = page.getByTestId("open-in-world");
-    await expect(open).toHaveAttribute("href", /^\/world\?focus=-?\d+\.\d+%2C-?\d+\.\d+%2C[\d.]+&territory=1&country=NA$/);
+    // `territory=1` is carried only when a published territorial dataset covers the country.
+    await expect(open).toHaveAttribute("href", /^\/world\?focus=-?\d+\.\d+%2C-?\d+\.\d+%2C[\d.]+(&territory=1)?&country=NA$/);
     await page.getByTestId("show-country-map").click();
     await page.getByTestId("country-map-layers").getByRole("button", { name: "Earthquakes" }).click();
     await expect(open).toHaveAttribute("href", /layers=earthquakes/);
     await open.click();
-    await expect(page).toHaveURL(/\/world\?layers=earthquakes&focus=.+&territory=1&country=NA/, { timeout: 90_000 });
+    await expect(page).toHaveURL(/\/world\?layers=earthquakes&focus=.+(&territory=1)?&country=NA/, { timeout: 90_000 });
     await expect(page.getByTestId("back-to-country")).toContainText("Namibia");
     // Brief items link to their country too.
     await page.goto("/brief");
@@ -406,7 +524,11 @@ test.describe.serial("Country page UI", () => {
   test("mobile-friendly: long sections collapse and the overview comes first", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openCountry(page, "/country/NA");
-    await expect(page.getByTestId("country-overview")).toBeInViewport();
+    await expect(page.getByTestId("country-header")).toBeInViewport();
+    // Priority order on phones: header, situation, exposure, developments before the secondary modules.
+    const order = await page.evaluate(() => ["country-header", "section-situation", "section-exposure", "section-developments", "section-territory", "section-coverage"].map((id) => document.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect().top));
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    await expect(page.getByTestId("conflicts-domestic-mobile").getByTestId("conflict-row-mobile").first()).toBeVisible(); // stacked rows, no table to scroll
     const overflowing = await page.evaluate(() => {
       const w = window.innerWidth;
       return [...document.querySelectorAll("main *")]

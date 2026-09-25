@@ -101,6 +101,9 @@ export function computeImpactScore(input: ImpactScoreInput): ImpactScoreResult {
     reasons.push("Sanctions/economic exposure");
   }
   relevance += exposureBonus / 100;
+  // Fighting physically inside the country reaches it fully, whatever the distance between the country's centroid and
+  // the conflict's reference point (a large country's own civil war must never rank below a distant war).
+  if (sameCountry) relevance = Math.max(relevance, 0.85);
 
   if (sameCountry && !warLike) reasons.push("Conflict is inside your country");
   else if (bordering && !warLike) reasons.push("Conflict is in a bordering country");

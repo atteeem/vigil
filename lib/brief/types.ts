@@ -150,6 +150,10 @@ export interface BriefDevelopment {
   /** (type, key) pairs a watch could match: the same vocabulary as the alert service. */
   watchKeys: { type: string; key: string }[];
   isPartyClaim: boolean;
+  /** Event-backed developments: how precisely the source locates it (point | city | region | country | global | unknown). */
+  locationScope?: string | null;
+  /** Event-backed developments: unique reports attached by the end of the window. */
+  reportCount?: number;
 }
 
 export interface BriefExclusion {
