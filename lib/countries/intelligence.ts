@@ -16,6 +16,10 @@ import { distanceKm } from "@/lib/utils/geo";
 import { getCountryByCode } from "@/lib/reference/countries";
 import { getCountryRecord, neighboursOf, type CountryRecord } from "./registry";
 import type { Conflict } from "@/lib/types";
+import { conflictReportCounts } from "@/lib/public/report-counts";
+import { listAvailableDatasets } from "@/lib/territory/datasets";
+import { DATASET_TYPE_LABEL, type PublicTerritorialDataset } from "@/lib/territory/dataset-types";
+import { ALL_DOMAIN_PLATFORMS, domainCoverage, type CoverageDomain, type DomainCoverage } from "./data-coverage";
 
 // The country intelligence layer: ONE server-side aggregation over the existing systems (public
 // conflicts + central impact scoring, the briefing engine, structured events, territorial control,
@@ -91,6 +95,11 @@ export interface ActorView {
   conflicts: string[];
   recentEvents30d: number;
   lastObservedAt: string | null;
+  /** Recorded relationships only (ConflictParticipant role, primary conflict), never inferred. */
+  relationships: string[];
+  /** Provenance of the actor record / its conflict link. */
+  provenance: string | null;
+  confidence: number | null;
 }
 
 export interface CoverageView {
@@ -109,6 +118,88 @@ export interface FreshnessItem {
   /** hours since `at`; null when unknown */
   ageHours: number | null;
   stale: boolean;
+}
+
+/** One conflict row in Conflict Exposure. Severity, impact and confidence are separate scores; report volume feeds none of them. */
+export interface ConflictRowView {
+  slug: string;
+  name: string;
+  status: string;
+  fullScaleWar: boolean;
+  fightingCountries: string[];
+  /** Conflict severity (0-100) from the central scoring engine; independent of this country. */
+  severityScore: number | null;
+  severityLabel: string;
+  /** Impact on THIS country (0-100) from the central impact model. */
+  impactScore: number;
+  /** Evidence confidence (0-100) of the conflict's records. */
+  confidenceScore: number | null;
+  impactReason: string;
+  latestDevelopment: { title: string; occurredAt: string; deepLink: string } | null;
+  /** Unique published reports in the last 7 days (canonical aggregate, /api/report-counts). Never feeds a score. */
+  reportCount7d: number;
+}
+
+export interface ExposureDriver {
+  text: string;
+  /** score: an input of the impact score. context: a current, recorded condition that does not change the score. */
+  kind: "score" | "context";
+  conflictSlug?: string;
+}
+
+export interface DevelopmentItem {
+  id: string;
+  occurredAt: string;
+  title: string;
+  category: string;
+  domain: string;
+  locationScope: string;
+  confidence: number;
+  confidenceLabel: string;
+  sources: { name: string; role: string }[];
+  independentSources: number;
+  reportCount: number | null;
+  isPartyClaim: boolean;
+  deepLink: string;
+  mapHref: string | null;
+  conflictName: string | null;
+}
+
+export interface TerritoryDatasetView {
+  id: string;
+  name: string;
+  datasetType: string;
+  typeLabel: string;
+  kind: string;
+  provider: string;
+  license: string | null;
+  attribution: string | null;
+  sourceUrl: string | null;
+  lastUpdated: string | null;
+  confidence: number | null;
+  actors: string[];
+  areaCount: number;
+  hasHistory: boolean;
+  conflictName: string | null;
+  openOnMap: string;
+}
+
+export interface DomainSection {
+  coverage: DomainCoverage;
+  items: DevelopmentItem[];
+}
+
+export interface SourceCoverageView {
+  state: "GOOD" | "LIMITED" | "STALE";
+  reasons: string[];
+  dedicated: number;
+  global: number;
+  official: number;
+  independent: number;
+  partyAligned: number;
+  freshDedicated: number;
+  freshGlobal: number;
+  lastSuccessfulIngestion: string | null;
 }
 
 export interface CountryIntelligence {
@@ -137,6 +228,23 @@ export interface CountryIntelligence {
   brief: { window: string; headline: string; counts: Record<string, number> };
   watch: { entityType: "country"; entityKey: string; label: string };
   meta: { computeMs: number; conflictsScored: number };
+  // ---- v1 country intelligence sections ----
+  exposureDrivers: ExposureDriver[];
+  currentSituation: string[];
+  lastMeaningfulUpdate: string | null;
+  borderingConflicts: ConflictRowView[];
+  otherRelevantConflicts: ConflictRowView[];
+  /** Domestic conflicts in the same row shape as bordering / other (domesticConflicts keeps its older detail view). */
+  domesticConflictRows: ConflictRowView[];
+  /** Last 7 days, newest first, party claims included but flagged (the client hides them unless the user opted in). */
+  developmentFeed: DevelopmentItem[];
+  territoryDatasets: TerritoryDatasetView[];
+  transport: DomainSection;
+  energy: DomainSection;
+  internet: DomainSection;
+  hazards: DomainSection;
+  sourceCoverage: SourceCoverageView;
+  mapHref: string;
 }
 
 const AVIATION = new Set(["airport", "airspace"]);
@@ -254,6 +362,163 @@ export async function getCountryIntelligence(code: string, now: Date = new Date(
   const score = exposure.score;
   const statusLine = [domestic.length ? `${domestic.length} active conflict${domestic.length === 1 ? "" : "s"} in ${rec.name}` : `No active conflict recorded inside ${rec.name}`, nearby.length ? `${nearby.length} high-impact conflict${nearby.length === 1 ? "" : "s"} nearby` : null, disruptions ? `${disruptions} significant disruption${disruptions === 1 ? "" : "s"}` : null].filter(Boolean).join(" · ");
 
+  // ---- v1 sections ----
+  const reportCounts = (await conflictReportCounts({ window: "7D" })).conflicts;
+  const bordering = live.filter((c) => !domesticIds.has(c.id) && c.fightingCountryCodes.some((f) => rec.borders.includes(f)));
+  const borderingIds = new Set(bordering.map((c) => c.id));
+  const otherHigh = perConflict.filter(({ c, r }) => !domesticIds.has(c.id) && !borderingIds.has(c.id) && r.impact >= NEARBY_IMPACT_MIN).slice(0, 6).map(({ c }) => c);
+  const reasonById = new Map(perConflict.map(({ c, r }) => [c.id, r]));
+  const rowFor = async (c: Conflict): Promise<ConflictRowView> => {
+    const r = reasonById.get(c.id)!;
+    const scores = await scoreConflict(c.id);
+    const dev = factual.filter((d) => d.conflictSlug === c.slug)[0];
+    const bordersHit = c.fightingCountryCodes.filter((f) => rec.borders.includes(f));
+    const reason = r.hardFloor ? hardFloorText(r.hardFloor)! : domesticIds.has(c.id) ? `Fighting recorded inside ${rec.name}` : bordersHit.length ? `Fighting in bordering ${bordersHit.map((b) => getCountryRecord(b)?.name ?? b).join(", ")}` : (r.reasons[0] ?? (r.distanceKm != null ? `About ${r.distanceKm.toLocaleString("en-US")} km away` : "Scored by the impact model"));
+    return {
+      slug: c.slug,
+      name: c.shortName,
+      status: c.status,
+      fullScaleWar: c.fullScaleWar,
+      fightingCountries: c.fightingCountryCodes,
+      severityScore: scores ? scores.severity.severityScore : null,
+      severityLabel: SEVERITY_LABEL[c.severity] ?? c.severity,
+      impactScore: r.impact,
+      confidenceScore: scores ? scores.confidence.confidenceScore : null,
+      impactReason: reason,
+      latestDevelopment: dev ? { title: dev.title, occurredAt: dev.occurredAt, deepLink: dev.deepLink } : null,
+      reportCount7d: reportCounts[c.id] ?? 0,
+    };
+  };
+  const [domesticConflictRows, borderingConflicts, otherRelevantConflicts] = await Promise.all([Promise.all(domestic.map(rowFor)), Promise.all(bordering.map(rowFor)), Promise.all(otherHigh.map(rowFor))]);
+  const byImpact = (a: ConflictRowView, b: ConflictRowView) => b.impactScore - a.impactScore;
+  borderingConflicts.sort(byImpact);
+
+  const mapHref = `/world?${new URLSearchParams({ focus: `${rec.lat.toFixed(3)},${rec.lng.toFixed(3)},${rec.zoom}`, country: rec.code }).toString()}`;
+  const toItem = (d: BriefDevelopment): DevelopmentItem => {
+    const t = d.mapTarget;
+    // Event developments carry their own scope. Conflict-wide developments (escalation, status, actors) sit on the
+    // conflict's reference point, which is not a location of the development.
+    const scope = d.locationScope ?? (d.domain === "conflict" || d.domain === "actor" || d.domain === "territory" ? "conflict" : d.geography.lat != null ? "point" : d.countryCode ? "country" : "unknown");
+    // A country-level item has no point: its map focus is the country, never an invented position.
+    const mapHrefFor = t?.lat != null && t?.lng != null ? `/world?${new URLSearchParams({ focus: `${t.lat.toFixed(3)},${t.lng.toFixed(3)},${t.zoom ?? 6}`, ...(t.layers.length ? { layers: t.layers.join(",") } : {}), ...(t.eventId ? { event: t.eventId } : {}), ...(t.hazardId ? { hazard: t.hazardId } : {}) }).toString()}` : d.countryCode ? `/world?${new URLSearchParams({ focus: `${(getCountryRecord(d.countryCode) ?? rec).lat.toFixed(3)},${(getCountryRecord(d.countryCode) ?? rec).lng.toFixed(3)},${(getCountryRecord(d.countryCode) ?? rec).zoom}`, country: d.countryCode, ...(t?.eventId ? { event: t.eventId } : {}) }).toString()}` : null;
+    return { id: d.id, occurredAt: d.occurredAt, title: d.title, category: d.developmentType.replace(/_/g, " "), domain: d.domain, locationScope: scope, confidence: d.confidence, confidenceLabel: d.confidenceLabel, sources: d.sources.slice(0, 4).map((x) => ({ name: x.name, role: x.role })), independentSources: d.independentSourceCount, reportCount: d.reportCount ?? null, isPartyClaim: d.isPartyClaim, deepLink: d.deepLink, mapHref: mapHrefFor, conflictName: d.conflictName };
+  };
+  // Latest developments: the brief engine's meaningful developments for the country (party claims flagged) PLUS the
+  // country's own published reports in the window, including country-level reports that have no map point and single
+  // reports below the brief's significance threshold. A report already represented by a brief item appears once.
+  const briefItems = briefClaims.developments.map(toItem);
+  const inBrief = new Set(briefClaims.developments.filter((d) => d.id.startsWith("event:") || d.id.startsWith("party:")).map((d) => d.id.slice(d.id.indexOf(":") + 1)));
+  const since7 = new Date(now.getTime() - 7 * 24 * HOUR);
+  const ownEvents = await prisma.event.findMany({
+    where: { published: true, countryCode: rec.code, occurredAt: { gte: since7, lte: now } },
+    select: { id: true, slug: true, title: true, eventType: true, occurredAt: true, latitude: true, longitude: true, locationScope: true, verificationStatus: true, conflict: { select: { shortName: true, name: true } }, sources: { select: { rawIngestionItemId: true, relationship: true, rawIngestionItem: { select: { source: { select: { name: true, sourceRole: true, independenceClass: true, claimPolicy: true, perspective: true } } } } } } },
+    orderBy: { occurredAt: "desc" },
+    take: 80,
+  });
+  const reportItems: DevelopmentItem[] = ownEvents
+    .filter((e) => !inBrief.has(e.id))
+    .map((e) => {
+      const trusts = e.sources.map((x) => sourceTrust(x.rawIngestionItem.source).category);
+      const independent = trusts.filter((t) => t === "strong" || t === "perspective").length;
+      const party = independent === 0 && trusts.some((t) => t === "party_claim" || t === "discovery");
+      const confidence = e.verificationStatus === "confirmed" ? 0.85 : e.verificationStatus === "likely" ? 0.6 : 0.35;
+      const scope = e.locationScope ?? (e.latitude != null ? "point" : "country");
+      const point = e.latitude != null && e.longitude != null && !["country", "global", "unknown"].includes(scope);
+      const focus = point ? `${e.latitude!.toFixed(3)},${e.longitude!.toFixed(3)},6` : `${rec.lat.toFixed(3)},${rec.lng.toFixed(3)},${rec.zoom}`;
+      return {
+        id: `report:${e.id}`,
+        occurredAt: e.occurredAt.toISOString(),
+        title: e.title,
+        category: `report · ${e.eventType.replace(/_/g, " ")}`,
+        domain: "conflict",
+        locationScope: scope,
+        confidence,
+        confidenceLabel: confidence >= 0.7 ? "high" : confidence >= 0.5 ? "medium" : "low",
+        sources: [...new Map(e.sources.map((x) => [x.rawIngestionItem.source.name, { name: x.rawIngestionItem.source.name, role: x.relationship }])).values()].slice(0, 4),
+        independentSources: independent,
+        reportCount: new Set(e.sources.map((x) => x.rawIngestionItemId)).size,
+        isPartyClaim: party,
+        deepLink: `/event/${e.slug}`,
+        // A country-level report is focused on the country, never on an invented point.
+        mapHref: `/world?${new URLSearchParams({ focus, ...(point ? { event: e.id } : { country: rec.code }) }).toString()}`,
+        conflictName: e.conflict ? (e.conflict.shortName ?? e.conflict.name) : null,
+      };
+    });
+  const developmentFeed = [...briefItems, ...reportItems].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)).slice(0, 80);
+
+  // Exposure drivers: only the impact model's own inputs (hard floors, per-conflict impact) plus recorded conditions.
+  const exposureDrivers: ExposureDriver[] = [];
+  for (const r of exposureReasoning) {
+    if (r.hardFloor === "own_country_war") exposureDrivers.push({ kind: "score", text: `Full-scale war inside ${rec.name}: ${r.conflictName} (sets impact to 100)`, conflictSlug: r.conflictSlug });
+    else if (r.hardFloor === "bordering_war") exposureDrivers.push({ kind: "score", text: `Full-scale war in a directly bordering country: ${r.conflictName} (sets impact to at least 75)`, conflictSlug: r.conflictSlug });
+    else if (r.impact >= 20) exposureDrivers.push({ kind: "score", text: `${r.conflictName}: impact ${r.impact}${r.reasons[0] ? ` (${r.reasons[0]})` : ""}`, conflictSlug: r.conflictSlug });
+  }
+  const within24 = (d: BriefDevelopment) => now.getTime() - new Date(d.occurredAt).getTime() <= 24 * HOUR;
+  const activeInfra = factual.filter((d) => d.domain === "infrastructure" && !d.isResolution && within24(d));
+  const infraKinds = [...new Set(activeInfra.map((d) => d.developmentType))];
+  if (activeInfra.length) exposureDrivers.push({ kind: "context", text: `${activeInfra.length} infrastructure disruption${activeInfra.length === 1 ? "" : "s"} recorded in the last 24 h (${infraKinds.join(", ")})` });
+  const recentHazards = factual.filter((d) => d.domain === "hazard" && within24(d));
+  if (recentHazards.length) exposureDrivers.push({ kind: "context", text: `${recentHazards.length} significant natural-hazard alert${recentHazards.length === 1 ? "" : "s"} in the last 24 h` });
+
+  // ---- territorial datasets relevant to the country (published only; control vs influence vs presence kept apart) ----
+  const datasets = (await listAvailableDatasets()).filter((d: PublicTerritorialDataset) => d.countryCodes.includes(rec.code) || (d.conflictId != null && domesticIds.has(d.conflictId)));
+  const territoryDatasets: TerritoryDatasetView[] = datasets.map((d) => ({
+    id: d.id,
+    name: d.name,
+    datasetType: d.datasetType,
+    typeLabel: DATASET_TYPE_LABEL[d.datasetType],
+    kind: d.kind,
+    provider: d.provider,
+    license: d.license,
+    attribution: d.attribution,
+    sourceUrl: d.sourceUrl,
+    lastUpdated: d.lastUpdated,
+    confidence: d.confidence,
+    actors: d.actors,
+    areaCount: d.areaCount,
+    hasHistory: d.hasHistory,
+    conflictName: d.conflictName,
+    openOnMap: `/world?${new URLSearchParams({ territory: "1", ...(d.conflictSlug ? { conflict: d.conflictSlug } : {}), focus: `${rec.lat.toFixed(3)},${rec.lng.toFixed(3)},${rec.zoom}`, country: rec.code }).toString()}`,
+  }));
+
+  // ---- infrastructure / hazard domains, with provider coverage stated ----
+  const feeds = await prisma.source.findMany({ where: { type: "structured", platform: { in: ALL_DOMAIN_PLATFORMS }, enabled: true }, select: { platform: true, lastSuccessfulIngestion: true } });
+  const domain = (key: CoverageDomain, pickFn: (d: BriefDevelopment) => boolean): DomainSection => ({ coverage: domainCoverage(key, rec, feeds, now), items: byRank.filter(pickFn).slice(0, 8).map(toItem) });
+  const transport = domain("transport", (d) => AVIATION.has(d.developmentType) || (!rec.landlocked && MARITIME.has(d.developmentType)));
+  const energy = domain("energy", (d) => d.developmentType === "energy");
+  const internet = domain("internet", (d) => d.developmentType === "internet");
+  const hazards = domain("hazards", (d) => d.domain === "hazard");
+
+  // ---- source coverage verdict ----
+  const sourceCoverage = await sourceCoverageFor(rec, domestic, now);
+
+  // ---- current situation: facts only ----
+  const currentSituation: string[] = [];
+  if (domestic.length === 0) currentSituation.push(`No active armed conflict recorded inside ${rec.name}.`);
+  else currentSituation.push(`Active armed conflict recorded inside ${rec.name}: ${domestic.map((c) => `${c.shortName}${c.fullScaleWar ? " (full-scale war)" : ""}`).join(", ")}.`);
+  const borderWars = bordering.filter((c) => c.fullScaleWar);
+  if (borderWars.length) currentSituation.push(`Full-scale war in a directly bordering country: ${borderWars.map((c) => `${c.shortName} (${c.fightingCountryCodes.filter((f) => rec.borders.includes(f)).map((f) => getCountryRecord(f)?.name ?? f).join(", ")})`).join("; ")}.`);
+  else if (bordering.length) currentSituation.push(`Armed conflict in a bordering country: ${bordering.map((c) => c.shortName).join(", ")}.`);
+  const meaningful24 = factual.filter(within24);
+  const inCountry24 = meaningful24.filter((d) => d.countryCode === rec.code || d.watchKeys.some((k) => k.type === "country" && k.key === rec.code));
+  const reports24 = ownEvents.filter((e) => now.getTime() - e.occurredAt.getTime() <= 24 * HOUR).length;
+  currentSituation.push(meaningful24.length ? `${meaningful24.length} meaningful development${meaningful24.length === 1 ? "" : "s"} relevant to ${rec.name} in the past 24 h (${inCountry24.length} located in ${rec.name}).` : `No meaningful development relevant to ${rec.name} recorded in the past 24 h.`);
+  if (reports24) currentSituation.push(`${reports24} published report${reports24 === 1 ? "" : "s"} located in ${rec.name} in the past 24 h.`);
+  const statusChanges = factual.filter((d) => d.developmentType === "conflict_status" || d.developmentType === "escalation" || d.developmentType === "de_escalation");
+  if (statusChanges.length) {
+    const names = [...new Set(statusChanges.map((d) => d.conflictName).filter(Boolean))];
+    currentSituation.push(`${statusChanges.length} escalation / status signal${statusChanges.length === 1 ? "" : "s"} in the past 7 days in conflicts relevant to ${rec.name}${names.length ? ` (${names.slice(0, 4).join(", ")}${names.length > 4 ? ", …" : ""})` : ""}.`);
+  }
+  if (territoryDatasets.length) currentSituation.push(`Reported territorial data available: ${territoryDatasets.map((d) => `${d.name} (${d.typeLabel.toLowerCase()})`).join("; ")}.`);
+  const infraState = [transport, energy, internet].some((x) => x.coverage.state === "covered");
+  if (activeInfra.length) currentSituation.push(`${activeInfra.length} infrastructure disruption${activeInfra.length === 1 ? "" : "s"} recorded in the past 24 h.`);
+  else currentSituation.push(infraState ? `No major infrastructure disruption recorded by the connected providers in the past 24 h.` : `Infrastructure disruption data for ${rec.name} is insufficient; no disruption can be ruled out.`);
+  if (recentHazards.length) currentSituation.push(`${recentHazards.length} significant natural-hazard alert${recentHazards.length === 1 ? "" : "s"} in the past 24 h.`);
+  // Escalation / de-escalation assessments are stamped at the end of the brief window, not when anything happened:
+  // they never count as the last update.
+  const timed = [...factual.filter((d) => d.developmentType !== "escalation" && d.developmentType !== "de_escalation").map((d) => d.occurredAt), ...ownEvents.map((e) => e.occurredAt.toISOString())];
+  const lastMeaningfulUpdate = timed.length ? timed.sort().at(-1)! : null;
+
   return {
     country: identityOf(rec),
     generatedAt: now.toISOString(),
@@ -286,6 +551,20 @@ export async function getCountryIntelligence(code: string, now: Date = new Date(
     brief: { window: "6h", headline: brief6.headline, counts: { ...brief6.counts } },
     watch: { entityType: "country", entityKey: rec.code, label: rec.name },
     meta: { computeMs: Date.now() - started, conflictsScored: live.length },
+    exposureDrivers,
+    currentSituation,
+    lastMeaningfulUpdate,
+    borderingConflicts,
+    otherRelevantConflicts,
+    domesticConflictRows,
+    developmentFeed,
+    territoryDatasets,
+    transport,
+    energy,
+    internet,
+    hazards,
+    sourceCoverage,
+    mapHref,
   };
 }
 
@@ -293,7 +572,7 @@ async function actorsFor(rec: CountryRecord, domesticIds: string[], now: Date) {
   const since30 = new Date(now.getTime() - 30 * 24 * HOUR);
   const units = await prisma.militaryUnit.findMany({
     where: { OR: [{ country: rec.code }, { country: rec.name }, ...(domesticIds.length ? [{ primaryConflictId: { in: domesticIds } }, { conflictLinks: { some: { conflictId: { in: domesticIds } } } }] : [])] },
-    select: { id: true, name: true, entityType: true, country: true, lastUpdatedAt: true, primaryConflict: { select: { name: true, shortName: true } }, conflictLinks: { select: { conflict: { select: { name: true, shortName: true } } } } },
+    select: { id: true, name: true, entityType: true, country: true, lastUpdatedAt: true, sourceName: true, primaryConflict: { select: { name: true, shortName: true } }, conflictLinks: { select: { role: true, sourceName: true, confidence: true, conflict: { select: { name: true, shortName: true } } } } },
     orderBy: { lastUpdatedAt: "desc" },
     take: 80,
   });
@@ -310,7 +589,9 @@ async function actorsFor(rec: CountryRecord, domesticIds: string[], now: Date) {
     const type = u.entityType && isEntityType(u.entityType) ? u.entityType : null;
     const conflicts = [...new Set([...(u.primaryConflict ? [u.primaryConflict.shortName ?? u.primaryConflict.name] : []), ...u.conflictLinks.map((l) => l.conflict.shortName ?? l.conflict.name)])];
     const st = stats.get(u.id);
-    const view: ActorView = { id: u.id, name: u.name, href: entityHref("unit", u.id, u.entityType), typeLabel: type ? ENTITY_TYPE_LABEL[type] : null, country: u.country, conflicts, recentEvents30d: st?.n30 ?? 0, lastObservedAt: iso(st?.last) };
+    const relationships = [...(u.primaryConflict ? [`primary conflict: ${u.primaryConflict.shortName ?? u.primaryConflict.name}`] : []), ...u.conflictLinks.map((l) => `${l.role.replace(/_/g, " ")} in ${l.conflict.shortName ?? l.conflict.name}`)];
+    const linkConf = u.conflictLinks.map((l) => l.confidence).filter((x): x is number => x != null);
+    const view: ActorView = { id: u.id, name: u.name, href: entityHref("unit", u.id, u.entityType), typeLabel: type ? ENTITY_TYPE_LABEL[type] : null, country: u.country, conflicts, recentEvents30d: st?.n30 ?? 0, lastObservedAt: iso(st?.last), relationships: [...new Set(relationships)], provenance: u.sourceName ?? u.conflictLinks.find((l) => l.sourceName)?.sourceName ?? null, confidence: linkConf.length ? Math.max(...linkConf) : null };
     return { view, type, here: isHere(u.country) };
   });
   const STATE = new Set(["state_military", "security_force", "military_unit"]);
@@ -348,6 +629,57 @@ async function coverageFor(rec: CountryRecord, domestic: Conflict[], now: Date):
     specialistLocalSources: sources.filter((s) => ["local_media", "eyewitness_community", "specialist_research"].includes(s.sourceRole ?? "") || s.country === rec.code || s.country === rec.name).length,
     staleFeeds: sources.filter((s) => s.enabled && (!s.lastSuccessfulIngestion || s.lastSuccessfulIngestion.getTime() < cutoff)).slice(0, 8).map((s) => ({ name: s.name, lastSuccessfulIngestion: iso(s.lastSuccessfulIngestion) })),
     gaps: rows.filter((r) => r.health !== "healthy").map((r) => ({ conflict: r.conflict.shortName ?? r.conflict.name, slug: r.conflict.slug, health: r.health, reasons: r.reasons.slice(0, 3) })),
+  };
+}
+
+/** Source coverage verdict. Counts describe coverage, never truth: the verdict says whether Vigil is likely to
+ * learn about developments in this country in time, from the sources it actually polls. Rules:
+ *   STALE   - no source relevant to the country (dedicated, or global when there is no dedicated one) succeeded in 48 h;
+ *   GOOD    - at least two fresh independent sources dedicated to / based in the country, and no domestic conflict
+ *             with a coverage gap;
+ *   LIMITED - anything else (e.g. only global outlets, or a single dedicated source). */
+async function sourceCoverageFor(rec: CountryRecord, domestic: Conflict[], now: Date): Promise<SourceCoverageView> {
+  const domesticIds = domestic.map((c) => c.id);
+  const linked = domesticIds.length ? await prisma.sourceConflictLink.findMany({ where: { conflictId: { in: domesticIds } }, select: { sourceId: true } }) : [];
+  const linkedIds = new Set(linked.map((l) => l.sourceId));
+  const all = await prisma.source.findMany({ where: { enabled: true, type: { not: "structured" } }, select: { id: true, country: true, sourceRole: true, independenceClass: true, claimPolicy: true, perspective: true, lastSuccessfulIngestion: true } });
+  const cutoff = now.getTime() - STALE_SOURCE_HOURS * HOUR;
+  const isHere = (c: string | null) => !!c && (c.toUpperCase() === rec.code || c.toLowerCase() === rec.name.toLowerCase());
+  const dedicated = all.filter((s) => isHere(s.country) || linkedIds.has(s.id));
+  const global = all.filter((s) => !s.country && !linkedIds.has(s.id));
+  const fresh = (s: { lastSuccessfulIngestion: Date | null }) => !!s.lastSuccessfulIngestion && s.lastSuccessfulIngestion.getTime() >= cutoff;
+  const trust = (s: (typeof all)[number]) => sourceTrust(s).category;
+  const relevant = [...dedicated, ...global];
+  const freshDedicated = dedicated.filter(fresh);
+  const freshGlobal = global.filter(fresh);
+  const freshIndependentDedicated = freshDedicated.filter((s) => ["strong", "perspective"].includes(trust(s)));
+  const gaps = (await Promise.all(domestic.map((c) => getCoverageRow(c.id, now)))).filter((r) => r && r.health !== "healthy");
+  const times = relevant.map((s) => s.lastSuccessfulIngestion).filter((t): t is Date => !!t).map((t) => t.getTime());
+  const reasons: string[] = [];
+  let state: SourceCoverageView["state"];
+  if ((dedicated.length > 0 && freshDedicated.length === 0 && freshGlobal.length === 0) || (dedicated.length === 0 && freshGlobal.length === 0)) {
+    state = "STALE";
+    reasons.push(`No relevant source delivered new items in the last ${STALE_SOURCE_HOURS} h.`);
+  } else if (freshIndependentDedicated.length >= 2 && gaps.length === 0) {
+    state = "GOOD";
+    reasons.push(`${freshIndependentDedicated.length} fresh independent sources dedicated to or based in ${rec.name}.`);
+  } else {
+    state = "LIMITED";
+    if (dedicated.length === 0) reasons.push(`No source is dedicated to or based in ${rec.name}; coverage relies on global outlets.`);
+    else if (freshIndependentDedicated.length < 2) reasons.push(`Fewer than two fresh independent dedicated sources (${freshIndependentDedicated.length}).`);
+    if (gaps.length) reasons.push(`${gaps.length} domestic conflict${gaps.length === 1 ? " has" : "s have"} a coverage gap.`);
+  }
+  return {
+    state,
+    reasons,
+    dedicated: dedicated.length,
+    global: global.length,
+    official: relevant.filter((s) => s.sourceRole === "official").length,
+    independent: relevant.filter((s) => ["strong", "perspective"].includes(trust(s))).length,
+    partyAligned: relevant.filter((s) => trust(s) === "party_claim").length,
+    freshDedicated: freshDedicated.length,
+    freshGlobal: freshGlobal.length,
+    lastSuccessfulIngestion: times.length ? new Date(Math.max(...times)).toISOString() : null,
   };
 }
 

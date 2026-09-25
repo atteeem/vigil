@@ -199,7 +199,7 @@ export function CountryContextPanel({ code, onClose, onSelectConflict }: { code:
           <div className="mt-4 flex items-center gap-2">
             <FollowButton entityType="country" entityKey={i.country.code} label={i.country.name} />
             <Link href={`/country/${i.country.code}`} className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-ink hover:bg-card" data-testid="ctx-open-country">
-              Open country page
+              Open Country Intelligence
             </Link>
           </div>
         </>

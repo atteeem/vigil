@@ -220,6 +220,9 @@ test.describe("World Command Center UI", () => {
     await page.getByTestId("entity-row").nth(1).click(); // Japan (country)
     await expect(page.getByTestId("right-rail").getByTestId("country-context")).toBeVisible();
     await expect(page.getByTestId("right-rail").getByTestId("ctx-country-impact")).toHaveText("12");
+    // World -> country: the panel opens the canonical country intelligence page (the same service it reads).
+    await expect(page.getByTestId("right-rail").getByTestId("ctx-open-country")).toHaveText("Open Country Intelligence");
+    await expect(page.getByTestId("right-rail").getByTestId("ctx-open-country")).toHaveAttribute("href", "/country/JP");
     await page.getByTestId("right-rail").getByTestId("country-context").getByRole("button", { name: "Close" }).click();
     await expect(page.getByTestId("world-rail")).toBeVisible();
   });
