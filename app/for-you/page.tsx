@@ -16,6 +16,8 @@ import { EmptyState, FreshnessStamp, LoadingLine } from "@/components/public/dat
 import { STALE_SOURCE_HOURS } from "@/lib/public/stale";
 import { BriefPanel } from "@/components/brief/brief-view";
 import { useWatches } from "@/hooks/use-watcher";
+import { ForYouDevelopments } from "@/components/discovery/for-you-feed";
+import { OverviewWatching } from "@/components/home/overview-landing";
 
 export default function ForYouPage() {
   const baseCountryCode = useAppStore((s) => s.baseCountryCode);
@@ -93,6 +95,13 @@ export default function ForYouPage() {
         ))}
       </div>
 
+      <section className="mt-8" data-testid="for-you-following">
+        <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-ink-faint">From what you follow</h2>
+        <p className="mb-3 text-xs text-ink-faint">Meaningful developments of the last 7 days that relate to something you watch or to {country.name}. Each says why it is here; nothing is inferred from your browsing.</p>
+        <ForYouDevelopments country={country.code} />
+        <OverviewWatching className="mt-5" />
+      </section>
+
       <section className="mt-10" data-testid="for-you-brief">
         <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-ink-faint">Your brief</h2>
         <p className="mb-3 text-xs text-ink-faint">
@@ -105,7 +114,7 @@ export default function ForYouPage() {
         Top Conflicts Affecting You
       </h2>
       {topConflicts.length === 0 && <EmptyState title="No conflicts to rank" detail="Nothing tracked affects this country yet." testId="for-you-empty" />}
-      <div className="space-y-2">
+      <div className="space-y-2" data-testid="for-you-top-conflicts">
         {topConflicts.map(({ conflict, impact, reasons }) => {
           const km = Math.round(distanceKm(country, conflict));
           const sec = impact.components.find((c) => c.dimension === "security")?.value ?? 0;

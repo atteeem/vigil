@@ -182,6 +182,7 @@ export interface TerritoryDatasetView {
   areaCount: number;
   hasHistory: boolean;
   conflictName: string | null;
+  conflictSlug: string | null;
   openOnMap: string;
 }
 
@@ -468,6 +469,7 @@ export async function getCountryIntelligence(code: string, now: Date = new Date(
     areaCount: d.areaCount,
     hasHistory: d.hasHistory,
     conflictName: d.conflictName,
+    conflictSlug: d.conflictSlug,
     openOnMap: `/world?${new URLSearchParams({ territory: "1", ...(d.conflictSlug ? { conflict: d.conflictSlug } : {}), focus: `${rec.lat.toFixed(3)},${rec.lng.toFixed(3)},${rec.zoom}`, country: rec.code }).toString()}`,
   }));
 

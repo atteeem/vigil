@@ -1,4 +1,6 @@
 import { notFound, redirect } from "next/navigation";
+import { ContextTrail } from "@/components/discovery/context-trail";
+import { RecordRecent } from "@/components/discovery/record-recent";
 import { FollowButton } from "@/components/watch/follow-button";
 import type { Metadata } from "next";
 import { getPublicEntity } from "@/lib/public/entities";
@@ -25,10 +27,12 @@ export default async function UnitPage({ params }: { params: Promise<{ id: strin
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-28 pt-24 sm:px-6 sm:pt-32" data-testid="unit-page">
+      <ContextTrail className="mb-2" items={[{ label: "Live Map", href: "/world" }, ...(country ? [{ label: country.name, href: `/country/${country.code}` }] : []), ...unit.conflicts.slice(0, 2).map((c) => ({ label: c.name, href: `/conflict/${c.slug}` }))]} />
       <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-faint">Military unit / formation</p>
       <h1 className="mt-1 text-2xl font-semibold text-ink" data-testid="unit-name">
         {unit.name}
       </h1>
+      <RecordRecent type="unit" entityKey={unit.id} title={unit.name} kind="Military unit" href={`/unit/${encodeURIComponent(unit.id)}`} />
       <FollowButton entityType="unit" entityKey={unit.id} label={unit.name} className="mt-2" />
       {unit.nativeName && <p className="text-sm text-ink-dim">{unit.nativeName}</p>}
       <p className="mt-1 text-xs text-ink-dim" data-testid="unit-overview-line">

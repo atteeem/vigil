@@ -483,7 +483,7 @@ test.describe.serial("Country page UI", () => {
     await page.getByTestId("section-watch").scrollIntoViewIfNeeded();
     if (!(await page.getByTestId("section-watch").evaluate((el) => (el as HTMLDetailsElement).open))) await page.getByTestId("section-watch").locator("summary").click(); // collapsed on phones
     await expect(page.getByTestId("watch-rules")).toContainText("Airport closed");
-    const button = page.getByTestId("section-watch").getByRole("button", { name: /follow/i }).first();
+    const button = page.getByTestId("section-watch").getByTestId("follow-button").first();
     await button.click();
     await expect(page.getByTestId("watch-mode")).toHaveText("Major developments only", { timeout: 30_000 });
     const id = await page.evaluate(() => localStorage.getItem("vigil-client-id"));

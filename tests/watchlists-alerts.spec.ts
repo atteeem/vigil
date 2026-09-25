@@ -648,7 +648,7 @@ test.describe.serial("Notification centre, Watchlist page and deep links (UI)", 
     await expect(item.getByTestId("notification-title")).toContainText("O'Hare");
     await expect(item).toHaveAttribute("data-unread", "true");
     await item.locator("button").first().click();
-    await expect(item.getByTestId("reason-follows")).toContainText("You follow Chicago O'Hare");
+    await expect(item.getByTestId("reason-follows")).toContainText("You watch Chicago O'Hare");
     await expect(item.getByTestId("reason-rule")).toHaveText("Airport closed");
     await expect(item.getByTestId("reason-priority")).toContainText("Priority HIGH");
     await expect(vis(page, "unread-badge")).toHaveCount(0); // opening marks it read

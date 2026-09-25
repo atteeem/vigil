@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { RecordRecent } from "@/components/discovery/record-recent";
 import type { Metadata } from "next";
 import { getPublicCommander } from "@/lib/public/entities";
 import { EmptyState } from "@/components/public/data-states";
@@ -24,6 +25,7 @@ export default async function CommanderPage({ params }: { params: Promise<{ id: 
       <h1 className="mt-1 text-2xl font-semibold text-ink" data-testid="commander-name">
         {c.name}
       </h1>
+      <RecordRecent type="commander" entityKey={c.id} title={c.name} kind="Commander" href={`/commander/${encodeURIComponent(c.id)}`} />
       <p className="mt-1 text-xs text-ink-dim" data-testid="commander-overview">
         {c.rank ?? "Rank not recorded"}
         {" · "}

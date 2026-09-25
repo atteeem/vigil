@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Newspaper, ArrowRight } from "lucide-react";
 import { ConflictGlobe } from "@/components/globe/conflict-globe";
+import { OpenLiveMap, OverviewBriefs, OverviewSignals, OverviewStatus, OverviewWatching, OverviewWhatChanged } from "@/components/home/overview-landing";
 import { useConflictReportCounts } from "@/hooks/use-conflict-report-counts";
 import { GlobeControls } from "@/components/globe/globe-controls";
 import { GlobalStatusCard } from "@/components/home/global-status-card";
@@ -117,7 +118,13 @@ export default function HomePage() {
         <div className="px-4">
           <TimeLayerControls className="items-start" />
         </div>
+        <OverviewStatus className="px-4" />
+        <OverviewWhatChanged className="px-4" />
         <IntelOverview className="px-4" conflicts={conflicts} events={events} loading={loading} />
+        <OverviewWatching className="px-4" />
+        <OpenLiveMap className="mx-4" />
+        <OverviewSignals className="px-4" />
+        <OverviewBriefs className="px-4" />
         <LatestEventsFeed className="px-4" events={events} loading={loading} limit={4} />
         <LatestTerritorialChanges className="px-4" changes={overview.data?.territorialChanges ?? []} />
         <Link href="/intel" className="mx-4 flex items-center gap-1.5 text-xs font-medium text-accent hover:underline">
@@ -127,20 +134,27 @@ export default function HomePage() {
         </Link>
       </div>
 
-      {/* Desktop: latest activity below the fold */}
-      <div className="mx-auto hidden max-w-[1600px] px-6 py-10 sm:block">
-        <div className="max-w-2xl">
-          <IntelOverview conflicts={conflicts} events={events} loading={loading} />
-          <LatestEventsFeed className="mt-8" events={events} loading={loading} limit={5} />
-          <LatestTerritorialChanges className="mt-6" changes={overview.data?.territorialChanges ?? []} />
-          <Link
-            href="/intel"
-            className="mt-4 flex items-center gap-1.5 text-xs font-medium text-accent hover:underline"
-          >
-            <Newspaper className="h-3.5 w-3.5" />
-            Regional Intel Briefings
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+      {/* Desktop: the Overview landing below the globe — a summary; spatial investigation lives on /world */}
+      <div className="mx-auto hidden max-w-[1400px] px-6 py-10 sm:block" data-testid="overview-landing">
+        <OverviewStatus />
+        <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+          <div className="min-w-0">
+            <OverviewWhatChanged />
+            <IntelOverview className="mt-8" conflicts={conflicts} events={events} loading={loading} />
+            <LatestEventsFeed className="mt-8" events={events} loading={loading} limit={5} />
+          </div>
+          <div className="min-w-0 space-y-8">
+            <OpenLiveMap />
+            <OverviewWatching />
+            <OverviewSignals />
+            <OverviewBriefs />
+            <LatestTerritorialChanges changes={overview.data?.territorialChanges ?? []} />
+            <Link href="/intel" className="flex items-center gap-1.5 text-xs font-medium text-accent hover:underline">
+              <Newspaper className="h-3.5 w-3.5" />
+              Regional Intel Briefings
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         </div>
       </div>
 

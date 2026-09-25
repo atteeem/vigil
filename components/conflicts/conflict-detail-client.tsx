@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { ContextTrail } from "@/components/discovery/context-trail";
+import { RecordRecent } from "@/components/discovery/record-recent";
 import { ArrowUp, ArrowDown, Minus, Map as MapIcon } from "lucide-react";
 import { FollowButton } from "@/components/watch/follow-button";
 import { SeverityBadge } from "@/components/ui/severity-badge";
@@ -63,6 +65,7 @@ export function ConflictDetailClient({ intel }: { intel: ConflictIntelligence })
       {/* Header / primary status */}
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-4">
         <div className="min-w-0">
+          <ContextTrail className="mb-2" items={[{ label: "Conflicts", href: "/conflicts" }, ...detail.geography.fighting.slice(0, 3).map((c) => ({ label: c.name, href: `/country/${c.code}` }))]} />
           <div className="flex flex-wrap items-center gap-2">
             <SeverityBadge severity={conflict.severity} />
             {conflict.fullScaleWar && (
@@ -77,6 +80,7 @@ export function ConflictDetailClient({ intel }: { intel: ConflictIntelligence })
           <h1 className="mt-2 text-2xl font-semibold text-ink sm:text-[30px]" data-testid="conflict-name">
             {conflict.name}
           </h1>
+          <RecordRecent type="conflict" entityKey={conflict.slug} title={conflict.shortName ?? conflict.name} kind="Conflict" href={`/conflict/${conflict.slug}`} />
           <p className="mt-1 text-sm text-ink-dim" data-testid="conflict-overview-line">
             Status: {detail.statusLabel}
             {" · "}
@@ -234,6 +238,14 @@ export function ConflictDetailClient({ intel }: { intel: ConflictIntelligence })
                   {d.confidence != null ? ` · confidence ${Math.round(d.confidence * 100)}%` : ""}
                   {d.license ? ` · ${d.license}` : ""}
                   {d.attribution ? ` · ${d.attribution}` : ""}
+                  {d.sourceUrl && (
+                    <>
+                      {" · "}
+                      <a href={d.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline" data-testid="territory-source-link">
+                        source
+                      </a>
+                    </>
+                  )}
                 </p>
               </div>
             ))}

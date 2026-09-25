@@ -19,6 +19,7 @@ export function MobileTopBar() {
         <button
           onClick={() => setSearchOpen(true)}
           aria-label="Search"
+          data-testid="mobile-search"
           className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-surface/60 text-ink-dim backdrop-blur-xl"
         >
           <Search className="h-4 w-4" />

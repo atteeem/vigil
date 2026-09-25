@@ -31,7 +31,7 @@ function jsonArray(value: string | null): string[] {
   }
 }
 
-const CONFIDENCE_WINDOW_DAYS = 90;
+export const CONFIDENCE_WINDOW_DAYS = 90;
 
 type EvidenceEvent = { occurredAt: Date; sources: { relationship: string; rawIngestionItem: { originalUrl: string | null; publishedAt: Date | null; receivedAt: Date; source: { id: string; sourceRole: string | null; independenceClass: string | null; claimPolicy: string | null; perspective: string | null; sourceCategory: string | null; type: string } } }[] };
 

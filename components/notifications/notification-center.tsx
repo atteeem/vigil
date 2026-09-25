@@ -24,7 +24,7 @@ export function NotificationReason({ n }: { n: NotificationDTO }) {
       <ul className="mt-1 list-disc space-y-0.5 pl-4">
         {r.follows && (
           <li data-testid="reason-follows">
-            You follow {r.follows.label} <span className="text-ink-faint">({r.follows.typeLabel}{r.modeLabel ? ` · ${r.modeLabel}` : ""})</span>
+            You watch {r.follows.label} <span className="text-ink-faint">({r.follows.typeLabel}{r.modeLabel ? ` · ${r.modeLabel}` : ""})</span>
           </li>
         )}
         {r.rule && <li data-testid="reason-rule">{r.rule}</li>}

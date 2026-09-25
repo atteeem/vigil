@@ -10,9 +10,10 @@ test.describe("Responsive navigation smoke test", () => {
     // the DOM at once (Tailwind responsive classes toggle visibility)
     // rather than being conditionally rendered, so filter to whichever
     // copy is actually visible at this viewport.
-    await expect(page.getByText("Global Status").filter({ visible: true })).toBeVisible();
+    // The Overview landing's own "Global status" summary sits below the fold, so take the first visible copy.
+    await expect(page.getByText("Global Status").filter({ visible: true }).first()).toBeVisible();
     if (isMobile) {
-      await expect(page.getByRole("link", { name: "World" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Map", exact: true })).toBeVisible();
     } else {
       await expect(page.getByRole("link", { name: "Overview" })).toBeVisible();
     }

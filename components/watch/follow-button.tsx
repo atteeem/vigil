@@ -6,8 +6,9 @@ import { useFollowState, useWatcherMutations } from "@/hooks/use-watcher";
 import type { WatchEntityType } from "@/lib/alerts/types";
 import { cn } from "@/lib/utils";
 
-/** The one Follow control used on country, conflict, actor/unit, airport/chokepoint/volcano and other pages.
- * It uses the same watch system everywhere: (entityType, entityKey) plus a display label. */
+/** The ONE Watch control used on country, conflict, actor / unit, airport / port / chokepoint / volcano pages and in
+ * context panels: the same watch system everywhere ((entityType, entityKey) + label) and the same visual language —
+ * "Watch" / "Watching ✓". */
 export function FollowButton({ entityType, entityKey, label, className }: { entityType: WatchEntityType; entityKey: string; label: string; className?: string }) {
   const watch = useFollowState(entityType, entityKey);
   const { follow, unfollow } = useWatcherMutations();
@@ -33,11 +34,12 @@ export function FollowButton({ entityType, entityKey, label, className }: { enti
         aria-pressed={following}
         data-testid="follow-button"
         data-following={following}
-        title={following ? `Stop following ${label}` : `Follow ${label}: get alerts for major developments`}
+        aria-label={following ? `Watching ${label}` : `Watch ${label}`}
+        title={following ? `Stop watching ${label}` : `Watch ${label}: get alerts for major developments`}
         className={cn("inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60", following ? "border-accent/40 bg-accent-dim text-accent" : "border-border-strong text-ink-dim hover:text-ink")}
       >
-        {following ? <Check className="h-3.5 w-3.5" /> : <BellRing className="h-3.5 w-3.5" />}
-        {following ? "Following" : "Follow"}
+        {following ? <Check className="h-3.5 w-3.5" aria-hidden /> : <BellRing className="h-3.5 w-3.5" aria-hidden />}
+        {following ? "Watching" : "Watch"}
       </button>
       {error && <span className="mt-1 text-[11px] text-elevated">{error}</span>}
     </span>

@@ -1,4 +1,6 @@
 import { notFound, redirect } from "next/navigation";
+import { ContextTrail } from "@/components/discovery/context-trail";
+import { RecordRecent } from "@/components/discovery/record-recent";
 import { FollowButton } from "@/components/watch/follow-button";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -49,12 +51,14 @@ export default async function ActorPage({ params }: { params: Promise<{ ref: str
   return (
     <main className="mx-auto max-w-3xl px-4 pb-28 pt-24 sm:px-6 sm:pt-32" data-testid="actor-page">
       {/* OVERVIEW */}
+      <ContextTrail className="mb-2" items={[{ label: "Live Map", href: "/world" }, ...(country ? [{ label: country.name, href: `/country/${country.code}` }] : []), ...entity.conflicts.slice(0, 2).map((c) => ({ label: c.name, href: `/conflict/${c.slug}` }))]} />
       <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-faint" data-testid="actor-kind">
         {entity.entityTypeLabel}
       </p>
       <h1 className="mt-1 text-2xl font-semibold text-ink" data-testid="actor-name">
         {entity.name}
       </h1>
+      <RecordRecent type="actor" entityKey={entity.id} title={entity.name} kind={entity.entityTypeLabel ?? "Actor"} href={`/actor/${encodeURIComponent(entity.id)}`} />
       <FollowButton entityType="actor" entityKey={entity.id} label={entity.name} className="mt-2" />
       {entity.nativeName && <p className="text-sm text-ink-dim">{entity.nativeName}</p>}
       <p className="mt-1 text-xs text-ink-dim" data-testid="actor-overview-line">

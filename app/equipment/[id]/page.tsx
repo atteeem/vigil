@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { RecordRecent } from "@/components/discovery/record-recent";
 import type { Metadata } from "next";
 import { getPublicEquipment } from "@/lib/public/entities";
 import { EmptyState } from "@/components/public/data-states";
@@ -26,6 +27,7 @@ export default async function EquipmentPage({ params }: { params: Promise<{ id: 
       <h1 className="mt-1 text-2xl font-semibold text-ink" data-testid="equipment-name">
         {e.name}
       </h1>
+      <RecordRecent type="equipment" entityKey={e.id} title={e.name} kind="Equipment" href={`/equipment/${encodeURIComponent(e.id)}`} />
       <p className="mt-1 text-xs text-ink-dim" data-testid="equipment-overview">
         {e.category ?? "Category not recorded"}
         {" · "}

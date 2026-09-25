@@ -141,10 +141,10 @@ export function CountryWatchPanel({ code, name }: { code: string; name: string }
       <p className="text-sm text-ink-dim">
         {watch ? (
           <>
-            You follow {name} · <span data-testid="watch-mode">{MODE_LABEL[watch.mode]}</span>.{" "}
+            You are watching {name} · <span data-testid="watch-mode">{MODE_LABEL[watch.mode]}</span>.{" "}
           </>
         ) : (
-          <>Follow {name} to be alerted to material developments there. Default: “Major only”.</>
+          <>Watch {name} to be alerted to material developments there. Default: “Major only”.</>
         )}{" "}
         <Link href="/watchlist" className="text-accent hover:underline">
           Manage on your Watchlist

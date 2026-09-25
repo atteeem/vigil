@@ -197,7 +197,7 @@ test.describe("For You uses the centralized impact engine on real conflicts", ()
     await page.addInitScript(() => localStorage.setItem("vigil-preferences", JSON.stringify({ state: { baseCountryCode: "FI" }, version: 2 })));
     await page.goto("/for-you");
     await expect(page.getByText("Your Global Exposure")).toBeVisible();
-    const first = page.locator("a[href^='/conflict/']").first();
+    const first = page.getByTestId("for-you-top-conflicts").locator("a[href^='/conflict/']").first();
     await expect(first).toBeVisible({ timeout: 20_000 });
     const slug = (await first.getAttribute("href"))!.replace("/conflict/", "");
     const shown = Number((await first.locator("p.text-accent").first().textContent())!.trim());

@@ -1,4 +1,6 @@
 import { notFound, redirect } from "next/navigation";
+import { ContextTrail } from "@/components/discovery/context-trail";
+import { RecordRecent } from "@/components/discovery/record-recent";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ExternalLink, Map as MapIcon } from "lucide-react";
@@ -42,6 +44,7 @@ export default async function CountryPage({ params }: { params: Promise<{ code: 
   return (
     <main className="mx-auto w-full max-w-[1080px] overflow-x-hidden px-4 pb-28 pt-24 sm:px-6 sm:pt-28" data-testid="country-page" data-country={c.code}>
       {/* Header: identity, exposure, last update, actions */}
+      <ContextTrail className="mb-2" items={[{ label: "Live Map", href: data.mapHref }, ...data.domesticConflictRows.slice(0, 2).map((r) => ({ label: r.name, href: `/conflict/${r.slug}` })), ...data.borderingConflicts.slice(0, 1).map((r) => ({ label: `${r.name} (bordering)`, href: `/conflict/${r.slug}` }))]} />
       <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 border-b border-border pb-4" data-testid="country-header">
         <div className="flex min-w-0 items-start gap-3">
           <span className="text-4xl leading-none" aria-hidden>
@@ -51,6 +54,7 @@ export default async function CountryPage({ params }: { params: Promise<{ code: 
             <h1 className="text-2xl font-semibold text-ink sm:text-[28px]" data-testid="country-name">
               {c.name}
             </h1>
+            <RecordRecent type="country" entityKey={c.code} title={c.name} kind="Country" href={`/country/${c.code}`} />
             <p className="text-[13px] text-ink-faint" data-testid="country-identity">
               {c.region} · {c.subregion} · Capital {c.capital} · {c.code} / {c.alpha3}
             </p>
@@ -204,6 +208,14 @@ export default async function CountryPage({ params }: { params: Promise<{ code: 
                 <p className="mt-0.5 text-[12px] text-ink-dim">
                   {d.actors.length ? `Actors: ${d.actors.join(", ")}` : "No actor recorded"} · {d.areaCount} published area version{d.areaCount === 1 ? "" : "s"}
                   {d.kind !== "control" && <span className="text-ink-faint"> · reported {d.kind}, not control</span>}
+                  {d.conflictSlug && (
+                    <>
+                      {" · "}
+                      <Link href={`/conflict/${d.conflictSlug}`} className="text-accent hover:underline" data-testid="territory-conflict-link">
+                        {d.conflictName ?? "conflict"}
+                      </Link>
+                    </>
+                  )}
                 </p>
                 <p className="mt-0.5 text-[11px] text-ink-faint">
                   {d.provider}
