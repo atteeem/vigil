@@ -1313,3 +1313,27 @@ Spec hygiene fixed here: the briefings, watchlist and country specs now delete t
 - [x] Compact context trails on actor, unit, conflict and country pages. Territorial dataset cards link their conflict and source (recorded provenance only).
 - Tests: `tests/discovery.spec.ts` (new, Desktop + Mobile) covers aliases, grouping, routing, keyboard, recent / watching / trending, For You reasons, Watch text, the mobile sheet, no-result states and directory filters. Neighbouring specs were updated for the new nav and landing (`responsive`, `public-data` For You scoping, `country-intelligence`, `watchlists-alerts`). Targeted run: 326 passed, then the fixed ones re-passed. The remaining failures are pre-existing (see Country Intelligence Pages v1): `public-data` "/world (live) shows database events only" (Desktop + Mobile) and "a published event appears on the homepage" (Mobile), and `world-command-center` Live View pause (Desktop).
 - Limitations / deferred: Recent is per-browser (localStorage). Actors missing from the registry (e.g. Wagner, Azov) and sources that are not configured (e.g. Reuters) return no match. Event search is a title match only. There is no "related entities" recommender beyond recorded conflict / participant / dataset links.
+
+## Launch Readiness & First-User Experience v1
+- [x] First-run introduction (4 steps: global intelligence, the three scores, source-backed, personalize; Back / Next / Skip / Done), stored in this browser (`vigil.onboarding`), no account. Settings → Help → "Show introduction again". Playwright specs start as returning visitors (`tests/fixtures/onboarded-state.json`); `tests/launch-readiness.spec.ts` starts empty.
+- [x] Impact country asked once ("What country should Vigil use when calculating Impact?"), with alias / code search, Skip, and no location request.
+- [x] One wording for Severity / Impact / Confidence and the source classes (`lib/copy/scores.ts`), used by the introduction, conflict score cards, /world context panels, confidence tooltips, For You, Settings and `/methodology` (new).
+- [x] Reusable source-label explanation (`components/sources/source-trust-help.tsx`) in event evidence, conflict feed evidence, Settings → Sources and /methodology.
+- [x] Phone /world: one compact row (Timeline chip, Filters, Layers, Legend). Filters and Layers (with the Territorial Control selector) open in bottom sheets. Historical mode keeps the timeline panel open. The ticker and the range "What changed" panel are desktop / tablet only (Pulse carries both on phones). Closing sheets never intercept taps. One sheet at a time. Reduced motion: no sheet animation, and Live View jumps instead of flying. Desktop gets a Legend popover.
+- [x] Header freshness badge from real ingestion (`/api/status/freshness`, same rule as the command center): LIVE / DELAYED / STALE / NO DATA. Shown once on /world.
+- [x] Watch confirmation. For You empty state with Search / Browse conflicts / Open World Map. 404 page with recovery actions. Route error boundaries. Search-unavailable and map-data-unavailable states with retry. Search shows the matched alias or code.
+- [x] Settings reorganized (General, Impact country, Sources, Notifications, Map, Privacy / local data, Help / About). Removed the dead theme, preferred-regions and "coming later" controls. "Content sensitivity" is now "Reduce motion".
+- [x] Overview: "Latest verified updates" removed (duplicate of Latest Activity). The data summary and freshness line are also shown on phones. The basemap notice uses plain words and appears only for a runtime failure or unavailable satellite imagery.
+- [x] Known failures resolved: Live View pause kept the camera flying (product bug, pause now stops the camera). `public-data` /world feed (stale test: the feed is behind the Events tab; phones read the map source). `public-data` homepage freshness on phones (product gap: the summary was desktop-only).
+- Note: `loading.tsx` is deliberately not used on entity routes, because streaming makes unknown entities return 200 instead of 404.
+- Warm timings (production build, DB copy): search 3–4 ms, freshness 1 ms, command center 3 ms, conflict directory 7–8 ms, country page ~14 ms, conflict page ~26 ms. No external provider calls during render.
+- Unrelated failures (they also fail on the previous main, 5014d3d, with the same tests):
+  - `world-timeline-ui` 1–3 and `event-lifecycle` 3 look for the raw feed without opening the Events tab (stale since the command center). `event-lifecycle` 3 is updated here; the timeline specs are not.
+  - `event-lifecycle` 6 on phones: the save button is never actionable.
+  - `live-data-layers-v2` "homepage and search: significant disruptions surface": search "Beirut" returns no airport hazard.
+  - `live-data-layers-v2` aviation markers and `live-data-layers` earthquake markers.
+  - `report-counts` 5 (heatmap hotspot labels).
+  - `territorial-changes` "approval supersedes".
+  - `territory-editor-ui` "timeline before / after the split".
+  - `rss-ingestion` 5-7 (conflict picker).
+  - `events` time / type filters and `world-map-heat` report labels / globe peak are data-dependent: they only pass after other specs have published events.

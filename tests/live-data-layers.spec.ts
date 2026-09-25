@@ -11,6 +11,7 @@ import { EVENT_ORIGINS, SEVERITY_DOMAINS } from "@/lib/hazards/types";
 import { sourceTrust } from "@/lib/sources/trust";
 import { hazardsToSources } from "@/lib/map/hazards-to-geojson";
 import type { HazardCollection, HazardDetail } from "@/lib/hazards/public-types";
+import { closeWorldControls, openWorldControls } from "./helpers/world-controls";
 
 // Live Global Data Layers v1: structured sensor/official data (earthquakes, thermal detections,
 // reported wildfires, volcanoes, official alerts) through ONE generic pipeline, kept apart from news,
@@ -429,9 +430,11 @@ async function openWorld(page: Page) {
   await page.waitForFunction(() => Boolean((window as unknown as { __vigilMap?: unknown }).__vigilMap));
 }
 async function enableLayer(page: Page, layer: string) {
+  await openWorldControls(page, "layers");
   await page.getByTestId("hazard-layers-button").click();
   await page.getByTestId(`hazard-toggle-${layer}`).check();
   await page.getByTestId("hazard-layers-button").click(); // collapse again
+  await closeWorldControls(page);
 }
 const mapEval = <T,>(page: Page, fn: (m: MapHandle) => T) => page.evaluate(`(${fn.toString()})(window.__vigilMap)`) as Promise<T>;
 
@@ -448,6 +451,7 @@ test.describe.serial("World map UI", () => {
   test("layer toggles are independent, off by default, remembered, and leave conflict layers alone", async ({ page }) => {
     await openWorld(page);
     await expect(page.locator("[data-hazard-layers]").first()).toHaveAttribute("data-hazard-layers", "");
+    await openWorldControls(page, "layers");
     await expect(page.getByTestId("hazard-layers-button")).toBeVisible();
     await page.getByTestId("hazard-layers-button").click();
     await expect(page.getByTestId("hazard-layer-list")).toBeVisible();
@@ -460,8 +464,10 @@ test.describe.serial("World map UI", () => {
     await expect(page.locator("[data-hazard-layers]").first()).toHaveAttribute("data-hazard-layers", "weather");
     // Independent of the conflict controls: Territorial Control and Heatmap behave as before.
     await enableTerritory(page);
+    await openWorldControls(page, "layers");
     await page.getByRole("button", { name: "Heatmap" }).click();
     await expect(page.getByRole("button", { name: "Heatmap" })).toHaveAttribute("aria-pressed", "true");
+    if (!(await page.getByTestId("hazard-toggle-weather").isVisible())) await page.getByTestId("hazard-layers-button").click();
     await expect(page.getByTestId("hazard-toggle-weather")).toBeChecked();
     // Remembered across a reload.
     await page.reload();

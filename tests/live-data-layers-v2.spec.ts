@@ -11,6 +11,7 @@ import { airportProminence, chokepointProminence, energyProminence, internetProm
 import { LAYER_GROUPS, watchKeyFor, HAZARD_LAYERS } from "@/lib/hazards/types";
 import { searchAirports, findAirport, countryCentroid } from "@/lib/hazards/reference";
 import type { HazardCollection, HazardDetail } from "@/lib/hazards/public-types";
+import { closeWorldControls, openWorldControls } from "./helpers/world-controls";
 
 // Live Global Data Layers v2: aviation, maritime, energy and internet disruption on the SAME GlobalEvent
 // pipeline, timeline and layer controls as v1. Strategic status only — no aircraft or vessel tracking.
@@ -396,9 +397,11 @@ async function openWorld(page: Page) {
   await page.waitForFunction(() => Boolean((window as unknown as { __vigilMap?: unknown }).__vigilMap));
 }
 async function enableLayer(page: Page, layer: string) {
+  await openWorldControls(page, "layers");
   await page.getByTestId("hazard-layers-button").click();
   await page.getByTestId(`hazard-toggle-${layer}`).check();
   await page.getByTestId("hazard-layers-button").click();
+  await closeWorldControls(page);
 }
 const mapEval = <T,>(page: Page, fn: (m: MapHandle) => T) => page.evaluate(`(${fn.toString()})(window.__vigilMap)`) as Promise<T>;
 
@@ -414,6 +417,7 @@ test.describe.serial("World map UI (v2 layers)", () => {
 
   test("Transport and Infrastructure groups hold independent toggles (off by default); conflict layers and natural hazards are unaffected", async ({ page }) => {
     await openWorld(page);
+    await openWorldControls(page, "layers");
     await page.getByTestId("hazard-layers-button").click();
     await expect(page.getByTestId("layer-group-transport").getByTestId("hazard-toggle-aviation")).not.toBeChecked();
     await expect(page.getByTestId("layer-group-transport").getByTestId("hazard-toggle-maritime")).not.toBeChecked();

@@ -12,6 +12,7 @@ import { useWorldTimeline } from "@/hooks/use-world-timeline";
 import { useTerritorialControl } from "@/hooks/use-territorial-control";
 import { useHazards, type HazardViewport } from "@/hooks/use-hazards";
 import { TimelineControls } from "@/components/map/timeline-controls";
+import { SourceTrustHelp } from "@/components/sources/source-trust-help";
 import { TerritoryLegend } from "@/components/map/territory-legend";
 import { GlobeLoading } from "@/components/globe/globe-loading";
 import { RelativeTime } from "@/components/ui/relative-time";
@@ -21,6 +22,7 @@ import type { Conflict } from "@/lib/types";
 import type { EvidenceReportView, FeedItem, ImpactEntry, WhatChangedWindow } from "@/lib/conflicts/intelligence";
 import { SEVERITY_TEXT_CLASS, severityFromScore } from "@/lib/utils/severity";
 import { cn } from "@/lib/utils";
+import { SCORE_COPY } from "@/lib/copy/scores";
 
 const WorldMap = dynamic(() => import("@/components/map/world-map").then((m) => m.WorldMap), { ssr: false, loading: () => <GlobeLoading /> });
 
@@ -35,13 +37,16 @@ export function ImpactScoreCard({ byCountry, explanation }: { byCountry: Record<
   return (
     <div className="rounded-xl border border-border bg-card/60 p-4" data-testid="score-impact" title={explanation}>
       <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-faint">Impact{country ? ` on ${country.name}` : ""}</p>
+      <p className="text-[11px] text-ink-dim" data-testid="score-impact-question">
+        {SCORE_COPY.impact.question}
+      </p>
       {entry ? (
         <p className={cn("mt-1 text-3xl font-semibold tabular-nums", SEVERITY_TEXT_CLASS[severityFromScore(entry.score)])} data-testid="score-impact-value">
           {entry.score}
           <span className="text-sm font-medium text-ink-faint"> / 100</span>
         </p>
       ) : (
-        <p className="mt-2 text-sm text-ink-faint">Select your country (Profile or the For You page) to see impact.</p>
+        <p className="mt-2 text-sm text-ink-faint">Choose your impact country in Settings to see Impact.</p>
       )}
       {entry && <p className="mt-1 text-xs text-ink-dim" data-testid="score-impact-reason">{entry.reason}</p>}
       <p className="mt-2 text-[11px] leading-snug text-ink-faint">{explanation}</p>
@@ -193,6 +198,7 @@ function FeedRow({ d, showClaims }: { d: FeedItem; showClaims: boolean }) {
               Sources disagree on {g.label.toLowerCase()}: {g.values.map((v) => `${v.value} (${v.sources.join(", ")}${v.partyOnly ? ", party only" : ""})`).join(" vs ")}. Vigil does not reconcile these.
             </p>
           ))}
+          <SourceTrustHelp className="mt-2" />
           {GROUPS.map((grp) => {
             const list = visibleReports.filter(grp.match);
             if (!list.length) return null;

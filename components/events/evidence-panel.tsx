@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ConflictEvent, SourceRef } from "@/lib/types";
 import type { ConflictingClaims, PublicClaim } from "@/lib/public/claims";
 import { SourceRoleIcon } from "./source-role-icon";
+import { SourceTrustHelp } from "@/components/sources/source-trust-help";
 import { RelativeTime } from "@/components/ui/relative-time";
 import { EmptyState } from "@/components/public/data-states";
 import { useAppStore } from "@/hooks/use-app-store";
@@ -67,6 +68,7 @@ export function EvidencePanel({
   return (
     <div className="mt-5" data-testid="event-reports">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Reports and sources</p>
+      <SourceTrustHelp className="mt-1" />
       <p className="mt-1 text-xs text-ink-dim" data-testid="evidence-summary-line">
         {summary.independentSources > 0 ? describeEvidence(summary, { claims: false }) : "No independent confirmation"}
         {hiddenClaims > 0 && (

@@ -5,6 +5,7 @@ import { NavBar } from "@/components/layout/nav-bar";
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { MobileTopBar } from "@/components/layout/mobile-top-bar";
 import { CommandSearch } from "@/components/layout/command-search";
+import { FirstRun } from "@/components/onboarding/first-run";
 
 export const metadata: Metadata = {
   title: "Vigil — See what's happening in the world",
@@ -31,6 +32,7 @@ export default function RootLayout({
           {children}
           <MobileTabBar />
           <CommandSearch />
+          <FirstRun />
         </Providers>
       </body>
     </html>

@@ -88,6 +88,24 @@
     color-scheme: dark;
   }
 
+  /* One visible keyboard-focus ring for every interactive element (mouse clicks do not show it). Components with
+     their own focus-visible ring keep theirs. */
+  :where(a, button, input, select, textarea, summary, [role="button"], [role="option"], [role="tab"], [tabindex]):focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
   /* MobileTopBar and MobileTabBar (components/layout/mobile-top-bar.tsx,
      mobile-tab-bar.tsx) are fixed, opaque bars rendered on every route
      below the `sm` breakpoint (matching their own `sm:hidden`) — ~52px

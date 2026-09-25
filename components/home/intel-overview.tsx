@@ -9,11 +9,10 @@ import { rankMajorConflicts, rankSignificantEvents } from "@/lib/data/priority";
 import { useNowMs } from "@/hooks/use-now";
 import { GlobalEvents } from "@/components/home/global-events";
 
-const VERIFIED = new Set(["confirmed", "multiple_sources"]);
 const WEEK_MS = 7 * 86_400_000;
 
 /** A concise real-data overview: the conflicts and events that matter most (ranked by severity,
- * significance, recency and evidence — never by article count) and the latest verified updates. */
+ * significance, recency and evidence — never by article count) Raw latest reports are in Latest Activity; this list does not repeat them. */
 export function IntelOverview({ conflicts, events, loading, className }: { conflicts: readonly Conflict[]; events: readonly ConflictEvent[]; loading?: boolean; className?: string }) {
   const now = useNowMs(events);
   if (loading && conflicts.length === 0) return <LoadingLine className={className} />;
@@ -23,7 +22,6 @@ export function IntelOverview({ conflicts, events, loading, className }: { confl
     now,
     4,
   );
-  const verified = events.filter((e) => VERIFIED.has(e.verificationStatus)).sort((a, b) => (a.occurredAt < b.occurredAt ? 1 : -1)).slice(0, 3);
 
   return (
     <div className={className} data-testid="intel-overview">
@@ -71,25 +69,6 @@ export function IntelOverview({ conflicts, events, loading, className }: { confl
 
       <GlobalEvents className="mt-6" />
 
-      <section className="mt-6" data-testid="verified-updates">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ink-faint">Latest verified updates</h2>
-        {verified.length === 0 ? (
-          <EmptyState title="No verified updates yet" detail="Events appear here once confirmed or backed by multiple sources." testId="verified-updates-empty" />
-        ) : (
-          <ul className="space-y-2">
-            {verified.map((event) => (
-              <li key={event.id} className="text-xs text-ink-dim" data-testid="verified-update">
-                <Link href={`/event/${event.slug}`} className="text-accent hover:underline">
-                  {event.title}
-                </Link>{" "}
-                <span className="text-ink-faint">
-                  <RelativeTime iso={event.occurredAt} />
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
     </div>
   );
 }

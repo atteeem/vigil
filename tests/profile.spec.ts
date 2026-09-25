@@ -1,11 +1,12 @@
 import { test, expect } from "@playwright/test";
+import { closeWorldControls, openWorldControls } from "./helpers/world-controls";
 
 test.describe("Profile / local account (/profile)", () => {
   test("create account, edit name, change default map, survive reload, sign out", async ({ page }) => {
     const email = `e2e-${Date.now()}@example.com`;
 
     await page.goto("/profile");
-    await expect(page.getByRole("heading", { name: "Vigil Profile" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Create Account" }).click();
     await page.getByPlaceholder("Display name").fill("E2E Tester");
@@ -42,6 +43,7 @@ test.describe("Profile / local account (/profile)", () => {
 
     // Default map mode actually drives /world.
     await page.goto("/world");
+    await openWorldControls(page, "layers");
     await expect(
       page.getByRole("radiogroup", { name: "Basemap" }).getByRole("radio", { name: "Satellite" }),
     ).toHaveAttribute("aria-checked", "true");
@@ -49,7 +51,7 @@ test.describe("Profile / local account (/profile)", () => {
     // Sign out.
     await page.goto("/profile");
     await page.getByRole("button", { name: "Sign Out" }).click();
-    await expect(page.getByRole("heading", { name: "Vigil Profile" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Create Account" })).toBeVisible();
   });
 

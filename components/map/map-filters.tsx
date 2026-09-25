@@ -39,6 +39,7 @@ export function MapFilters({
   hazardLayers = [],
   onToggleHazardLayer,
   hazardHealth,
+  section = "all",
   className,
 }: {
   typeFilter: TypeFilter;
@@ -65,15 +66,24 @@ export function MapFilters({
   hazardLayers?: readonly HazardLayer[];
   onToggleHazardLayer?: (layer: HazardLayer) => void;
   hazardHealth?: readonly HazardLayerHealth[];
+  /** Phones split the controls into two sheets: "filters" (what is shown) and "layers" (how the map draws it). */
+  section?: "all" | "filters" | "layers";
   className?: string;
 }) {
+  const filters = section !== "layers";
+  const layers = section !== "filters";
+  const sheet = section !== "all";
+  const heading = (text: string) => sheet && <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">{text}</p>;
   return (
     <div className={cn("flex flex-col gap-2.5", className)}>
-      <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto">
+      {filters && heading("Event type")}
+      {filters && (
+      <div className={cn("no-scrollbar flex items-center gap-1.5", sheet ? "flex-wrap" : "overflow-x-auto")} role="group" aria-label="Event type">
         {(["all", ...EVENT_TYPES] as TypeFilter[]).map((t) => (
           <button
             key={t}
             onClick={() => onTypeFilter(t)}
+            aria-pressed={typeFilter === t}
             className={cn(
               "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
               typeFilter === t
@@ -85,22 +95,35 @@ export function MapFilters({
           </button>
         ))}
       </div>
+      )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <SegmentedControl
-          aria-label="Basemap"
-          options={MAP_BASEMAP_MODES.map((m) => ({ value: m, label: MAP_BASEMAP_MODE_LABEL[m] }))}
-          value={basemapMode}
-          onChange={onBasemapMode}
-        />
-        <SegmentedControl aria-label="Time" options={WORLD_TIME_OPTIONS} value={timeRange} onChange={onTimeRange} />
-        <SegmentedControl
-          aria-label="Region"
-          options={[{ value: "Global", label: "Global" }, ...REGIONS.map((r) => ({ value: r, label: r }))]}
-          value={region}
-          onChange={onRegion}
-        />
-        <div className="ml-auto flex items-center gap-1 rounded-full border border-border bg-surface/70 p-1">
+      <div className={cn("flex flex-wrap items-center gap-2", sheet && "flex-col items-start gap-3")}>
+        {layers && heading("Basemap")}
+        {layers && (
+          <SegmentedControl
+            aria-label="Basemap"
+            options={MAP_BASEMAP_MODES.map((m) => ({ value: m, label: MAP_BASEMAP_MODE_LABEL[m] }))}
+            value={basemapMode}
+            onChange={onBasemapMode}
+          />
+        )}
+        {filters && heading("Reports from the last")}
+        {filters && <SegmentedControl aria-label="Time" options={WORLD_TIME_OPTIONS} value={timeRange} onChange={onTimeRange} />}
+        {filters && heading("Region")}
+        {filters && (
+          <div className={cn(sheet && "no-scrollbar max-w-full overflow-x-auto")}>
+            <SegmentedControl
+              aria-label="Region"
+              options={[{ value: "Global", label: "Global" }, ...REGIONS.map((r) => ({ value: r, label: r }))]}
+              value={region}
+              onChange={onRegion}
+            />
+          </div>
+        )}
+        {layers && heading("Map view and layers")}
+        {layers && (
+        <>
+        <div className={cn("flex items-center gap-1 rounded-full border border-border bg-surface/70 p-1", !sheet && "ml-auto")} role="group" aria-label="Map view">
           <button
             onClick={() => onViewMode("markers")}
             aria-pressed={viewMode === "markers"}
@@ -137,6 +160,8 @@ export function MapFilters({
           {territoryCount > 0 && <span className="rounded-full bg-accent/20 px-1.5 text-[10px] font-semibold" data-testid="territory-count">{territoryCount}</span>}
         </button>
         {onToggleHazardLayer && <HazardLayerPanel enabled={hazardLayers} onToggle={onToggleHazardLayer} health={hazardHealth} />}
+        </>
+        )}
       </div>
     </div>
   );

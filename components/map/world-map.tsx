@@ -24,6 +24,7 @@ import { useHeatField } from "@/hooks/use-heat-field";
 import { renderHeatCanvas, MERCATOR_MAX_LAT } from "@/lib/heat/render";
 import { getHeatBorders } from "@/lib/heat/borders";
 import { HeatLegend } from "@/components/heat/heat-legend";
+import { useAppStore } from "@/hooks/use-app-store";
 import { aggregateReportBuckets, formatReportCount, REPORT_COUNT_CAP } from "@/lib/map/report-counts";
 import { createEventIconImageData } from "@/lib/map/event-icons";
 import { createContestedPatternImageData } from "@/lib/map/territorial-pattern";
@@ -109,6 +110,8 @@ export interface WorldMapProps {
   hazards?: HazardCollection | null;
   /** Centre the map here once (notification deep links). */
   focus?: { lat: number; lng: number; zoom: number; animate?: boolean } | null;
+  /** True while Live View is paused: an in-flight camera move stops where it is. */
+  holdCamera?: boolean;
   /** Situation-level markers for active conflicts (name, severity, recent-development ring). One per conflict. */
   activeConflicts?: readonly MarkerConflict[];
   onSelectConflict?: (slug: string) => void;
@@ -578,6 +581,7 @@ export function WorldMap({
   onSelectTerritory = () => {},
   hazards = null,
   focus = null,
+  holdCamera = false,
   activeConflicts = [],
   onSelectConflict = () => {},
   hazardLayers = [],
@@ -607,7 +611,7 @@ export function WorldMap({
   const resolutionRef = useRef<BasemapResolution | null>(null);
   const styleReadyRef = useRef(false);
   const basemapErrorsRef = useRef(0);
-  const [basemapNotice, setBasemapNotice] = useState<string | null>(null);
+  const [basemapNotice, setBasemapNotice] = useState<{ text: string; detail: string } | null>(null);
   const heatUrlRef = useRef<string | null>(null);
   // Reference time for the heat surface: the caller's (timeline asOf) or the real clock when the data last changed.
   const clockIso = useMemo(() => new Date().toISOString(), [events]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -654,7 +658,14 @@ export function WorldMap({
     if (!r) return;
     recordBasemapState({ at: new Date().toISOString(), mode: r.mode, provider: r.provider.id, fallback: r.fallback, reason: r.reason ? safeReason(r.reason) : null, failed: failedRef.current, mapLoaded: map?.isStyleLoaded() === true, glyphs: glyphStats() });
     const expected = r.mode === "satellite" && r.provider.id !== "external-satellite";
-    setBasemapNotice(r.fallback && r.reason ? (expected ? `Satellite imagery needs an external provider (NEXT_PUBLIC_MAPTILER_KEY). Showing the Vigil basemap instead.` : `Basemap fallback: ${safeReason(r.reason)}`) : null);
+    // Users see plain words; the technical reason stays in the recorded basemap state (and the notice's tooltip). A basemap
+    // that is simply not configured is not news to a visitor — only a failure at runtime or unavailable imagery is.
+    const runtimeFailure = Object.keys(failedRef.current).length > 0;
+    setBasemapNotice(
+      r.fallback && r.reason && (expected || runtimeFailure)
+        ? { text: expected ? "Satellite imagery is not available here. Showing the Vigil basemap instead." : "Basemap fallback: the detailed map could not be loaded, showing Vigil's built-in map.", detail: safeReason(r.reason) }
+        : null,
+    );
   };
 
   /** A provider failed: remember why, resolve the next one and switch to it (once). */
@@ -963,10 +974,14 @@ export function WorldMap({
     if (!map || !focus) return;
     // Camera moves are valid before the style finishes loading. Animated only when asked to (Live View) and the
     // user has not asked for reduced motion.
-    const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+    const reduce = (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true) || useAppStore.getState().contentSensitivity === "reduced";
     if (focus.animate && !reduce) map.flyTo({ center: [focus.lng, focus.lat], zoom: focus.zoom, duration: 1400, essential: false });
     else map.jumpTo({ center: [focus.lng, focus.lat], zoom: focus.zoom });
   }, [focus]);
+
+  useEffect(() => {
+    if (holdCamera) mapRef.current?.stop();
+  }, [holdCamera]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -991,10 +1006,10 @@ export function WorldMap({
   return (
     <div className={className} style={{ position: "relative" }} data-heat-signature={heatField?.signature} data-heat-peak={heatField ? Math.round(heatField.peak) : undefined} data-hazard-layers={hazardLayerKey} data-hazard-count={hazards ? hazards.features.length : 0}>
       <div ref={containerRef} className="h-full w-full" role="application" aria-label="Operational conflict map" />
-      {viewMode === "heatmap" && <HeatLegend className="absolute bottom-20 left-3 z-10 sm:bottom-7" />}
+      {viewMode === "heatmap" && <HeatLegend className="absolute bottom-32 left-3 z-10 sm:bottom-7" />}
       {basemapNotice && (
-        <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-xs rounded-lg border border-border bg-surface/90 px-3 py-2 text-xs text-ink-faint backdrop-blur" data-testid="basemap-notice">
-          {basemapNotice}
+        <div className="pointer-events-none absolute bottom-3 left-3 z-10 max-w-xs rounded-lg border border-border bg-surface/90 px-3 py-2 text-xs text-ink-faint backdrop-blur" data-testid="basemap-notice" title={basemapNotice.detail}>
+          {basemapNotice.text}
         </div>
       )}
     </div>

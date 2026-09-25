@@ -1,3 +1,4 @@
+import { SCORE_COPY } from "@/lib/copy/scores";
 import { test, expect, type Page } from "@playwright/test";
 import { buildSignals, buildTicker, HIGH_TENSION_MIN_SCORE, liveState, rankEntities } from "@/lib/world/derive";
 import type { CommandCenter, WorldItem } from "@/lib/world/types";
@@ -131,6 +132,9 @@ async function mockWorld(page: Page, opts: { claims?: boolean; data?: CommandCen
   return seen;
 }
 
+// The canonical confidence wording (components/world/confidence-badge.tsx builds the same string).
+const CONFIDENCE_TOOLTIP = `${SCORE_COPY.confidence.question} It does not represent severity.`;
+
 const center = async (page: Page) => {
   await page.waitForFunction(() => !!(window as unknown as { __vigilMap?: unknown }).__vigilMap, undefined, { timeout: 30_000 });
   return page.evaluate(() => {
@@ -191,7 +195,7 @@ test.describe("World Command Center UI", () => {
     const rows = page.getByTestId("pulse-row");
     await expect(rows).toHaveCount(4);
     await expect(rows.first().getByTestId("pulse-badge")).toHaveText("VERIFIED");
-    await expect(rows.first().getByTestId("confidence-badge")).toHaveAttribute("title", "Confidence reflects evidence/corroboration. It does not represent severity.");
+    await expect(rows.first().getByTestId("confidence-badge")).toHaveAttribute("title", CONFIDENCE_TOOLTIP);
     await page.getByTestId("pulse-tab-hazard").click();
     await expect(rows).toHaveCount(1);
     await page.getByTestId("pulse-tab-all").click();
@@ -213,7 +217,7 @@ test.describe("World Command Center UI", () => {
     await expect(page.getByTestId("right-rail").getByTestId("ctx-severity")).toHaveText("100");
     await expect(page.getByTestId("right-rail").getByTestId("ctx-impact")).toHaveText("78");
     await expect(page.getByTestId("right-rail").getByTestId("ctx-confidence")).toHaveText("74");
-    await expect(ctx).toContainText("Confidence reflects evidence/corroboration. It does not represent severity.");
+    await expect(ctx).toContainText(CONFIDENCE_TOOLTIP);
     await expect(page.getByTestId("right-rail").getByTestId("ctx-open-full")).toHaveAttribute("href", "/conflict/ukraine");
     await ctx.getByRole("button", { name: "Close" }).click();
     await expect(page.getByTestId("world-rail")).toBeVisible();
@@ -281,6 +285,19 @@ test.describe("World Command Center UI", () => {
     await expect(page.getByTestId("live-view-pause")).toHaveText("Resume");
     await page.getByTestId("live-view-button").click(); // stop
     await expect(page.getByTestId("live-view-pause")).toHaveCount(0);
+  });
+
+  test("reduced motion: Live View jumps between developments instead of flying", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await mockWorld(page);
+    await page.goto("/world");
+    await expect(page.getByTestId("ticker-item").first()).toBeVisible();
+    await center(page);
+    await page.getByTestId("live-view-button").click();
+    // A jump lands at once: no camera animation is running and the map is already on the first development.
+    await expect.poll(async () => (await center(page)).lat, { timeout: 2000 }).toBeCloseTo(49.99, 0);
+    expect(await page.evaluate(() => (window as unknown as { __vigilMap: { isMoving(): boolean } }).__vigilMap.isMoving())).toBe(false);
+    await page.getByTestId("live-view-button").click(); // stop
   });
 
   test("deep links still focus the map and the rail stays inside the viewport at 1440 and 1280", async ({ page }) => {

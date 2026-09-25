@@ -47,7 +47,8 @@ export async function searchPublic(query: string, perGroup = 5): Promise<SearchR
   // ---- countries (canonical registry: ISO2 / ISO3 / name / alias) ----
   for (const c of short ? searchCountries(q, perGroup).filter((c) => [c.code, c.alpha3, ...c.aliases].some((x) => x.toLowerCase() === q.toLowerCase())) : searchCountries(q, perGroup)) {
     const alias = normalizeName(c.name) !== normalizeName(q) && q.length > 3 ? c.aliases.find((a) => nameMatches(q, a)) : undefined;
-    results.push({ type: "country", group: "Countries", id: c.code, title: c.name, kind: "Country", context: `${c.region} · ${c.subregion}`, status: null, subtitle: `${c.code} / ${c.alpha3}${alias ? ` · matched "${alias}"` : ""}`, href: `/country/${c.code}` });
+    const code = [c.code, c.alpha3].find((x) => x.toLowerCase() === q.toLowerCase());
+    results.push({ type: "country", group: "Countries", id: c.code, title: c.name, kind: "Country", context: `${c.region} · ${c.subregion}`, status: null, subtitle: `${c.code} / ${c.alpha3}`, matched: code ? `Code: ${code}` : alias ? `Alias: ${alias}` : undefined, href: `/country/${c.code}` });
   }
 
   const [conflictRows, aliasHits, nameUnits, nameCommanders, nameEquipment, events, sources, hazards] = await Promise.all([
@@ -80,7 +81,7 @@ export async function searchPublic(query: string, perGroup = 5): Promise<SearchR
     } catch {
       fighting = [];
     }
-    results.push({ type: "conflict", group: "Conflicts", id: c.id, title: c.shortName ?? c.name, kind: "Conflict", context: fighting.length ? fighting.map(countryName).join(", ") : c.region, status: cap(c.status), subtitle: `Severity ${c.severity}${alias ? ` · matched alias "${alias}"` : ""}`, href: `/conflict/${c.slug}` });
+    results.push({ type: "conflict", group: "Conflicts", id: c.id, title: c.shortName ?? c.name, kind: "Conflict", context: fighting.length ? fighting.map(countryName).join(", ") : c.region, status: cap(c.status), subtitle: `Severity ${c.severity}`, matched: alias ? `Alias: ${alias}` : undefined, href: `/conflict/${c.slug}` });
   }
 
   // ---- actors, units, commanders, equipment (knowledge layer + alias rows, one query per kind) ----
@@ -96,7 +97,7 @@ export async function searchPublic(query: string, perGroup = 5): Promise<SearchR
   ]);
   const matchedVia = (kind: string, id: string) => {
     const h = hits.find((x) => x.entityKind === kind && x.entityId === id && x.aliasType !== "canonical");
-    return h ? ` · matched alias "${h.alias}"` : "";
+    return h ? `Alias: ${h.alias}` : undefined;
   };
   // Exact alias hits ("RSF") first, then names.
   const unitOrder = (id: string) => (hits.some((h) => h.entityKind === "unit" && h.entityId === id && h.normalized === norm) ? 0 : 1);
@@ -112,12 +113,13 @@ export async function searchPublic(query: string, perGroup = 5): Promise<SearchR
       kind: military ? (u.unitType ?? "Military unit") : u.entityType ? cap(u.entityType.replace(/_/g, " ")) : "Actor",
       context: countryName(u.country),
       status: link ? cap(link.role.replace(/_/g, " ")) : null,
-      subtitle: `${conflict ? (conflict.shortName ?? conflict.name) : (u.branch ?? "")}${matchedVia("unit", u.id)}`.replace(/^ · /, ""),
+      subtitle: conflict ? (conflict.shortName ?? conflict.name) : (u.branch ?? ""),
+      matched: matchedVia("unit", u.id),
       href: entityHref("unit", u.id, u.entityType),
     });
   }
-  for (const c of commanders) results.push({ type: "commander", group: "Military", id: c.id, title: `${c.rank ? `${c.rank} ` : ""}${c.name}`, kind: "Commander", context: countryName(c.currentUnit?.country), status: null, subtitle: `${c.currentUnit ? `Commands ${c.currentUnit.name}` : "No current unit recorded"}${matchedVia("commander", c.id)}`, href: entityHref("commander", c.id) });
-  for (const e of equipment) results.push({ type: "equipment", group: "Military", id: e.id, title: e.name, kind: "Equipment", context: e.category ?? null, status: null, subtitle: matchedVia("equipment", e.id).replace(/^ · /, ""), href: entityHref("equipment", e.id) });
+  for (const c of commanders) results.push({ type: "commander", group: "Military", id: c.id, title: `${c.rank ? `${c.rank} ` : ""}${c.name}`, kind: "Commander", context: countryName(c.currentUnit?.country), status: null, subtitle: c.currentUnit ? `Commands ${c.currentUnit.name}` : "No current unit recorded", matched: matchedVia("commander", c.id), href: entityHref("commander", c.id) });
+  for (const e of equipment) results.push({ type: "equipment", group: "Military", id: e.id, title: e.name, kind: "Equipment", context: e.category ?? null, status: null, subtitle: "", matched: matchedVia("equipment", e.id), href: entityHref("equipment", e.id) });
 
   // ---- places: admin regions (centroid, region precision) and gazetteer cities ----
   const regions = short ? [] : ADMIN_REGIONS.filter((r) => [r.name, ...r.aliases].some((n) => nameMatches(q, n))).slice(0, perGroup);

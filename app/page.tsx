@@ -49,6 +49,23 @@ export default function HomePage() {
 
   const selectedConflict = conflicts.find((c) => c.slug === selectedSlug) ?? null;
 
+  // The same real counts and freshness stamps on every screen size (desktop: over the globe; phones: below it).
+  const dataSummary = (
+    <>
+      <p className="text-[11px] font-medium text-ink-faint">
+        {loading ? "Loading data…" : `${events.length} published events (last 30 days) · ${activeCount} active conflicts`}
+      </p>
+      {!loading && (
+        <p className="text-[10px] text-ink-faint">
+          <FreshnessStamp label="Last event" iso={freshness?.lastEventAt} staleAfterHours={STALE_SOURCE_HOURS} className="text-[10px]" />
+          {" · "}
+          <FreshnessStamp label="Last source fetch" iso={freshness?.lastIngestionAt} staleAfterHours={STALE_SOURCE_HOURS} none="never" className="text-[10px]" />
+          {overview.status === "error" && <span className="ml-1.5 text-elevated" data-testid="home-data-error">· may be out of date</span>}
+        </p>
+      )}
+    </>
+  );
+
   return (
     <main className="min-h-screen bg-bg">
       <section className="relative h-[62vh] w-full overflow-hidden sm:h-[86vh]">
@@ -85,17 +102,7 @@ export default function HomePage() {
             />
           </div>
           <div className="pointer-events-none absolute inset-x-0 top-24 flex flex-col items-center gap-0.5" data-testid="home-data-summary">
-            <p className="text-[11px] font-medium text-ink-faint">
-              {loading ? "Loading data…" : `${events.length} published events (last 30 days) · ${activeCount} active conflicts`}
-            </p>
-            {!loading && (
-              <p className="text-[10px] text-ink-faint">
-                <FreshnessStamp label="Last event" iso={freshness?.lastEventAt} staleAfterHours={STALE_SOURCE_HOURS} className="text-[10px]" />
-                {" · "}
-                <FreshnessStamp label="Last source fetch" iso={freshness?.lastIngestionAt} staleAfterHours={STALE_SOURCE_HOURS} none="never" className="text-[10px]" />
-                {overview.status === "error" && <span className="ml-1.5 text-elevated" data-testid="home-data-error">· may be out of date</span>}
-              </p>
-            )}
+            {dataSummary}
           </div>
           <div
             className={
@@ -114,6 +121,9 @@ export default function HomePage() {
       {/* Mobile stacked sections, overlapping the globe fold slightly */}
       <div className="relative z-10 -mt-6 space-y-4 rounded-t-3xl bg-bg pb-24 pt-5 sm:hidden">
         <MobileStatusStrip status={status} />
+        <div className="flex flex-col gap-0.5 px-4" data-testid="home-data-summary">
+          {dataSummary}
+        </div>
         <MobileTopExposureCard baseCountryCode={baseCountryCode} conflicts={conflicts} events={events} onSeeWhy={setSelectedSlug} />
         <div className="px-4">
           <TimeLayerControls className="items-start" />

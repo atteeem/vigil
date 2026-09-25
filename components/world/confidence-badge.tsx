@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
+import { SCORE_COPY } from "@/lib/copy/scores";
 
-export const CONFIDENCE_TOOLTIP = "Confidence reflects evidence/corroboration. It does not represent severity.";
+export const CONFIDENCE_TOOLTIP = `${SCORE_COPY.confidence.question} It does not represent severity.`;
 const LABEL = { high: "High", medium: "Medium", low: "Low" } as const;
 const TONE = { high: "text-stable", medium: "text-accent", low: "text-ink-faint" } as const;
 

@@ -23,16 +23,17 @@ export function StatusBar({ data, loading, error, liveView }: { data: CommandCen
   const s = data?.status;
   const v = (n: number | undefined) => (s && n != null ? String(n) : loading ? "…" : "—");
   return (
-    <div className="flex h-9 shrink-0 items-center gap-5 overflow-x-auto border-b border-border bg-surface/70 px-4 backdrop-blur" data-testid="status-bar" role="region" aria-label="World status">
+    <div className="no-scrollbar flex h-9 shrink-0 items-center gap-5 overflow-x-auto border-b border-border bg-surface/70 px-4 backdrop-blur" data-testid="status-bar" role="region" aria-label="World status">
       <Stat label="Active conflicts" value={v(s?.activeConflicts)} testId="stat-active" hint="Conflicts with status Active in the canonical registry." />
       <Stat label="High tension" value={v(s?.highTension)} testId="stat-tension" hint={`Active conflicts with a severity score of ${data?.meta.thresholds.highTensionMinScore ?? 70} or more.`} />
       <Stat label="New developments" value={v(s?.newDevelopments)} testId="stat-new" hint="Significant, de-duplicated developments in the last 24 hours (state changes, not article counts)." />
-      <div className={cn("ml-auto flex items-center gap-1.5 whitespace-nowrap text-[11px] font-semibold uppercase tracking-wider", s ? LIVE_TONE[s.live.state] : "text-ink-faint")} data-testid="live-indicator" data-live-state={s?.live.state ?? (error ? "error" : "loading")} title={s?.live.lastIngestionAt ? `Newest successful ingestion ${timeAgo(s.live.lastIngestionAt)}` : "No successful ingestion recorded"}>
+      <div className={cn("ml-auto hidden items-center gap-1.5 whitespace-nowrap text-[11px] sm:flex font-semibold uppercase tracking-wider", s ? LIVE_TONE[s.live.state] : "text-ink-faint")} data-testid="live-indicator" data-live-state={s?.live.state ?? (error ? "error" : "loading")} title={s?.live.lastIngestionAt ? `Newest successful ingestion ${timeAgo(s.live.lastIngestionAt)}` : "No successful ingestion recorded"}>
         <span className={cn("h-1.5 w-1.5 rounded-full bg-current", s?.live.state === "live" && "animate-pulse")} />
         {s ? s.live.label : error ? "UNAVAILABLE" : "…"}
       </div>
-      <div className="flex items-center gap-1.5">
-        <button type="button" onClick={liveView.onToggle} disabled={liveView.disabled && !liveView.active} aria-pressed={liveView.active} data-testid="live-view-button" className={cn("inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide transition-colors disabled:opacity-40", liveView.active ? "border-accent bg-accent/15 text-accent" : "border-border text-ink-dim hover:text-ink")}>
+      {/* Phones: Live View first, where the thumb finds it without scrolling the strip. */}
+      <div className="order-first flex shrink-0 items-center gap-1.5 sm:order-none">
+        <button type="button" onClick={liveView.onToggle} disabled={liveView.disabled && !liveView.active} aria-pressed={liveView.active} data-testid="live-view-button" title={liveView.disabled && !liveView.active ? "No recent developments to cycle through" : "Cycle through recent developments on the map"} className={cn("inline-flex min-h-[28px] items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide transition-colors disabled:opacity-40", liveView.active ? "border-accent bg-accent/15 text-accent" : "border-border text-ink-dim hover:text-ink")}>
           <Radio className="h-3 w-3" /> Live view
         </button>
         {liveView.active && (

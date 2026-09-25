@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { closeWorldControls, openWorldControls } from "./helpers/world-controls";
 
 // Heatmap mode = the continuous global conflict-intensity surface (lib/heat).
 // The field maths are covered in heat-field.spec.ts; this file covers the
@@ -9,7 +10,9 @@ const mapEval = <T,>(page: Page, fn: (map: any) => T) => page.evaluate(`(${fn.to
 
 async function openHeatmap(page: Page) {
   await page.goto("/world");
+  await openWorldControls(page, "layers");
   await page.getByRole("button", { name: "Heatmap" }).click();
+  await closeWorldControls(page);
   await expect(page.locator("[data-heat-signature]")).toHaveCount(1);
   await expect.poll(() => page.evaluate(`Boolean(window.__vigilMap && window.__vigilMap.getStyle() && window.__vigilMap.getLayer("heat-surface"))`)).toBe(true);
 }
@@ -43,7 +46,9 @@ test.describe("World map heatmap (continuous surface)", () => {
     expect(peak).toBeGreaterThanOrEqual(90); // curated full-scale war reaches the deepest band
 
     // Markers mode hides the surface and computes nothing.
+    await openWorldControls(page, "layers");
     await page.getByRole("button", { name: "Markers" }).click();
+    await closeWorldControls(page);
     await expect(page.locator("[data-heat-signature]")).toHaveCount(0);
     expect(await mapEval(page, (map) => map.getLayoutProperty("heat-surface", "visibility"))).toBe("none");
     await expect(page.getByTestId("heat-legend")).toHaveCount(0);

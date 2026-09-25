@@ -41,6 +41,6 @@ test.describe("Responsive navigation smoke test", () => {
 
   test("/profile renders the logged-out header", async ({ page }) => {
     await page.goto("/profile");
-    await expect(page.getByRole("heading", { name: "Vigil Profile" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
   });
 });

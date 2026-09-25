@@ -12,6 +12,7 @@ import type { ConflictContext } from "@/lib/world/conflict-context";
 import type { WorldItem } from "@/lib/world/types";
 import { CATEGORY_ICON } from "./ticker";
 import { ConfidenceBadge, CONFIDENCE_TOOLTIP } from "./confidence-badge";
+import { SCORE_COPY } from "@/lib/copy/scores";
 
 function Stat({ label, value, sub, testId, title }: { label: string; value: string; sub?: string; testId: string; title?: string }) {
   return (
@@ -91,8 +92,8 @@ export function ConflictContextPanel({ slug, country, onClose, onSelectItem }: {
             {c.statusLabel}
           </p>
           <div className="grid grid-cols-3 gap-2">
-            <Stat label="Severity" value={String(c.severity.score)} sub={SEVERITY_LABEL[c.severity.label as Severity] ?? c.severity.label} testId="ctx-severity" title="How severe the conflict itself is." />
-            <Stat label="Impact" value={c.impact ? String(c.impact.score) : "n/a"} sub={c.impact ? `on ${c.impact.countryName}` : "no country set"} testId="ctx-impact" title="Effect on your country; independent of severity." />
+            <Stat label="Severity" value={String(c.severity.score)} sub={SEVERITY_LABEL[c.severity.label as Severity] ?? c.severity.label} testId="ctx-severity" title={SCORE_COPY.severity.question} />
+            <Stat label="Impact" value={c.impact ? String(c.impact.score) : "n/a"} sub={c.impact ? `on ${c.impact.countryName}` : "no country set"} testId="ctx-impact" title={`${SCORE_COPY.impact.question} ${SCORE_COPY.impact.note}`} />
             <Stat label="Confidence" value={String(c.confidence.score)} sub="evidence" testId="ctx-confidence" title={CONFIDENCE_TOOLTIP} />
           </div>
           <p className="mt-1 text-[10px] text-ink-faint">{CONFIDENCE_TOOLTIP}</p>

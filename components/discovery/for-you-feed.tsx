@@ -6,18 +6,43 @@ import { meFetch } from "@/hooks/use-watcher";
 import { RelativeTime } from "@/components/ui/relative-time";
 import { LoadingLine } from "@/components/public/data-states";
 import type { ForYouFeed } from "@/lib/discovery/for-you";
+import { Search } from "lucide-react";
+import { useAppStore } from "@/hooks/use-app-store";
+
+const ACTION = "inline-flex min-h-[36px] items-center gap-1.5 rounded-full border border-border-strong px-3.5 text-xs font-medium text-ink hover:bg-card";
 
 /** Developments related to what the user follows or their selected country, each labelled with WHY it is shown. */
 export function ForYouDevelopments({ country }: { country: string | null }) {
+  const setSearchOpen = useAppStore((s) => s.setSearchOpen);
   const q = useQuery<ForYouFeed>({ queryKey: ["me", "for-you", country], queryFn: () => meFetch<ForYouFeed>(`for-you${country ? `?country=${country}` : ""}`), staleTime: 30_000 });
-  if (q.isPending) return <LoadingLine />;
+  if (q.isPending) return <LoadingLine label="Loading your feed…" />;
+  if (q.isError)
+    return (
+      <p className="text-sm text-ink-dim" data-testid="for-you-feed-error">
+        Your feed could not be loaded.{" "}
+        <button type="button" onClick={() => q.refetch()} className="text-accent hover:underline">
+          Try again
+        </button>
+      </p>
+    );
   const items = q.data?.items ?? [];
   return (
     <div data-testid="for-you-feed">
       {q.data && q.data.watches === 0 && (
-        <p className="mb-2 text-xs text-ink-faint" data-testid="for-you-no-watches">
-          No watched entities yet. Use Watch on a country, conflict or actor page to add it here.
-        </p>
+        <div className="mb-3 rounded-xl border border-border bg-card/50 p-4" data-testid="for-you-no-watches">
+          <p className="text-sm font-medium text-ink">Watch countries, conflicts or actors to build your intelligence feed.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" onClick={() => setSearchOpen(true)} className={ACTION} data-testid="for-you-action-search">
+              <Search className="h-3.5 w-3.5" aria-hidden /> Search
+            </button>
+            <Link href="/conflicts" className={ACTION} data-testid="for-you-action-conflicts">
+              Browse conflicts
+            </Link>
+            <Link href="/world" className={ACTION} data-testid="for-you-action-map">
+              Open World Map
+            </Link>
+          </div>
+        </div>
       )}
       {items.length === 0 ? (
         <p className="text-sm text-ink-dim" data-testid="for-you-feed-empty">

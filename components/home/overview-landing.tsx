@@ -39,7 +39,7 @@ export function OverviewStatus({ className }: { className?: string }) {
   );
   return (
     <section className={className} data-testid="overview-status">
-      <Heading aside={s ? <span className="text-[11px] text-ink-faint">{s.live.label}</span> : null}>Global status</Heading>
+      <Heading>Right now</Heading>
       {cc.isError ? (
         <EmptyState title="Global status could not be loaded" detail="Try again in a moment." />
       ) : (
