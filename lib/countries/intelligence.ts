@@ -19,6 +19,7 @@ import type { Conflict } from "@/lib/types";
 import { conflictReportCounts } from "@/lib/public/report-counts";
 import { listAvailableDatasets } from "@/lib/territory/datasets";
 import { DATASET_TYPE_LABEL, type PublicTerritorialDataset } from "@/lib/territory/dataset-types";
+import { coverageVerdict, type CoverageVerdict } from "@/lib/sources/coverage-verdict";
 import { ALL_DOMAIN_PLATFORMS, domainCoverage, type CoverageDomain, type DomainCoverage } from "./data-coverage";
 
 // The country intelligence layer: ONE server-side aggregation over the existing systems (public
@@ -189,18 +190,7 @@ export interface DomainSection {
   items: DevelopmentItem[];
 }
 
-export interface SourceCoverageView {
-  state: "GOOD" | "LIMITED" | "STALE";
-  reasons: string[];
-  dedicated: number;
-  global: number;
-  official: number;
-  independent: number;
-  partyAligned: number;
-  freshDedicated: number;
-  freshGlobal: number;
-  lastSuccessfulIngestion: string | null;
-}
+export type SourceCoverageView = CoverageVerdict;
 
 export interface CountryIntelligence {
   country: CountryIdentity;
@@ -632,55 +622,18 @@ async function coverageFor(rec: CountryRecord, domestic: Conflict[], now: Date):
   };
 }
 
-/** Source coverage verdict. Counts describe coverage, never truth: the verdict says whether Vigil is likely to
- * learn about developments in this country in time, from the sources it actually polls. Rules:
- *   STALE   - no source relevant to the country (dedicated, or global when there is no dedicated one) succeeded in 48 h;
- *   GOOD    - at least two fresh independent sources dedicated to / based in the country, and no domestic conflict
- *             with a coverage gap;
- *   LIMITED - anything else (e.g. only global outlets, or a single dedicated source). */
+/** Source coverage verdict for the country (lib/sources/coverage-verdict.ts): dedicated = based in the country or
+ * linked to one of its domestic conflicts; global = everything else Vigil polls. */
 async function sourceCoverageFor(rec: CountryRecord, domestic: Conflict[], now: Date): Promise<SourceCoverageView> {
   const domesticIds = domestic.map((c) => c.id);
   const linked = domesticIds.length ? await prisma.sourceConflictLink.findMany({ where: { conflictId: { in: domesticIds } }, select: { sourceId: true } }) : [];
   const linkedIds = new Set(linked.map((l) => l.sourceId));
   const all = await prisma.source.findMany({ where: { enabled: true, type: { not: "structured" } }, select: { id: true, country: true, sourceRole: true, independenceClass: true, claimPolicy: true, perspective: true, lastSuccessfulIngestion: true } });
-  const cutoff = now.getTime() - STALE_SOURCE_HOURS * HOUR;
   const isHere = (c: string | null) => !!c && (c.toUpperCase() === rec.code || c.toLowerCase() === rec.name.toLowerCase());
-  const dedicated = all.filter((s) => isHere(s.country) || linkedIds.has(s.id));
-  const global = all.filter((s) => !s.country && !linkedIds.has(s.id));
-  const fresh = (s: { lastSuccessfulIngestion: Date | null }) => !!s.lastSuccessfulIngestion && s.lastSuccessfulIngestion.getTime() >= cutoff;
-  const trust = (s: (typeof all)[number]) => sourceTrust(s).category;
-  const relevant = [...dedicated, ...global];
-  const freshDedicated = dedicated.filter(fresh);
-  const freshGlobal = global.filter(fresh);
-  const freshIndependentDedicated = freshDedicated.filter((s) => ["strong", "perspective"].includes(trust(s)));
-  const gaps = (await Promise.all(domestic.map((c) => getCoverageRow(c.id, now)))).filter((r) => r && r.health !== "healthy");
-  const times = relevant.map((s) => s.lastSuccessfulIngestion).filter((t): t is Date => !!t).map((t) => t.getTime());
-  const reasons: string[] = [];
-  let state: SourceCoverageView["state"];
-  if ((dedicated.length > 0 && freshDedicated.length === 0 && freshGlobal.length === 0) || (dedicated.length === 0 && freshGlobal.length === 0)) {
-    state = "STALE";
-    reasons.push(`No relevant source delivered new items in the last ${STALE_SOURCE_HOURS} h.`);
-  } else if (freshIndependentDedicated.length >= 2 && gaps.length === 0) {
-    state = "GOOD";
-    reasons.push(`${freshIndependentDedicated.length} fresh independent sources dedicated to or based in ${rec.name}.`);
-  } else {
-    state = "LIMITED";
-    if (dedicated.length === 0) reasons.push(`No source is dedicated to or based in ${rec.name}; coverage relies on global outlets.`);
-    else if (freshIndependentDedicated.length < 2) reasons.push(`Fewer than two fresh independent dedicated sources (${freshIndependentDedicated.length}).`);
-    if (gaps.length) reasons.push(`${gaps.length} domestic conflict${gaps.length === 1 ? " has" : "s have"} a coverage gap.`);
-  }
-  return {
-    state,
-    reasons,
-    dedicated: dedicated.length,
-    global: global.length,
-    official: relevant.filter((s) => s.sourceRole === "official").length,
-    independent: relevant.filter((s) => ["strong", "perspective"].includes(trust(s))).length,
-    partyAligned: relevant.filter((s) => trust(s) === "party_claim").length,
-    freshDedicated: freshDedicated.length,
-    freshGlobal: freshGlobal.length,
-    lastSuccessfulIngestion: times.length ? new Date(Math.max(...times)).toISOString() : null,
-  };
+  // A source based in another country covers that country, not this one.
+  const relevant = all.filter((s) => isHere(s.country) || linkedIds.has(s.id) || !s.country).map((s) => ({ ...s, dedicated: isHere(s.country) || linkedIds.has(s.id) }));
+  const gaps = (await Promise.all(domestic.map((c) => getCoverageRow(c.id, now)))).filter((r) => r && r.health !== "healthy").length;
+  return coverageVerdict(rec.name, relevant, { now, staleHours: STALE_SOURCE_HOURS, gaps });
 }
 
 async function freshnessFor(rec: CountryRecord, domestic: Conflict[], coverage: CoverageView, now: Date): Promise<FreshnessItem[]> {

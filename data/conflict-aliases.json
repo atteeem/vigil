@@ -1,0 +1,27 @@
+{
+  "_comment": "Curated alternative names for registry conflicts (keyed by registry slug). Used only to route searches and URLs to the ONE canonical conflict record; never creates a record. Abbreviations are included only where they are in common use for that conflict.",
+  "aliases": {
+    "russia-ukraine": ["Russo-Ukrainian War", "Russian invasion of Ukraine", "Ukraine war", "War in Ukraine", "RU-UA"],
+    "sudan": ["Sudanese civil war", "SAF-RSF war", "SAF vs RSF", "War in Sudan"],
+    "israel-palestine": ["Gaza war", "Israel-Hamas war", "Israel–Gaza war", "Gaza", "Israeli-Palestinian conflict"],
+    "israel-lebanon": ["Israel-Hezbollah conflict", "Hezbollah-Israel war"],
+    "persian-gulf-iran": ["Iran-Israel war", "Iran–Israel conflict", "Persian Gulf crisis"],
+    "yemen-red-sea": ["Yemeni civil war", "Houthi conflict", "Red Sea crisis", "Houthis"],
+    "syria": ["Syrian civil war", "Syrian conflict"],
+    "somalia": ["Somali civil war", "Al-Shabaab insurgency"],
+    "drc": ["Eastern Congo conflict", "Kivu conflict", "M23 conflict", "DR Congo conflict"],
+    "sahel": ["Sahel insurgency", "Sahel crisis"],
+    "myanmar": ["Myanmar civil war", "Burmese civil war", "Burma civil war", "Spring Revolution"],
+    "mexico-cartel": ["Mexican drug war", "Mexican cartel war", "Mexico drug war", "Cartel violence"],
+    "haiti": ["Haitian gang war", "Haiti crisis"],
+    "ethiopia": ["Amhara conflict", "Fano insurgency", "Ethiopian civil conflict"],
+    "nigeria-insurgencies": ["Boko Haram insurgency", "ISWAP insurgency"],
+    "afghanistan-pakistan": ["TTP insurgency", "Pakistan–Taliban conflict"],
+    "kurdish-turkey-pkk": ["PKK insurgency", "Kurdish–Turkish conflict"],
+    "colombia": ["Colombian conflict"],
+    "libya": ["Libyan civil war", "Libyan crisis"],
+    "armenia-azerbaijan": ["Nagorno-Karabakh conflict", "Karabakh conflict"],
+    "india-pakistan": ["Kashmir conflict", "Line of Control tensions"],
+    "central-african-republic": ["CAR civil war", "Central African Republic civil war"]
+  }
+}

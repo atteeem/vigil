@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/client";
 import { searchCountries } from "@/lib/countries/registry";
+import { slugsMatchingAlias } from "@/lib/conflicts/resolve";
 import { normalizeEntityText } from "@/lib/military/aliases";
 import { entityHref } from "./entities";
 import { searchHazards } from "@/lib/hazards/query";
@@ -22,9 +23,11 @@ export async function searchPublic(query: string, limit = 8): Promise<SearchResu
   // ("FI", "FIN", "Finland", "Suomi") all reach the same /country/[code] page.
   for (const c of searchCountries(q, 5)) results.push({ type: "country", id: c.code, title: c.name, subtitle: `${c.region} · ${c.alpha3}`, href: `/country/${c.code}` });
   const norm = normalizeEntityText(q);
+  const aliasSlugs = slugsMatchingAlias(q);
   const [conflicts, events, aliasHits] = await Promise.all([
     prisma.conflict.findMany({
-      where: { status: { notIn: ["ended", "resolved", "archived"] }, OR: [{ name: { contains: q } }, { shortName: { contains: q } }] },
+      // Canonical name, short name, slug, or a curated alias (data/conflict-aliases.json): one record, one page.
+      where: { status: { notIn: ["ended", "resolved", "archived"] }, OR: [{ name: { contains: q } }, { shortName: { contains: q } }, { slug: { contains: q.toLowerCase() } }, ...(aliasSlugs.length ? [{ slug: { in: aliasSlugs.map((a) => a.slug) } }] : [])] },
       select: { id: true, slug: true, name: true, shortName: true, region: true, severity: true },
       take: limit,
     }),
@@ -55,7 +58,8 @@ export async function searchPublic(query: string, limit = 8): Promise<SearchResu
     return h ? ` · matched alias "${h.alias}"` : "";
   };
   for (const c of conflicts) {
-    results.push({ type: "conflict", id: c.id, title: c.shortName ?? c.name, subtitle: `${c.region} · Severity: ${c.severity}`, href: `/conflict/${c.slug}` });
+    const via = aliasSlugs.find((a) => a.slug === c.slug);
+    results.push({ type: "conflict", id: c.id, title: c.shortName ?? c.name, subtitle: `${c.region} · Severity: ${c.severity}${via && !normalizeEntityText(c.name).includes(norm) ? ` · matched alias "${via.alias}"` : ""}`, href: `/conflict/${c.slug}` });
   }
   for (const u of units) {
     results.push({ type: "actor", id: u.id, title: u.name, subtitle: `${u.entityType ? u.entityType.replace(/_/g, " ") : (u.branch ?? "Armed actor")}${u.country ? ` · ${u.country}` : ""}${matchedVia("unit", u.id)}`, href: entityHref("unit", u.id, u.entityType) });

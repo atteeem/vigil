@@ -89,6 +89,8 @@ export default function WorldPage() {
   const [deepLinkAt, setDeepLinkAt] = useState<Date | null>(null);
   const [pendingEventId, setPendingEventId] = useState<string | null>(null);
   const [fromCountry, setFromCountry] = useState<string | null>(null);
+  const [pendingConflictSlug, setPendingConflictSlug] = useState<string | null>(null);
+  const [fromConflict, setFromConflict] = useState<string | null>(null);
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     const layers = (p.get("layers") ?? "").split(",").filter((l): l is HazardLayer => (HAZARD_LAYERS as readonly string[]).includes(l));
@@ -103,6 +105,9 @@ export default function WorldPage() {
     const ev = p.get("event");
     if (ev) setPendingEventId(ev);
     if (p.get("territory") === "1") setTerritoryRequest({ slug: p.get("conflict") });
+    // A conflict link (/world?conflict=slug) opens that conflict's context once the command-center data has loaded.
+    const conflictParam = p.get("conflict");
+    if (conflictParam) setPendingConflictSlug(conflictParam);
     const cc = p.get("country");
     if (cc && getCountryByCode(cc)) setFromCountry(cc.toUpperCase());
   }, []);
@@ -265,6 +270,21 @@ export default function WorldPage() {
     } else if (i.conflictSlug) selectConflict(i.conflictSlug, animate, !(i.lat != null && i.lng != null));
     else if (i.countryCode && !(i.lat != null && i.lng != null)) selectCountry(i.countryCode, animate);
   }
+
+  useEffect(() => {
+    if (!pendingConflictSlug || !cc.data) return;
+    const m = cc.data.conflicts.find((x) => x.slug === pendingConflictSlug);
+    /* eslint-disable react-hooks/set-state-in-effect -- one-time selection once the command-center data has loaded */
+    setPendingConflictSlug(null);
+    if (!m) return;
+    setFromConflict(m.slug);
+    setSelected(null);
+    setSelectedTerritory(null);
+    setSelectedHazardId(null);
+    setSelectedCountry(null);
+    setSelectedConflictSlug(m.slug);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [pendingConflictSlug, cc.data]);
 
   // LIVE VIEW cycles the ticker queue; any manual interaction pauses it.
   const liveQueue = useMemo(() => cc.data?.ticker ?? [], [cc.data]);
@@ -452,6 +472,11 @@ export default function WorldPage() {
                 hazardHealth={hazards?.meta.health}
               />
             </div>
+            {fromConflict && (
+              <Link href={`/conflict/${fromConflict}`} className="pointer-events-auto rounded-full border border-border bg-surface/80 px-3 py-1.5 text-xs font-medium text-ink-dim backdrop-blur-xl hover:text-ink" data-testid="back-to-conflict">
+                ← {cc.data?.conflicts.find((x) => x.slug === fromConflict)?.name ?? "Conflict"} page
+              </Link>
+            )}
             {fromCountry && (
               <Link href={`/country/${fromCountry}`} className="pointer-events-auto rounded-full border border-border bg-surface/80 px-3 py-1.5 text-xs font-medium text-ink-dim backdrop-blur-xl hover:text-ink" data-testid="back-to-country">
                 ← {getCountryByCode(fromCountry)?.name} country page
