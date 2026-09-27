@@ -1,7 +1,7 @@
 import type { Source } from "@prisma/client";
 import type { RawIngestionItemDTO } from "@/lib/db/repositories/raw-ingestion-items";
 import type { DraftSuggestionDTO } from "@/lib/types/db";
-import { detectEventType, suggestSeverityAndImportance } from "@/lib/ingestion/event-type-keywords";
+import { detectEventType, suggestSeverityAndImportance, NON_CONFLICT_EVENT_TYPES } from "@/lib/ingestion/event-type-keywords";
 import { gazetteerPlaceNames, gazetteerLookup } from "@/lib/geocoding/gazetteer";
 import { resolveLocationScope, leadOf } from "@/lib/geocoding/location-scope";
 import { deriveSummary, deriveTitle, cleanText } from "@/lib/ingestion/text-summary";
@@ -41,7 +41,7 @@ export async function extractDraft(item: RawIngestionItemDTO, source: Source, op
 
   let conflictId: string | null = null;
   let conflictName: string | null = null;
-  if (loc.countryCode) {
+  if (loc.countryCode && !NON_CONFLICT_EVENT_TYPES.has(eventType)) {
     const conflict = await findConflictByCountryCode(loc.countryCode);
     if (conflict) {
       conflictId = conflict.id;

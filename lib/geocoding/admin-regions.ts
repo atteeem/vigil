@@ -98,4 +98,9 @@ export const ADMIN_REGIONS: readonly AdminRegion[] = [
   { name: "Tripolitania", countryCode: "LY", lat: 32.0, lng: 13.5, aliases: ["Tripolitania"], bareOk: true },
   { name: "Cyrenaica", countryCode: "LY", lat: 31.0, lng: 22.0, aliases: ["Cyrenaica"], bareOk: true },
   { name: "Fezzan", countryCode: "LY", lat: 26.0, lng: 14.0, aliases: ["Fezzan"], bareOk: true },
+  // Mexico (cartel-violence conflict regions, data/conflict-registry.json "mexico-cartel")
+  region("Sinaloa", "MX", 25.0, -107.5, "State", true, ["Sinaloa"]),
+  region("Michoacán", "MX", 19.35, -101.7, "State", true, ["Michoacán", "Michoacan"]),
+  region("Guerrero", "MX", 17.55, -99.9, "State", true, ["Guerrero"]),
+  region("Chiapas", "MX", 16.75, -92.85, "State", true, ["Chiapas"]),
 ];

@@ -71,8 +71,13 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
  * (spec "Processing") — never blocks/fails the ingestion pass itself; a
  * snapshot failure is logged and left null rather than thrown, since the
  * review screen recomputes fresh regardless (see the schema comment on
- * RawIngestionItem). */
-async function computeAndStoreSnapshot(item: RawIngestionItemDTO, source: Source): Promise<void> {
+ * RawIngestionItem). Exported so an admin action (POST
+ * /api/admin/incoming/refresh-snapshots) can re-run it for items ingested
+ * under an older version of the extraction heuristic — the snapshot is
+ * written once at ingestion time and never recomputed on its own, so the
+ * queue's own country/conflict/region/event-type filters silently go
+ * stale relative to what draft() would say today until this re-runs. */
+export async function computeAndStoreSnapshot(item: RawIngestionItemDTO, source: Source): Promise<void> {
   try {
     const draft = await extractDraft(item, source);
     if (!draft) return; // autoProcessing is off for this source

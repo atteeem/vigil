@@ -41,6 +41,15 @@ export const EVENT_TYPE_KEYWORDS: [EventType, string[]][] = [
   ["health", ["pandemic", "disease outbreak", "epidemic", "health emergency", "world health", "global health"]],
 ];
 
+// Real-data audit finding: draft.ts used to link ANY item whose location
+// resolved to a country to that country's one tracked conflict, regardless
+// of topic — a tourism, trade, or weather story about Mexico was suggested
+// as a "Mexico cartel violence" event purely because it mentioned a
+// Mexican place name. These event types are never armed-conflict violence
+// by definition (natural hazard, health, or uncategorized), so an item
+// classified as one of them should never carry a conflict suggestion.
+export const NON_CONFLICT_EVENT_TYPES: ReadonlySet<EventType> = new Set(["other", "earthquake", "flood", "storm", "fire", "health"]);
+
 export function detectEventType(text: string): EventType {
   const lower = text.toLowerCase();
   for (const [type, keywords] of EVENT_TYPE_KEYWORDS) {

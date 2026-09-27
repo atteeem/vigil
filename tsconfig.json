@@ -38,7 +38,11 @@
     ".next-test/types/**/*.ts",
     ".next-test/dev/types/**/*.ts",
     ".next-visual/types/**/*.ts",
-    ".next-visual/dev/types/**/*.ts"
+    ".next-visual/dev/types/**/*.ts",
+    ".next-audit/types/**/*.ts",
+    ".next-audit/dev/types/**/*.ts",
+    ".next-realdb/types/**/*.ts",
+    ".next-realdb/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

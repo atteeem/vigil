@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/client";
 import type { RawIngestionItem, Prisma } from "@prisma/client";
 import type { ProcessingStatus } from "@/lib/types/db";
+import { normalizeUrl } from "@/lib/ingestion/url-normalize";
 
 // SQLite has no array/json column type, so mediaUrls/rawMetadata are
 // stored as JSON-encoded strings (see prisma/schema.prisma) and this
@@ -94,6 +95,12 @@ export async function getRawIngestionItem(id: string): Promise<RawIngestionItemD
  * requirement — see Map Requirements.md / the source-ingestion spec).
  * Returns the existing row (unchanged) on a duplicate rather than erroring,
  * since adapters call this unconditionally on every poll.
+ *
+ * A second, independent check: the same source+normalized original URL (lib/ingestion/url-normalize.ts) is also
+ * treated as a duplicate, even when externalId differs — several real feeds are not guid-stable across polls of
+ * one article (BBC appends a revision fragment; WordPress preview links mint a different guid before vs. after
+ * publication) while the article's own URL stays the same. Confirmed on real ingested data: 21 duplicate pairs
+ * across three sources, each one feed minting two different guids for one identical article URL.
  */
 export async function createRawIngestionItemIfNew(input: RawIngestionItemInput): Promise<{
   item: RawIngestionItemDTO;
@@ -104,11 +111,18 @@ export async function createRawIngestionItemIfNew(input: RawIngestionItemInput):
   });
   if (existing) return { item: toDTO(existing), created: false };
 
+  const originalUrlKey = input.originalUrl ? normalizeUrl(input.originalUrl) : null;
+  if (originalUrlKey) {
+    const byUrl = await prisma.rawIngestionItem.findFirst({ where: { sourceId: input.sourceId, originalUrlKey }, orderBy: { receivedAt: "asc" } });
+    if (byUrl) return { item: toDTO(byUrl), created: false };
+  }
+
   const row = await prisma.rawIngestionItem.create({
     data: {
       sourceId: input.sourceId,
       externalId: input.externalId,
       originalUrl: input.originalUrl,
+      originalUrlKey,
       originalTitle: input.originalTitle,
       originalText: input.originalText,
       language: input.language,

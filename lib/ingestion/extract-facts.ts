@@ -1,6 +1,7 @@
 import type { RawIngestionItemDTO } from "@/lib/db/repositories/raw-ingestion-items";
 import type { ExtractedFactField } from "@/lib/types/db";
-import { detectEventType, suggestSeverityAndImportance } from "@/lib/ingestion/event-type-keywords";
+import { detectEventType, suggestSeverityAndImportance, NON_CONFLICT_EVENT_TYPES } from "@/lib/ingestion/event-type-keywords";
+import type { EventType } from "@/lib/types";
 import { gazetteerPlaceNames, gazetteerLookup } from "@/lib/geocoding/gazetteer";
 import { detectActors } from "@/lib/ingestion/actors";
 import { extractKilled, extractInjured } from "@/lib/ingestion/casualties";
@@ -174,7 +175,7 @@ export async function extractFacts(item: RawIngestionItemDTO): Promise<Extracted
   // --- conflict association: only when a single, unambiguous country
   // resolved AND a matching seeded conflict exists — never guessed. ---
   const resolved = locationCandidates.length === 1 ? locationCandidates[0]! : null;
-  if (resolved?.countryCode) {
+  if (resolved?.countryCode && eventType && !NON_CONFLICT_EVENT_TYPES.has(eventType as EventType)) {
     const conflict = await findConflictByCountryCode(resolved.countryCode);
     if (conflict) {
       facts.push({

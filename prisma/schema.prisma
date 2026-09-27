@@ -129,6 +129,12 @@ model RawIngestionItem {
   source           Source    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   externalId       String    @map("external_id")
   originalUrl      String?   @map("original_url")
+  // Normalized form of originalUrl (lib/ingestion/url-normalize.ts), used as a SECOND dedupe key alongside
+  // (sourceId, externalId): several real feeds mint a different guid for the same article across polls (a
+  // revision fragment, a WordPress preview-vs-published guid) while the article's own URL is unchanged. Null
+  // when the item has no URL (manual entries) or the URL didn't parse. Not unique at the DB level — checked in
+  // application code the same way the externalId check already is, so one bad source can't corrupt another's rows.
+  originalUrlKey   String?   @map("original_url_key")
   originalTitle    String?   @map("original_title")
   originalText     String?   @map("original_text")
   language         String?
@@ -173,6 +179,7 @@ model RawIngestionItem {
   militaryCommanderLinks ArticleMilitaryCommanderLink[]
 
   @@unique([sourceId, externalId])
+  @@index([sourceId, originalUrlKey])
   @@map("raw_ingestion_items")
 }
 

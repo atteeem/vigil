@@ -21,6 +21,7 @@ function item(overrides: Partial<RawIngestionItemDTO>): RawIngestionItemDTO {
     sourceId: "source-1",
     externalId: `ext-${counter}`,
     originalUrl: null,
+    originalUrlKey: null,
     originalTitle: "Untitled report",
     originalText: "",
     language: null,
@@ -181,5 +182,40 @@ test.describe("Structured fact extraction (lib/ingestion/extract-facts.ts)", () 
     expect(facts("longitude", result)).toHaveLength(3);
     // An ambiguous location must never silently resolve to one conflict.
     expect(facts("conflictId", result)).toHaveLength(0);
+  });
+
+  // Real-data audit finding: a country-code match alone used to attach that
+  // country's tracked conflict to ANY article — a tourism/lifestyle piece
+  // naming a Mexican city was suggested as a "Mexico cartel violence" event
+  // purely because the place resolved to MX. Only an article whose own
+  // eventType is actually conflict/security-relevant should carry a
+  // conflict suggestion (lib/ingestion/event-type-keywords.ts's
+  // NON_CONFLICT_EVENT_TYPES).
+  test("6. A non-conflict story naming a conflict country's city gets no conflict association", async () => {
+    const result = await extractFacts(
+      item({
+        originalTitle: "The story of a beach resort in Tijuana",
+        originalText: "A feature on the history and architecture of a beloved seaside hotel in Tijuana.",
+      }),
+    );
+
+    expect(facts("countryCode", result)[0]!.value).toBe("MX");
+    expect(facts("eventType", result)).toHaveLength(0);
+    expect(facts("conflictId", result)).toHaveLength(0);
+  });
+
+  test("7. A genuine security incident in the same city still gets its conflict association", async () => {
+    const result = await extractFacts(
+      item({
+        originalTitle: "Army downs drone and arrests its operator in Tijuana",
+        originalText: "The Defense Ministry said the drone belonged to a criminal group operating in the area.",
+      }),
+    );
+
+    expect(facts("countryCode", result)[0]!.value).toBe("MX");
+    expect(facts("eventType", result)[0]!.value).toBe("drone");
+    const conflictId = facts("conflictId", result);
+    expect(conflictId).toHaveLength(1);
+    expect(conflictId[0]!.source).toContain("MX");
   });
 });

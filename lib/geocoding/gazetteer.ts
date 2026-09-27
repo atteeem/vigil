@@ -85,6 +85,18 @@ const GAZETTEER: Record<string, GeocodeCandidate[]> = {
   pyongyang: [{ label: "Pyongyang, North Korea", lat: 39.02, lng: 125.75, countryCode: "KP", region: "Asia" }],
 
   taipei: [{ label: "Taipei, Taiwan", lat: 25.03, lng: 121.57, countryCode: "TW", region: "Asia" }],
+
+  "mexico city": [{ label: "Mexico City, Mexico", lat: 19.43, lng: -99.13, countryCode: "MX", region: "Americas" }],
+  tijuana: [{ label: "Tijuana, Baja California, Mexico", lat: 32.52, lng: -117.02, countryCode: "MX", region: "Americas" }],
+  culiacan: [{ label: "Culiacán, Sinaloa, Mexico", lat: 24.79, lng: -107.38, countryCode: "MX", region: "Americas" }],
+  "ciudad juarez": [{ label: "Ciudad Juárez, Chihuahua, Mexico", lat: 31.69, lng: -106.42, countryCode: "MX", region: "Americas" }],
+  guadalajara: [{ label: "Guadalajara, Jalisco, Mexico", lat: 20.66, lng: -103.35, countryCode: "MX", region: "Americas" }],
+  monterrey: [{ label: "Monterrey, Nuevo León, Mexico", lat: 25.67, lng: -100.31, countryCode: "MX", region: "Americas" }],
+  acapulco: [{ label: "Acapulco, Guerrero, Mexico", lat: 16.86, lng: -99.89, countryCode: "MX", region: "Americas" }],
+  chilpancingo: [{ label: "Chilpancingo, Guerrero, Mexico", lat: 17.55, lng: -99.5, countryCode: "MX", region: "Americas" }],
+  morelia: [{ label: "Morelia, Michoacán, Mexico", lat: 19.7, lng: -101.19, countryCode: "MX", region: "Americas" }],
+  uruapan: [{ label: "Uruapan, Michoacán, Mexico", lat: 19.42, lng: -102.07, countryCode: "MX", region: "Americas" }],
+  tapachula: [{ label: "Tapachula, Chiapas, Mexico", lat: 14.9, lng: -92.26, countryCode: "MX", region: "Americas" }],
 };
 
 export function gazetteerLookup(placeName: string): GeocodeCandidate[] {
