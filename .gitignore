@@ -13,6 +13,7 @@ next-env.d.ts
 prisma/dev.db
 prisma/dev.db-journal
 prisma/test.db*
+prisma/viz.db*
 .next-*
 
 # Playwright output
