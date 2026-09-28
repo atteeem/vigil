@@ -40,6 +40,12 @@ export interface SuggestionSnapshotInput {
   suggestedSeverity: string | null;
   suggestedImportance: number | null;
   locationSource: "resolved" | "ambiguous" | "none";
+  /** Backlog Triage & Safe Publication v1 — see lib/ingestion/publish-readiness.ts. */
+  suggestedClassification?: string | null;
+  suggestedReadiness?: string | null;
+  suggestedReadinessReasons?: string | null;
+  suggestedConflictConfidence?: number | null;
+  suggestedConflictReasons?: string | null;
 }
 
 function toDTO(row: RawIngestionItem): RawIngestionItemDTO {

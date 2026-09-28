@@ -1,12 +1,12 @@
 import type { RawIngestionItemDTO } from "@/lib/db/repositories/raw-ingestion-items";
 import type { ExtractedFactField } from "@/lib/types/db";
-import { detectEventType, suggestSeverityAndImportance, NON_CONFLICT_EVENT_TYPES } from "@/lib/ingestion/event-type-keywords";
-import type { EventType } from "@/lib/types";
+import { detectEventType, suggestSeverityAndImportance } from "@/lib/ingestion/event-type-keywords";
 import { gazetteerPlaceNames, gazetteerLookup } from "@/lib/geocoding/gazetteer";
 import { detectActors } from "@/lib/ingestion/actors";
 import { extractKilled, extractInjured } from "@/lib/ingestion/casualties";
 import { detectInfrastructureDamage } from "@/lib/ingestion/infrastructure-damage";
-import { findConflictByCountryCode } from "@/lib/db/repositories/conflicts";
+import { matchConflict } from "@/lib/ingestion/conflict-match";
+import type { EventType } from "@/lib/types";
 
 /**
  * Structured Event Intelligence (spec "Structured Event Intelligence") —
@@ -172,17 +172,18 @@ export async function extractFacts(item: RawIngestionItemDTO): Promise<Extracted
     });
   }
 
-  // --- conflict association: only when a single, unambiguous country
-  // resolved AND a matching seeded conflict exists — never guessed. ---
+  // --- conflict association: only when a single, unambiguous country resolved AND the central
+  // evidence-based matcher (lib/ingestion/conflict-match.ts) finds real conflict-specific evidence —
+  // country association alone is never sufficient (see that module's own comment). ---
   const resolved = locationCandidates.length === 1 ? locationCandidates[0]! : null;
-  if (resolved?.countryCode && eventType && !NON_CONFLICT_EVENT_TYPES.has(eventType as EventType)) {
-    const conflict = await findConflictByCountryCode(resolved.countryCode);
-    if (conflict) {
+  if (resolved?.countryCode) {
+    const match = await matchConflict({ title, bodyText: body, countryCode: resolved.countryCode, eventType: (eventType ?? "other") as EventType, sourceId: item.sourceId });
+    if (match.conflictId) {
       facts.push({
         field: "conflictId",
-        value: conflict.id,
-        confidence: 0.7,
-        source: `resolved location's country (${resolved.countryCode}) matches an active tracked conflict`,
+        value: match.conflictId,
+        confidence: match.matchConfidence,
+        source: match.matchReasons.join("; "),
       });
     }
   }

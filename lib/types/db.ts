@@ -199,6 +199,9 @@ export interface DraftSuggestionDTO {
   longitude: number | null;
   conflictId: string | null;
   conflictName: string | null;
+  /** Evidence strength behind conflictId (0 when null) and why — see lib/ingestion/conflict-match.ts. */
+  conflictMatchConfidence: number;
+  conflictMatchReasons: string[];
   title: string;
   summary: string;
   verificationStatus: DbVerificationStatus;
@@ -322,6 +325,14 @@ export interface RawIngestionItemWithSourceDTO {
    * Review to be clicked first. */
   topDuplicate: DuplicateCandidateDTO | null;
   duplicateLikelihood: DuplicateLikelihood;
+  suggestedClassification: string | null;
+  suggestedReadiness: string | null;
+  suggestedConflictConfidence: number | null;
+  /** FINAL verdict (snapshot classification/readiness combined with the live duplicate signal above) —
+   * this, not the raw suggested* snapshot fields, is what filters/badges should read. */
+  finalClassification: string;
+  finalReadiness: string;
+  finalReadinessReasons: string[];
 }
 
 // Structured Event Intelligence (spec "Structured Event Intelligence").

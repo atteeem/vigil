@@ -4,6 +4,7 @@ import { extractDraft } from "@/lib/ingestion/draft";
 import { listIncomingItems, type IncomingFilters } from "@/lib/ingestion/incoming-queue";
 import { PublishError, publishRawItem } from "@/lib/ingestion/publish-item";
 import { evidenceRoleOf, isNonIndependentRole } from "@/lib/registry/source-tiers";
+import { CLASSIFICATIONS, type Classification } from "@/lib/ingestion/publish-readiness";
 import type { DraftSuggestionDTO, LocationScope } from "@/lib/types/db";
 import type { EventType, Severity } from "@/lib/types";
 
@@ -46,6 +47,8 @@ export interface BulkPlan {
   publishable: number;
   skipped: { code: SkipReason; label: string; count: number; samples: { id: string; title: string }[] }[];
   scopes: Record<LocationScope, number>;
+  /** Backlog Triage & Safe Publication v1 §11: classification breakdown of what would actually publish. */
+  classifications: Record<Classification, number>;
   warnings: { lowConfidence: number; partyClaimOrAggregator: number; mediumDuplicateRisk: number; noCoordinates: number };
   ids: string[];
   outcomes: BulkItemOutcome[];
@@ -67,6 +70,7 @@ interface Candidate {
   skip?: SkipReason;
   partyClaim: boolean;
   duplicate: "none" | "low" | "medium" | "high";
+  classification: Classification;
 }
 
 async function evaluate(filters: IncomingFilters, ids?: string[]): Promise<{ matching: number; candidates: Candidate[] }> {
@@ -82,7 +86,7 @@ async function evaluate(filters: IncomingFilters, ids?: string[]): Promise<{ mat
     await yieldToLoop();
     const source = await getSource(item.sourceId);
     const partyClaim = source ? isNonIndependentRole(evidenceRoleOf(source)) : false;
-    const c: Candidate = { id: item.id, title: item.originalTitle ?? "(no title)", draft: null, partyClaim, duplicate: item.duplicateLikelihood };
+    const c: Candidate = { id: item.id, title: item.originalTitle ?? "(no title)", draft: null, partyClaim, duplicate: item.duplicateLikelihood, classification: item.finalClassification };
     if (item.processingStatus !== "pending") c.skip = "not_pending";
     else if (!source) c.skip = "source_missing";
     else {
@@ -101,6 +105,7 @@ async function evaluate(filters: IncomingFilters, ids?: string[]): Promise<{ mat
 export async function planBulkPublish(filters: IncomingFilters, ids?: string[]): Promise<BulkPlan> {
   const { matching, candidates } = await evaluate(filters, ids);
   const scopes: BulkPlan["scopes"] = { global: 0, country: 0, region: 0, city: 0, point: 0, unknown: 0 };
+  const classifications = Object.fromEntries(CLASSIFICATIONS.map((k) => [k, 0])) as BulkPlan["classifications"];
   const skipped = new Map<SkipReason, BulkPlan["skipped"][number]>();
   const warnings = { lowConfidence: 0, partyClaimOrAggregator: 0, mediumDuplicateRisk: 0, noCoordinates: 0 };
   const outcomes: BulkItemOutcome[] = [];
@@ -117,13 +122,14 @@ export async function planBulkPublish(filters: IncomingFilters, ids?: string[]):
     ok.push(c.id);
     const d = c.draft!;
     scopes[d.locationScope]++;
+    classifications[c.classification]++;
     if (d.locationScope === "unknown" || d.verificationStatus === "unverified" || d.titleSource === "text_excerpt") warnings.lowConfidence++;
     if (c.partyClaim) warnings.partyClaimOrAggregator++;
     if (c.duplicate === "medium") warnings.mediumDuplicateRisk++;
     if (d.latitude == null) warnings.noCoordinates++;
     outcomes.push({ id: c.id, title: c.title, status: "publishable", scope: d.locationScope });
   }
-  return { matching, publishable: ok.length, skipped: [...skipped.values()], scopes, warnings, ids: ok, outcomes };
+  return { matching, publishable: ok.length, skipped: [...skipped.values()], scopes, classifications, warnings, ids: ok, outcomes };
 }
 
 export async function runBulkPublish(filters: IncomingFilters, opts: { ids?: string[]; expectedCount?: number; /** Test seam: the function that publishes one report. */ publish?: typeof publishRawItem } = {}): Promise<BulkResult> {

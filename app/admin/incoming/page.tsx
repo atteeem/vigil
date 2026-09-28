@@ -29,6 +29,7 @@ import {
   type ExtractedFactsResponseDTO,
   type LocationScope,
 } from "@/lib/types/db";
+import { CLASSIFICATIONS, READINESS_STATUSES, type Classification, type ReadinessStatus } from "@/lib/ingestion/publish-readiness";
 import { timeAgo } from "@/lib/utils";
 import type { ConflictEvent } from "@/lib/types";
 
@@ -41,6 +42,9 @@ interface IncomingFilters {
   duplicateLikelihood: DuplicateLikelihood | "";
   maxAgeHours: string;
   sort: IncomingSort;
+  readiness: ReadinessStatus | "";
+  classification: Classification | "";
+  conflictMatchLevel: "high" | "medium" | "none" | "";
 }
 
 const DEFAULT_FILTERS: IncomingFilters = {
@@ -52,7 +56,22 @@ const DEFAULT_FILTERS: IncomingFilters = {
   duplicateLikelihood: "",
   maxAgeHours: "",
   sort: "newest",
+  readiness: "",
+  classification: "",
+  conflictMatchLevel: "",
 };
+
+const CLASSIFICATION_LABEL: Record<Classification, string> = {
+  CONFLICT_EVENT: "Conflict event",
+  COUNTRY_DEVELOPMENT: "Country development",
+  GLOBAL_LIVE_EVENT: "Global / live event",
+  DUPLICATE: "Duplicate",
+  INSUFFICIENT: "Insufficient",
+  PARTY_CLAIM: "Party claim",
+  OTHER: "Other",
+};
+
+const READINESS_LABEL: Record<ReadinessStatus, string> = { READY: "Ready", NEEDS_REVIEW: "Needs review", BLOCKED: "Blocked" };
 
 const AGE_OPTIONS: { label: string; value: string }[] = [
   { label: "Any age", value: "" },
@@ -89,6 +108,9 @@ function buildIncomingQuery(filters: IncomingFilters): string {
   if (filters.duplicateLikelihood) params.set("duplicateLikelihood", filters.duplicateLikelihood);
   if (filters.maxAgeHours) params.set("maxAgeHours", filters.maxAgeHours);
   if (filters.sort) params.set("sort", filters.sort);
+  if (filters.readiness) params.set("readiness", filters.readiness);
+  if (filters.classification) params.set("classification", filters.classification);
+  if (filters.conflictMatchLevel) params.set("conflictMatchLevel", filters.conflictMatchLevel);
   return params.toString();
 }
 
@@ -515,6 +537,49 @@ export default function AdminIncomingPage() {
           </select>
         </label>
         <label className="text-xs text-ink-faint">
+          Readiness
+          <select
+            className="mt-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-ink"
+            value={filters.readiness}
+            onChange={(e) => setFilters((f) => ({ ...f, readiness: e.target.value as ReadinessStatus | "" }))}
+          >
+            <option value="">Any</option>
+            {READINESS_STATUSES.map((r) => (
+              <option key={r} value={r}>
+                {READINESS_LABEL[r]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs text-ink-faint">
+          Classification
+          <select
+            className="mt-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-ink"
+            value={filters.classification}
+            onChange={(e) => setFilters((f) => ({ ...f, classification: e.target.value as Classification | "" }))}
+          >
+            <option value="">Any</option>
+            {CLASSIFICATIONS.map((c) => (
+              <option key={c} value={c}>
+                {CLASSIFICATION_LABEL[c]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs text-ink-faint">
+          Conflict-match confidence
+          <select
+            className="mt-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-ink"
+            value={filters.conflictMatchLevel}
+            onChange={(e) => setFilters((f) => ({ ...f, conflictMatchLevel: e.target.value as "high" | "medium" | "none" | "" }))}
+          >
+            <option value="">Any</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="none">None</option>
+          </select>
+        </label>
+        <label className="text-xs text-ink-faint">
           Age
           <select
             className="mt-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-ink"
@@ -597,6 +662,17 @@ export default function AdminIncomingPage() {
                     <span className="font-medium text-ink-dim">{item.source.name}</span>
                     <span>·</span>
                     <span>{timeAgo(item.receivedAt)}</span>
+                    {item.processingStatus === "pending" && (
+                      <span
+                        data-testid={`readiness-badge-${item.id}`}
+                        title={item.finalReadinessReasons.join("; ")}
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          item.finalReadiness === "READY" ? "bg-stable/10 text-stable" : item.finalReadiness === "BLOCKED" ? "bg-high/10 text-high" : "bg-white/5 text-ink-faint"
+                        }`}
+                      >
+                        {READINESS_LABEL[item.finalReadiness as ReadinessStatus]} · {CLASSIFICATION_LABEL[item.finalClassification as Classification]}
+                      </span>
+                    )}
                     {showDuplicateBadge && (
                       <span
                         data-testid={`duplicate-badge-${item.id}`}

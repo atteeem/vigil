@@ -105,17 +105,54 @@ All 16 structured providers (USGS, GDACS, EONET, FIRMS, HANS, NWS, FAA, PortWatc
 
 Zero foreign-key violations, zero orphaned rows across every checked relation, zero duplicate slugs/names/feed URLs/aliases (re-verified this pass after the disabled-source and dedupe changes), all territorial geometry valid JSON. No `git`-tracked secrets found (scanned for API-key/token/password-shaped strings in tracked source; only `.env.example` is tracked).
 
-## 14. Known launch blockers (ranked)
+## 14. Known launch blockers (ranked, superseded — see §16 for current state)
 
-1. **The pending-review backlog, not source coverage, is the real bottleneck** — 2,598+ real items sit unreviewed; 0 events are published on the real DB. Public pages will look empty/stale on day one unless a deliberate, human-reviewed publish pass happens before testers arrive.
+1. ~~The pending-review backlog, not source coverage, is the real bottleneck~~ — **addressed 2026-09-28, see §16**: 820 real reports now published via a evidence-gated, conservatively-scoped two-batch rollout.
 2. **Ingestion scheduler needs to run continuously** before launch — every freshness badge reads STALE right now purely because polling has been off during most of this admin session (confirmed healthy once turned on — see Performance below).
 3. **Mexico (`mexico-cartel`) has 2 sources, 0 dedicated** — thin for a conflict the product explicitly names and spot-checks.
 4. **Korean Peninsula and Taiwan Strait have zero sources** despite substantial, well-documented real-world tension (missile tests, record PRC vessel incursions) — correctly classified as "not an active armed conflict," but under-covered relative to real news volume.
 5. Territorial coverage is real but thin: only Yemen has approvable geometry; every other tracked conflict correctly shows "no verified territorial dataset" rather than guessing.
+6. **~2,866 pending reports remain** (mostly NEEDS_REVIEW, dominated by real location-resolution gaps — see §16) — a genuine, ongoing human-review workload, not a bug.
 
 ## 15. Source-gap recommendation (small, targeted — not a mass list)
 
 `kurdish-turkey-pkk`'s 0-source gap was fixed this pass (Al-Monitor, real RSS, verified end-to-end — see §3). Everything else found (Mexico's thin coverage, Korean Peninsula/Taiwan Strait's zero sourcing despite real news volume) is real but lower-urgency, since those conflicts already show honest "STALE"/"NO_SOURCE" states rather than fabricated confidence — left as documented candidates rather than force-adding mediocre feeds.
+
+## 16. Backlog Triage, Conflict Attribution & Safe Publication v1 (2026-09-28)
+
+**Root cause fixed.** The previous milestone's country+eventType gate was still too permissive: any article whose location resolved to a tracked-conflict country, with an eventType outside a small hazard/health blocklist, still got linked — a diplomatic/economic/cultural story using an incidental "security"-flavored word could still slip through. Replaced with a central, evidence-based matcher (`lib/ingestion/conflict-match.ts`) used everywhere a conflict gets suggested (`draft.ts`, `extract-facts.ts`): a report is linked to a conflict only on real evidence — an explicit conflict name/alias (~0.9), a named conflict actor alongside a conflict-relevant event type (~0.85), a conflict-relevant event type alone in the conflict's own fighting geography (~0.6), a named actor alone (~0.55), or the conflict's own dedicated source (~0.45, always below the auto-ready threshold). Country association alone is never sufficient; `matchConfidence` and `matchReasons` are stored with every suggestion, never an opaque link.
+
+**A second false-positive class was found and fixed during the matcher's own sample audit**: several conflicts are literally named after their country (`Libya`, `Haiti gang conflict`'s short name `Haiti`) or have a bare single-word curated alias (`Gaza`) — a naive substring match on `conflict.name`/`shortName`/aliases treated an NFL player's tribute to a slain Palestinian girl, a routine diplomatic meeting in Benghazi, and a Haitian football club's cup win as high-confidence (0.9) conflict events, purely because the text said "Gaza"/"Libya"/"Haiti". Fixed by requiring a matched name/alias to be a specific multi-word phrase (`isSpecificEnough` in `conflict-match.ts`) — a real conflict name/alias is always distinctive ("Gaza war", "Mexican drug war"); a bare place name is exactly the weak, country-name-alone evidence the matcher must reject.
+
+**Quality sample** (per the milestone's own explicit sampling requirement): manually reviewed a random 50-item READY sample plus all 84 items in the "strong" (≥0.8) confidence band that the fix made eligible for auto-publish. After the alias fix: **zero observed false positives in the strong band** (every match reason checked out — real drone/missile/actor evidence, or a genuinely conflict-relevant development like "War in Sudan has devastated the economy" or a real terrorist attack in Kohat correctly matched via the TTP actor). A handful of borderline-but-defensible cases exist (conflict-context economic/political developments rather than hard kinetic-incident news) — acceptable, not false positives. NEEDS_REVIEW is dominated (1,517 of 2,006, ~75%) by items with **no resolvable location at all** — a pre-existing gazetteer/location-extraction coverage gap, not a conflict-attribution issue; correctly deferred to review rather than guessed. One minor, non-blocking data nit: `Iran`'s actor-registry entry lists the bare capital `tehran` as a "military-flavored" alias, which is nearly as weak as a bare country name — flagged, not fixed (never crosses the auto-ready threshold, so it only adds harmless NEEDS_REVIEW noise).
+
+**Classification + readiness** (`lib/ingestion/publish-readiness.ts`, persisted as `suggestedClassification`/`suggestedReadiness`/`suggestedReadinessReasons`/`suggestedConflictConfidence` snapshot columns, combined with a live duplicate-likelihood signal at read/publish time — the same staleness-safe pattern the project already used for duplicate detection, never a stale "not a duplicate" snapshot). Reprocessed the full real backlog (3,686 pending items at the time) after the fix:
+
+| Readiness | Count | | Classification (all) | Count |
+|---|---|---|---|---|
+| READY | 1,621 | | CONFLICT_EVENT | 676 |
+| NEEDS_REVIEW | 2,006 | | COUNTRY_DEVELOPMENT | 1,420 |
+| BLOCKED | 59 | | OTHER (no location) | 1,517 |
+| | | | INSUFFICIENT | 59 |
+| | | | PARTY_CLAIM | 14 |
+
+**Dry-run → two controlled publication batches**, both on the real `dev.db` via the extended "Publish READY filtered" bulk action (`classifications` breakdown added to `planBulkPublish`'s preview):
+- Batch 1: 220 READY reports, spread across 19 conflicts and >100 countries (81 CONFLICT_EVENT, 139 COUNTRY_DEVELOPMENT). 220/220 published, 0 skipped, 0 failed.
+- Inspected batch 1 before proceeding (public pages, event distribution, alerts, timeline) — see below. Looked correct.
+- Batch 2: 600 more READY reports (oldest-first). 600/600 published, 0 skipped, 0 failed, in 17s.
+- **Total: 820 real reports published this pass.** ~2,866 remain pending (mostly NEEDS_REVIEW). Nothing NEEDS_REVIEW or BLOCKED was touched.
+
+**Events/corroboration**: all 820 published events are singletons (1 source each) — expected, since this DB had 0 events before this pass, so there was nothing to corroborate against, and the existing architecture deliberately never auto-merges duplicate reports into one event ("Do NOT automatically merge" — a prior, considered decision, not revisited here). A targeted scan for same-conflict/same-country/same-day pairs found 39 clusters; nearly all are genuinely distinct stories. **One real near-duplicate was found**: two separate events about the same Novoshakhtinsk refinery drone strike (different outlets, both worded distinctly enough that live duplicate-detection — which only compares against already-published events, not other items in the same batch — didn't catch the second one against the first from earlier in the same batch). Rate: 1 pair / 820 events (~0.2%). Left for a human to merge via the existing admin merge tooling; not auto-fixed, consistent with the "never auto-merge" policy.
+
+**Map/report-count verification**: `/api/report-counts` returns real, sensible per-conflict counts (1-4 per conflict in the last 24h across 7 active conflicts) after publication. `/api/events` returns all 820 with real `occurredAt` values spanning 2026-08-21 to 2026-09-28 — genuinely historical, not clustered at publish time.
+
+**Brief/alert/timeline safety — verified, not just assumed**: `alert_records` stayed at **0** after both batches (733 `alert_states` ledger rows were written, i.e. state was tracked, but nothing crossed the "material change" bar the existing alert engine already enforces — a first-ever observation of a fact isn't itself a change to alert on). The World Command Center's `whatChanged`/`ticker` arrays were **empty** after 820 publishes; `pulse` showed only 3 genuinely current items. `runBulkPublish` already threads `occurredAt` from the report's own `publishedAt` (never the publish moment) into the created `Event` — confirmed with a dedicated integration test that backdates a report 10 days and asserts the resulting event keeps that date. **No false "breaking now" signal was produced by this backlog publish.**
+
+**Admin queue**: added Readiness / Classification / Conflict-match-confidence filters to `/admin/incoming` (reusing the existing filter-bar pattern, no new page) and a readiness+classification badge per item. Review prioritization (§12) was intentionally NOT built as a new bespoke sort — the new filters let an admin already construct the described priority view (e.g. `readiness=NEEDS_REVIEW&conflictMatchLevel=medium&sort=importance`) without inventing an opaque ranking function.
+
+**Tests**: `tests/conflict-match.spec.ts` (14 tests: the matcher's evidence tiers, the bare-alias fix, readiness/classification derivation, duplicate downgrading, party-claim handling) and `tests/backlog-publish.spec.ts` (end-to-end "Publish READY filtered" + historical-timestamp preservation), plus 2 pre-existing `extract-facts.spec.ts` assertions updated for the new (more descriptive) match-reason wording.
+
+**Performance**: the 600-item batch published in 17s with no reported failures; the full-backlog reprocessing (3,686 items across 54 sources) completed the same way as the previous milestone's refresh (well under a minute per source, bounded, yielding between items).
 
 ## Performance
 

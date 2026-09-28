@@ -34,6 +34,7 @@ import { proposeTerritorialChange } from "@/lib/db/repositories/territorial-chan
 import { findConflictByCountryCode } from "@/lib/db/repositories/conflicts";
 import { isAggregatorRole, evidenceRoleOf, isNonIndependentRole } from "@/lib/registry/source-tiers";
 import { upstreamMetadata } from "@/lib/ingestion/upstream";
+import { deriveReadinessSnapshot } from "@/lib/ingestion/publish-readiness";
 
 export interface FetchResult {
   fetched: number;
@@ -81,6 +82,14 @@ export async function computeAndStoreSnapshot(item: RawIngestionItemDTO, source:
   try {
     const draft = await extractDraft(item, source);
     if (!draft) return; // autoProcessing is off for this source
+    const readiness = deriveReadinessSnapshot({
+      draft,
+      hasOriginalText: !!item.originalText?.trim(),
+      sourceMissing: false,
+      sourceUrl: item.originalUrl,
+      sourceAutoProcessing: source.autoProcessing,
+      source,
+    });
     await setSuggestionSnapshot(item.id, {
       suggestedEventType: draft.eventType,
       suggestedConflictId: draft.conflictId,
@@ -92,6 +101,11 @@ export async function computeAndStoreSnapshot(item: RawIngestionItemDTO, source:
       suggestedSeverity: draft.severity,
       suggestedImportance: draft.importance,
       locationSource: draft.locationSource,
+      suggestedClassification: readiness.classification,
+      suggestedReadiness: readiness.readiness,
+      suggestedReadinessReasons: JSON.stringify(readiness.reasons),
+      suggestedConflictConfidence: draft.conflictMatchConfidence,
+      suggestedConflictReasons: JSON.stringify(draft.conflictMatchReasons),
     });
   } catch (err) {
     console.error(`[ingestion] snapshot computation failed for item ${item.id}:`, err);

@@ -168,6 +168,16 @@ model RawIngestionItem {
   suggestedImportance   Int?      @map("suggested_importance")
   locationSource        String?   @map("location_source") // "resolved" | "ambiguous" | "none"
   processedAt           DateTime? @map("processed_at")
+  // Backlog Triage & Safe Publication v1 (lib/ingestion/publish-readiness.ts): a second, deliberately
+  // separate snapshot pair layered on top of the suggestion above. "Readiness" excludes the live
+  // duplicate signal on purpose (same staleness reasoning as this model's own comment above) — the
+  // admin queue and bulk-publish combine this snapshot with a freshly-computed duplicateLikelihood via
+  // applyDuplicateSignal, never trusting a stored "not a duplicate" as permanent.
+  suggestedClassification     String? @map("suggested_classification") // CONFLICT_EVENT | COUNTRY_DEVELOPMENT | GLOBAL_LIVE_EVENT | DUPLICATE | INSUFFICIENT | PARTY_CLAIM | OTHER
+  suggestedReadiness          String? @map("suggested_readiness") // READY | NEEDS_REVIEW | BLOCKED (pre-duplicate-check; see comment above)
+  suggestedReadinessReasons   String? @map("suggested_readiness_reasons") // JSON-encoded string[]
+  suggestedConflictConfidence Float?  @map("suggested_conflict_confidence")
+  suggestedConflictReasons    String? @map("suggested_conflict_reasons") // JSON-encoded string[]
 
   eventLinks             EventSource[]
   extractedFacts         ExtractedFact[]
@@ -180,6 +190,7 @@ model RawIngestionItem {
 
   @@unique([sourceId, externalId])
   @@index([sourceId, originalUrlKey])
+  @@index([processingStatus, suggestedReadiness, suggestedClassification])
   @@map("raw_ingestion_items")
 }
 

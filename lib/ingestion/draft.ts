@@ -1,12 +1,12 @@
 import type { Source } from "@prisma/client";
 import type { RawIngestionItemDTO } from "@/lib/db/repositories/raw-ingestion-items";
 import type { DraftSuggestionDTO } from "@/lib/types/db";
-import { detectEventType, suggestSeverityAndImportance, NON_CONFLICT_EVENT_TYPES } from "@/lib/ingestion/event-type-keywords";
+import { detectEventType, suggestSeverityAndImportance } from "@/lib/ingestion/event-type-keywords";
 import { gazetteerPlaceNames, gazetteerLookup } from "@/lib/geocoding/gazetteer";
 import { resolveLocationScope, leadOf } from "@/lib/geocoding/location-scope";
 import { deriveSummary, deriveTitle, cleanText } from "@/lib/ingestion/text-summary";
 import { getCountryRecord } from "@/lib/countries/registry";
-import { findConflictByCountryCode } from "@/lib/db/repositories/conflicts";
+import { matchConflict } from "@/lib/ingestion/conflict-match";
 import { findDuplicateCandidates } from "@/lib/ingestion/duplicates";
 
 /**
@@ -39,15 +39,9 @@ export async function extractDraft(item: RawIngestionItemDTO, source: Source, op
   const candidates = ambiguousName ? gazetteerLookup(ambiguousName) : loc.scope === "city" ? gazetteerLookup(loc.city!.toLowerCase()) : [];
   const locationSource: DraftSuggestionDTO["locationSource"] = loc.scope === "city" ? "resolved" : ambiguousName && loc.scope !== "region" ? "ambiguous" : "none";
 
-  let conflictId: string | null = null;
-  let conflictName: string | null = null;
-  if (loc.countryCode && !NON_CONFLICT_EVENT_TYPES.has(eventType)) {
-    const conflict = await findConflictByCountryCode(loc.countryCode);
-    if (conflict) {
-      conflictId = conflict.id;
-      conflictName = conflict.name;
-    }
-  }
+  const match = await matchConflict({ title, bodyText: cleanText(item.originalText), countryCode: loc.countryCode, eventType, sourceId: source.id });
+  const conflictId = match.conflictId;
+  const conflictName = match.conflictName;
 
   const occurredAt = item.publishedAt ?? item.receivedAt;
   const duplicates =
@@ -69,6 +63,8 @@ export async function extractDraft(item: RawIngestionItemDTO, source: Source, op
     longitude: loc.longitude,
     conflictId,
     conflictName,
+    conflictMatchConfidence: match.matchConfidence,
+    conflictMatchReasons: match.matchReasons,
     title,
     titleSource: titleResult.source,
     summary: summary.summary,

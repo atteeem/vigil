@@ -41,6 +41,11 @@ function item(overrides: Partial<RawIngestionItemDTO>): RawIngestionItemDTO {
     suggestedImportance: null,
     locationSource: null,
     processedAt: null,
+    suggestedClassification: null,
+    suggestedReadiness: null,
+    suggestedReadinessReasons: null,
+    suggestedConflictConfidence: null,
+    suggestedConflictReasons: null,
     ...overrides,
   };
 }
@@ -76,13 +81,14 @@ test.describe("Structured fact extraction (lib/ingestion/extract-facts.ts)", () 
     expect(facts("countryCode", result)[0]!.value).toBe("UA");
     expect(facts("region", result)[0]!.value).toBe("Europe");
 
-    // A single resolved location whose country matches a seeded conflict
-    // should surface a likely conflict association (spec "likely conflict
-    // association") — but only as a suggestion, never asserted as fact.
+    // A single resolved location whose country matches a seeded conflict AND has real evidence (here,
+    // an "airstrike" event type in that conflict's own fighting geography — see
+    // lib/ingestion/conflict-match.ts) should surface a likely conflict association (spec "likely
+    // conflict association") — but only as a suggestion, never asserted as fact.
     const conflictId = facts("conflictId", result);
     expect(conflictId.length).toBeLessThanOrEqual(1);
     if (conflictId.length === 1) {
-      expect(conflictId[0]!.source).toContain("UA");
+      expect(conflictId[0]!.source).toContain("Russia–Ukraine War");
     }
 
     // Every extracted field carries confidence + provenance + status.
@@ -216,6 +222,6 @@ test.describe("Structured fact extraction (lib/ingestion/extract-facts.ts)", () 
     expect(facts("eventType", result)[0]!.value).toBe("drone");
     const conflictId = facts("conflictId", result);
     expect(conflictId).toHaveLength(1);
-    expect(conflictId[0]!.source).toContain("MX");
+    expect(conflictId[0]!.source).toContain("Mexico cartel violence");
   });
 });
