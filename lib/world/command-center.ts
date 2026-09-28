@@ -26,10 +26,19 @@ export function conflictSeverityScore(c: Conflict): number {
   }).severityScore;
 }
 
-export async function getCommandCenter(opts: { includePartyClaims?: boolean } = {}, now: Date = new Date()): Promise<CommandCenter> {
+export async function getCommandCenter(opts: { includePartyClaims?: boolean; asOf?: Date | null } = {}, now: Date = new Date()): Promise<CommandCenter> {
   const started = Date.now();
   const includePartyClaims = opts.includePartyClaims === true;
-  const [conflicts, brief24, brief6, freshness] = await Promise.all([listPublicConflicts(), getBrief({ window: "24h", includePartyClaims }, now), getBrief({ window: "6h" }, now), getPublicFreshness(now)]);
+  // Historical mode (spec §6): only the brief-derived sections (whatChanged/pulse/topEntities/
+  // globalSignals, via getBrief's own asOf support) are reconstructable — `listPublicConflicts()` and
+  // `getPublicFreshness()` always read CURRENT state (the conflict registry and source health have no
+  // version history), so `status` and `conflicts` below stay live-only; `meta.asOf` tells callers so.
+  const asOf = opts.asOf ? opts.asOf.toISOString() : undefined;
+  // The effective reference point for all "how recent is this relative to..." math below — the historical
+  // moment when replaying, real "now" otherwise. Using raw wall-clock `now` here in historical mode would
+  // bucket a replayed item's recency against today rather than against the moment being replayed.
+  const ref = opts.asOf ?? now;
+  const [conflicts, brief24, brief6, freshness] = await Promise.all([listPublicConflicts(), getBrief({ window: "24h", includePartyClaims, asOf }, now), getBrief({ window: "6h", asOf }, now), getPublicFreshness(now)]);
 
   const active = conflicts.filter((c) => c.status === "active");
   const scored = active.map((c) => ({ c, score: conflictSeverityScore(c) }));
@@ -41,7 +50,7 @@ export async function getCommandCenter(opts: { includePartyClaims?: boolean } = 
   for (const i of claimFree) {
     if (!i.conflictSlug) continue;
     if (!latestBySlug.has(i.conflictSlug)) latestBySlug.set(i.conflictSlug, i.headline);
-    if (now.getTime() - new Date(i.occurredAt).getTime() <= RECENT_MS) recentBySlug.add(i.conflictSlug);
+    if (ref.getTime() - new Date(i.occurredAt).getTime() <= RECENT_MS) recentBySlug.add(i.conflictSlug);
   }
   const markers: MarkerConflict[] = scored
     .filter(({ c }) => c.locationKnown && Number.isFinite(c.lat) && Number.isFinite(c.lng))
@@ -59,9 +68,9 @@ export async function getCommandCenter(opts: { includePartyClaims?: boolean } = 
     ticker: buildTicker(claimFree),
     pulse: items.slice(0, PULSE_MAX),
     whatChanged: dedupeItems(brief6.developments.filter((d) => !d.isPartyClaim).map(toWorldItem)).slice(0, WHAT_CHANGED_MAX),
-    topEntities: rankEntities(claimFree, now, (code) => getCountryRecord(code)?.name ?? null),
+    topEntities: rankEntities(claimFree, ref, (code) => getCountryRecord(code)?.name ?? null),
     globalSignals: buildSignals(claimFree),
     conflicts: markers,
-    meta: { revision: brief24.revision, computeMs: Date.now() - started, includePartyClaims, partyClaimsHidden: brief24.counts.partyClaimsHidden, thresholds: { highTensionMinScore: HIGH_TENSION_MIN_SCORE, liveMaxMinutes: LIVE_MAX_MINUTES } },
+    meta: { revision: brief24.revision, computeMs: Date.now() - started, includePartyClaims, partyClaimsHidden: brief24.counts.partyClaimsHidden, thresholds: { highTensionMinScore: HIGH_TENSION_MIN_SCORE, liveMaxMinutes: LIVE_MAX_MINUTES }, asOf: asOf ?? null },
   };
 }

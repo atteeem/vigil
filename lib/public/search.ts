@@ -8,6 +8,10 @@ import { searchAirports } from "@/lib/hazards/reference";
 import { searchHazards } from "@/lib/hazards/query";
 import { STATUS_CATEGORIES } from "@/lib/hazards/types";
 import { entityHref } from "./entities";
+import { normalizeConflictStatus } from "@/lib/registry/status";
+import { effectiveSeverityLabel } from "@/lib/scoring/severity";
+import { SEVERITY_LABEL } from "@/lib/utils/severity";
+import type { Severity } from "@/lib/types/severity";
 
 // One canonical entity search over the existing registries and tables. Nothing is indexed twice: countries come from
 // the country registry, conflicts from the conflict table (+ curated aliases), actors / units / commanders / equipment
@@ -52,7 +56,7 @@ export async function searchPublic(query: string, perGroup = 5): Promise<SearchR
   }
 
   const [conflictRows, aliasHits, nameUnits, nameCommanders, nameEquipment, events, sources, hazards] = await Promise.all([
-    prisma.conflict.findMany({ select: { id: true, slug: true, name: true, shortName: true, region: true, status: true, severity: true, fightingCountries: true } }),
+    prisma.conflict.findMany({ select: { id: true, slug: true, name: true, shortName: true, region: true, status: true, severity: true, fullScaleWar: true, fightingCountries: true } }),
     prisma.entityAlias.findMany({ where: short ? { normalized: norm } : { normalized: { contains: norm } }, take: 60 }),
     short ? Promise.resolve([]) : prisma.militaryUnit.findMany({ where: { name: { contains: q } }, select: { id: true }, take: perGroup * 2 }),
     short ? Promise.resolve([]) : prisma.commander.findMany({ where: { name: { contains: q } }, select: { id: true }, take: perGroup }),
@@ -81,7 +85,8 @@ export async function searchPublic(query: string, perGroup = 5): Promise<SearchR
     } catch {
       fighting = [];
     }
-    results.push({ type: "conflict", group: "Conflicts", id: c.id, title: c.shortName ?? c.name, kind: "Conflict", context: fighting.length ? fighting.map(countryName).join(", ") : c.region, status: cap(c.status), subtitle: `Severity ${c.severity}`, matched: alias ? `Alias: ${alias}` : undefined, href: `/conflict/${c.slug}` });
+    const severity = effectiveSeverityLabel(c.severity as Severity, c.fullScaleWar, normalizeConflictStatus(c.status));
+    results.push({ type: "conflict", group: "Conflicts", id: c.id, title: c.shortName ?? c.name, kind: "Conflict", context: fighting.length ? fighting.map(countryName).join(", ") : c.region, status: cap(c.status), subtitle: `Severity ${SEVERITY_LABEL[severity] ?? severity}`, matched: alias ? `Alias: ${alias}` : undefined, href: `/conflict/${c.slug}` });
   }
 
   // ---- actors, units, commanders, equipment (knowledge layer + alias rows, one query per kind) ----

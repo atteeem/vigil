@@ -4,6 +4,7 @@ import { getDailyIngestionStatsBySource } from "@/lib/db/repositories/ingestion-
 import { SOURCE_TYPES } from "@/lib/types/db";
 import { prisma } from "@/lib/db/client";
 import type { Source } from "@prisma/client";
+import { validateSourceUrlFields } from "@/lib/ingestion/source-url-validation";
 
 function health(source: Source): "live" | "error" | "disabled" {
   if (!source.enabled) return "disabled";
@@ -49,6 +50,8 @@ export async function POST(request: Request) {
   if (!SOURCE_TYPES.includes(body.type)) {
     return NextResponse.json({ error: `type must be one of ${SOURCE_TYPES.join(", ")}` }, { status: 400 });
   }
+  const urlError = validateSourceUrlFields(body);
+  if (urlError) return NextResponse.json({ error: urlError }, { status: 400 });
   const source = await createSource(body as SourceInput);
   return NextResponse.json(source, { status: 201 });
 }

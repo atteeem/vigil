@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { ADMIN_TEST_BYPASS_SECRET } from "./tests/fixtures/admin-test-bypass";
 
 // Local-development E2E suite (spec §20). Tests create whatever fixture data
 // they need via the API and avoid asserting on total counts.
@@ -11,6 +12,9 @@ import { defineConfig, devices } from "@playwright/test";
 const TEST_PORT = 3100;
 const TEST_DB_URL = "file:./prisma/test.db";
 process.env.DATABASE_URL = TEST_DB_URL;
+// Admin auth test bypass (lib/admin/auth.ts's isTestBypass): a fixed, non-secret value is fine here — it
+// only ever works when NODE_ENV isn't "production" (enforced server-side, not by this value being
+// secret). Shared with tests/admin-auth.spec.ts via tests/fixtures/admin-test-bypass.ts.
 
 export default defineConfig({
   testDir: "./tests",
@@ -24,6 +28,10 @@ export default defineConfig({
     // Every spec starts as a returning visitor (introduction and impact-country question already answered) so the
     // first-run dialog does not cover the page; tests/onboarding.spec.ts starts from an empty state instead.
     storageState: "tests/fixtures/onboarded-state.json",
+    // Lets every test's page navigations and request-fixture calls reach the admin surface without a real
+    // login — tests/admin-auth.spec.ts is the one spec that deliberately drops this header to exercise
+    // the real unauthenticated path.
+    extraHTTPHeaders: { "x-admin-test-bypass": ADMIN_TEST_BYPASS_SECRET },
   },
   projects: [
     { name: "Desktop", use: { ...devices["Desktop Chrome"] } },
@@ -38,6 +46,10 @@ export default defineConfig({
     env: {
       DATABASE_URL: TEST_DB_URL,
       NEXT_DIST_DIR: ".next-test",
+      ADMIN_TEST_BYPASS_SECRET,
+      // Never used in tests (the bypass header above covers every admin request instead) — set only so
+      // lib/admin/auth.ts's own functions never throw "not configured" in the rare code path that reads it.
+      ADMIN_SESSION_SECRET: "test-only-session-secret-unused",
       // Fixture Telegram channels for the credential-gated adapter (test server only).
       TELEGRAM_FIXTURES: "true",
       TEST_FIXTURES: "true",

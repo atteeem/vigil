@@ -153,6 +153,9 @@ export function TimelineControls({
           data-testid="historical-indicator"
         >
           <span>Viewing {formatAbsoluteTime(asOf.toISOString(), "UTC")}</span>
+          <span className="text-accent/70" title="Conflict markers and the Active conflicts / High tension counters read the current registry — there is no historical version history for them yet.">
+            · conflict markers & status counters are current, not historical
+          </span>
           <Button size="sm" variant="ghost" onClick={onReturnToLive} className="ml-auto" data-testid="return-to-live-button">
             <RotateCcw className="h-3 w-3" /> Return to Live
           </Button>

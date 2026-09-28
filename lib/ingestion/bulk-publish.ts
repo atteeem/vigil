@@ -3,10 +3,55 @@ import { getSource } from "@/lib/db/repositories/sources";
 import { extractDraft } from "@/lib/ingestion/draft";
 import { listIncomingItems, type IncomingFilters } from "@/lib/ingestion/incoming-queue";
 import { PublishError, publishRawItem } from "@/lib/ingestion/publish-item";
+import { findDuplicateCandidates } from "@/lib/ingestion/duplicates";
+import { mergeReportIntoEvent } from "@/lib/ingestion/merge-report";
 import { evidenceRoleOf, isNonIndependentRole } from "@/lib/registry/source-tiers";
 import { CLASSIFICATIONS, type Classification } from "@/lib/ingestion/publish-readiness";
-import type { DraftSuggestionDTO, LocationScope } from "@/lib/types/db";
+import type { DraftSuggestionDTO, DuplicateCandidateDTO, LocationScope } from "@/lib/types/db";
 import type { EventType, Severity } from "@/lib/types";
+
+// Report != Event, same-batch corroboration (Pre-Launch Critical Correctness & Security v1 §4): bulk
+// publishing used to evaluate the whole batch up front against a STALE, ingestion-time
+// duplicateLikelihood snapshot, then have every candidate's publishRawItem unconditionally create a new
+// Event — so several wire reports of the SAME real-world incident, submitted in the same bulk batch,
+// could never discover each other and each became its own Event (the root cause behind ~1 source per
+// published event at scale). The fix runs here, in the per-item PUBLISH loop (not the cheaper
+// evaluate/plan preview), one candidate at a time, in order: by the time candidate N is checked, every
+// earlier candidate in this SAME batch that became an Event is already committed and published:true in
+// the DB, so a plain, fresh findDuplicateCandidates() call naturally sees same-batch events exactly like
+// it already sees older published ones — no batch-specific matcher was invented (spec "use the EXISTING
+// duplicate/event-matching engine").
+//
+// Two outcomes, chosen deliberately over full automatic merging at the existing MIN_SCORE(35)/"high"(70)
+// advisory thresholds (which are tuned for "worth flagging to a human", not "safe with zero review" —
+// e.g. two DIFFERENT incidents in the same city, hours apart, both resolved to the same gazetteer city
+// centroid, can already score >=70 on conflict+region+type+time alone with zero real distance signal):
+//   - AUTO-CORROBORATE only when the match is specific enough that it is not plausibly two different
+//     incidents (isSafeAutoCorroboration below) — the report is attached to the matched event as an
+//     additional source (mergeReportIntoEvent, the same logic the admin's manual Merge action uses) and
+//     never becomes its own Event. Spec test (A): three wire reports of the same strike land in one Event.
+//   - Otherwise, a match at the existing advisory "high" threshold (score >= 70) is left for a human:
+//     skipped with reasonCode "likely_duplicate", now correctly computed against the SAME-BATCH state
+//     instead of the stale ingestion-time snapshot (spec test (B): two different attacks, hours/locations
+//     apart, must remain separate, not merged, not silently published as if unrelated).
+// Relay/aggregator reports of an already-corroborated story are attached as "relay", never "corroborating"
+// (mergeReportIntoEvent's own rule, spec test (C): a syndicated repeat is never independent confirmation).
+// Unrelated same-country/same-conflict reports never reach either path — findDuplicateCandidates' own
+// distance/time-gated scoring formula (lib/ingestion/duplicates.ts) keeps them below MIN_SCORE entirely
+// (spec test (D)).
+const AUTO_CORROBORATE_MIN_SCORE = 80;
+const AUTO_CORROBORATE_MAX_MINUTES_APART = 180;
+const AUTO_CORROBORATE_MIN_TITLE_SIMILARITY = 0.5;
+
+function isSafeAutoCorroboration(candidate: DuplicateCandidateDTO): boolean {
+  return (
+    candidate.score >= AUTO_CORROBORATE_MIN_SCORE &&
+    candidate.sameEventType &&
+    candidate.titleSimilarity >= AUTO_CORROBORATE_MIN_TITLE_SIMILARITY &&
+    candidate.minutesApart != null &&
+    candidate.minutesApart <= AUTO_CORROBORATE_MAX_MINUTES_APART
+  );
+}
 
 // "Publish filtered" / "Publish selected": publishes the reports that match the queue's current filters (or a chosen
 // subset of them) through the SAME publishRawItem as the single Publish button, using the automatic draft (the
@@ -34,10 +79,13 @@ export const SKIP_LABEL: Record<SkipReason, string> = {
 export interface BulkItemOutcome {
   id: string;
   title: string;
-  status: "publishable" | "published" | "skipped" | "failed";
+  status: "publishable" | "published" | "corroborated" | "skipped" | "failed";
   reason?: string;
   reasonCode?: SkipReason;
   scope?: LocationScope;
+  /** Set only when status is "corroborated": the existing event (created earlier in this same batch, or
+   * already published) this report was attached to instead of becoming its own Event. */
+  mergedIntoEventId?: string;
 }
 
 export interface BulkPlan {
@@ -56,6 +104,9 @@ export interface BulkPlan {
 
 export interface BulkResult {
   published: number;
+  /** Attached to an existing event (created earlier in this same batch, or already published) as an
+   * additional source instead of becoming its own Event — see the module comment above. */
+  corroborated: number;
   skipped: number;
   failed: number;
   outcomes: BulkItemOutcome[];
@@ -140,6 +191,7 @@ export async function runBulkPublish(filters: IncomingFilters, opts: { ids?: str
   }
   const outcomes: BulkItemOutcome[] = [];
   let published = 0;
+  let corroborated = 0;
   let skipped = 0;
   let failed = 0;
   for (const c of candidates) {
@@ -153,6 +205,35 @@ export async function runBulkPublish(filters: IncomingFilters, opts: { ids?: str
     try {
       // Re-checked at write time: publishRawItem refuses an item another admin published in the meantime.
       const raw = await prisma.rawIngestionItem.findUnique({ where: { id: c.id }, select: { publishedAt: true, receivedAt: true } });
+      const occurredAt = raw?.publishedAt ?? raw?.receivedAt ?? new Date();
+
+      // Same-batch corroboration (spec §4): freshly re-checked here, against real DB state — which
+      // already includes every event an earlier candidate in THIS batch just created — rather than the
+      // evaluate()-phase's stale, skipDuplicates:true snapshot. See the module comment above.
+      const duplicateMatches = await findDuplicateCandidates({
+        title: d.title,
+        eventType: d.eventType,
+        latitude: d.latitude,
+        longitude: d.longitude,
+        countryCode: d.countryCode,
+        region: d.region,
+        conflictId: d.conflictId,
+        occurredAt,
+      });
+      const topMatch = duplicateMatches[0] ?? null;
+
+      if (topMatch && isSafeAutoCorroboration(topMatch)) {
+        const outcome = await mergeReportIntoEvent(c.id, topMatch.eventId);
+        corroborated++;
+        outcomes.push({ id: c.id, title: c.title, status: "corroborated", scope: d.locationScope, mergedIntoEventId: outcome.eventId, reason: `Attached to an existing event (${Math.round(topMatch.score)}% match: ${topMatch.reasons.join(", ")})` });
+        continue;
+      }
+      if (topMatch && topMatch.score >= 70) {
+        skipped++;
+        outcomes.push({ id: c.id, title: c.title, status: "skipped", reasonCode: "likely_duplicate", reason: `${SKIP_LABEL.likely_duplicate} (${Math.round(topMatch.score)}% match to an event in this same batch or already published)` });
+        continue;
+      }
+
       await publishOne(c.id, {
         title: d.title,
         summary: d.summary,
@@ -160,7 +241,7 @@ export async function runBulkPublish(filters: IncomingFilters, opts: { ids?: str
         severity: d.severity as Severity,
         importance: d.importance,
         verificationStatus: d.verificationStatus,
-        occurredAt: (raw?.publishedAt ?? raw?.receivedAt ?? new Date()).toISOString(),
+        occurredAt: occurredAt.toISOString(),
         conflictId: d.conflictId,
         locationScope: d.locationScope,
         countryCode: d.countryCode,
@@ -180,5 +261,5 @@ export async function runBulkPublish(filters: IncomingFilters, opts: { ids?: str
       outcomes.push({ id: c.id, title: c.title, status: "failed", reason: err instanceof Error ? err.message : String(err) });
     }
   }
-  return { published, skipped, failed, outcomes };
+  return { published, corroborated, skipped, failed, outcomes };
 }

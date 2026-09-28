@@ -2,6 +2,7 @@ import type { Source } from "@prisma/client";
 import type { SourceAdapter, NormalizedItem, HealthCheckResult } from "@/lib/ingestion/types";
 import { HttpFetchError, parseRetryAfter } from "@/lib/ingestion/errors";
 import { resolveFeedUrl } from "@/lib/ingestion/rsshub";
+import { safeFetch } from "@/lib/security/safe-fetch";
 
 interface RssItem {
   title?: string;
@@ -105,7 +106,7 @@ export const RSSAdapter: SourceAdapter = {
     // stops waiting for it), so a hung feed cannot keep a socket open after it has been given up on.
     const timeoutMs = Number(process.env.INGESTION_FETCH_TIMEOUT_MS) || 20_000;
     try {
-      const res = await fetch(resolveFeedUrl(source.url), { headers: RSS_REQUEST_HEADERS, signal: AbortSignal.timeout(timeoutMs) });
+      const res = await safeFetch(resolveFeedUrl(source.url), { headers: RSS_REQUEST_HEADERS, timeoutMs });
       if (!res.ok) throw new HttpFetchError(res.status, res.statusText, parseRetryAfter(res.headers.get("retry-after")));
       return parseRss(await res.text());
     } catch (err) {
@@ -143,7 +144,7 @@ export const RSSAdapter: SourceAdapter = {
   async healthCheck(source: Source): Promise<HealthCheckResult> {
     if (!source.url) return { ok: false, message: "No feed URL configured." };
     try {
-      const res = await fetch(resolveFeedUrl(source.url), { method: "GET", headers: RSS_REQUEST_HEADERS });
+      const res = await safeFetch(resolveFeedUrl(source.url), { method: "GET", headers: RSS_REQUEST_HEADERS });
       if (!res.ok) return { ok: false, message: `HTTP ${res.status}` };
       return { ok: true };
     } catch (err) {

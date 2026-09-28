@@ -23,6 +23,7 @@ import { LatestTerritorialChanges } from "@/components/home/latest-territorial-c
 import { IntelOverview } from "@/components/home/intel-overview";
 import { FreshnessStamp } from "@/components/public/data-states";
 import { STALE_SOURCE_HOURS } from "@/lib/public/stale";
+import { isWithinRange, TIME_RANGE_LABEL } from "@/lib/utils/time-range";
 
 const EMPTY_CONFLICTS: never[] = [];
 const EMPTY_EVENTS: never[] = [];
@@ -34,14 +35,27 @@ export default function HomePage() {
   const viewMode = useAppStore((s) => s.globeViewMode);
   const globeLayers = useAppStore((s) => s.globeLayers);
   const contentSensitivity = useAppStore((s) => s.contentSensitivity);
+  // Homepage time-range control (1H/6H/24H/7D/30D — Pre-Launch Critical Correctness & Security v1 §7):
+  // the same TimeRange type/values and the same isWithinRange filter /world's own recency filter already
+  // uses (lib/utils/time-range.ts), so the "same time selection" genuinely means the same canonical event
+  // universe on both pages (§9). The underlying fetch stays the existing bounded 30-day/200-event window
+  // (usePublicOverview is a shared singleton read by 3 other pages too — every selectable range here is
+  // <=30 days, so client-filtering that window is exact, not an approximation.
+  const timeRange = useAppStore((s) => s.timeRange);
   // Real, DB-backed data — the same conflicts and events /world uses.
   useRefreshOnFocus();
   const overview = usePublicOverview();
   const conflicts = overview.data?.conflicts ?? EMPTY_CONFLICTS;
   const events = overview.data?.events ?? EMPTY_EVENTS;
-  // Conflict hotspot numbers: the canonical server aggregate over the same 30-day window the globe shows (not a count
+  const nowIso = overview.data?.freshness.generatedAt ?? new Date().toISOString();
+  const rangeEvents = events.filter((e) => isWithinRange(e.occurredAt, timeRange, nowIso));
+  // The real 30-day total (never events.length, which is capped at 200 — see PublicOverview.eventsTotal)
+  // when the full window is selected; the exact, uncapped count of the already-fetched window for any
+  // narrower range, since every selectable range fits inside the fetched 30 days.
+  const rangeEventsTotal = timeRange === "30D" ? (overview.data?.eventsTotal ?? rangeEvents.length) : rangeEvents.length;
+  // Conflict hotspot numbers: the canonical server aggregate over the SELECTED range (not a count
   // of the capped event feed), identical to what /world's conflict markers read for the same state.
-  const reportCounts = useConflictReportCounts({ window: "30D", dataVersion: `${events.length}:${events[0]?.id ?? ""}` });
+  const reportCounts = useConflictReportCounts({ window: timeRange, dataVersion: `${events.length}:${events[0]?.id ?? ""}` });
   const freshness = overview.data?.freshness ?? null;
   const loading = overview.status === "loading";
   const status = getGlobalStatus(conflicts);
@@ -53,7 +67,7 @@ export default function HomePage() {
   const dataSummary = (
     <>
       <p className="text-[11px] font-medium text-ink-faint">
-        {loading ? "Loading data…" : `${events.length} published events (last 30 days) · ${activeCount} active conflicts`}
+        {loading ? "Loading data…" : `${rangeEventsTotal} published events (${TIME_RANGE_LABEL[timeRange]}) · ${activeCount} active conflicts`}
       </p>
       {!loading && (
         <p className="text-[10px] text-ink-faint">
@@ -72,7 +86,7 @@ export default function HomePage() {
         <ConflictGlobe
           className="absolute inset-0 h-full w-full"
           conflicts={conflicts}
-          events={events}
+          events={rangeEvents}
           conflictReportCounts={reportCounts.data?.conflicts}
           selectedSlug={selectedSlug}
           onSelectConflict={(c) => setSelectedSlug(c.slug)}

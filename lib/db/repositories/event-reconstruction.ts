@@ -71,14 +71,18 @@ export async function listEventIdsKnownAt(timestamp: Date): Promise<KnownEventSu
  * mapper (spec "reuse existing APIs/data services... rather than
  * duplicating logic").
  *
- * Only events that were PUBLISHED as of `timestamp` are included —
- * "the public world state at T" is meaningless for a draft, same as the
- * live `GET /api/events` already only returns `published: true`. See
- * `reconstructEventState`'s own comment on why `published` here is
- * best-effort (first-publish time only, no unpublish history tracked).
+ * "The world at T" means "what was really happening at T" (Pre-Launch Critical Correctness & Security v1
+ * §5) — an event is visible from its `occurredAt`, not from whenever it was ingested/published, and
+ * "published" here is the event's CURRENT publish status (options.published: "current"), not "had it been
+ * published by T yet" — the latter is a "what did Vigil KNOW at T" question, which is what the separate,
+ * admin-only single-event reconstruction (reconstructEventStateAt above) intentionally still answers with
+ * this same function's DEFAULT options. Before this fix, both used the default createdAt/asOf-published
+ * semantics, which made almost the entire bulk-published backlog invisible for any `asOf` earlier than its
+ * (recent) bulk-publish moment, regardless of how far back in real history `asOf` scrubbed — the "replay
+ * does nothing, then dumps everything near the end" bug.
  */
 export async function reconstructWorldStateAt(timestamp: Date): Promise<EventWithSources[]> {
-  const events = await prisma.event.findMany({ where: { createdAt: { lte: timestamp } }, include: WITH_SOURCES });
+  const events = await prisma.event.findMany({ where: { occurredAt: { lte: timestamp }, published: true }, include: WITH_SOURCES });
   if (events.length === 0) return [];
 
   const historyRows = await prisma.eventHistory.findMany({ where: { eventId: { in: events.map((e) => e.id) } } });
@@ -97,7 +101,7 @@ export async function reconstructWorldStateAt(timestamp: Date): Promise<EventWit
       relationship: s.relationship,
       createdAt: s.createdAt,
     }));
-    const state = reconstructEventState(event, history, sourcesForReplay, timestamp);
+    const state = reconstructEventState(event, history, sourcesForReplay, timestamp, { existence: "occurredAt", published: "current" });
     if (!state || !state.published) continue;
 
     const attachedByT = new Set(state.sources.map((s) => s.rawIngestionItemId));

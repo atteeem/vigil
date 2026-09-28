@@ -6,6 +6,7 @@ import { conflictGeographyOf } from "@/lib/registry/geography";
 import { normalizeConflictStatus } from "@/lib/registry/status";
 import { getCountryByCode } from "@/lib/reference/countries";
 import { severityFromScore } from "@/lib/utils/severity";
+import { effectiveSeverityLabel } from "@/lib/scoring/severity";
 
 // THE public conflict source. Every public surface (homepage, globe, /world,
 // For You, conflict/country pages, search) reads conflicts through here, so
@@ -29,14 +30,21 @@ export interface ConflictStats {
   lastEventAt: Date | null;
 }
 
-/** DB row -> the UI Conflict. Severity is the stored label when valid, else derived
- * from intensity through the single centralized threshold function. */
+/** DB row -> the UI Conflict. Severity is the stored label when valid, else derived from intensity
+ * through the single centralized threshold function — and ALWAYS passed through
+ * `effectiveSeverityLabel` afterward, the same canonical hard rule `computeSeverityScore`/`scoreConflict`
+ * apply (active full-scale war => "extreme"). This is the one DB-row-to-UI mapping every public surface
+ * reads a conflict through, so applying the rule here — rather than separately in each of the many
+ * downstream aggregators that read `.severity` — is what keeps the label every surface shows in sync
+ * with the canonical severityScore a surface may separately compute via scoreConflict() (Pre-Launch
+ * Critical Correctness & Security v1: "public surfaces must not present contradictory Severity values"). */
 export function toPublicConflict(row: ConflictRow & { family?: Pick<ConflictFamily, "slug"> | null }, stats: ConflictStats): Conflict {
   const geography = conflictGeographyOf(row);
   const anchorCountry = geography.fighting.map((c) => getCountryByCode(c)).find(Boolean);
   const hasPoint = row.lat != null && row.lng != null;
-  const severity = (SEVERITIES.includes(row.severity) ? row.severity : severityFromScore(row.intensity)) as Severity;
+  const storedSeverity = (SEVERITIES.includes(row.severity) ? row.severity : severityFromScore(row.intensity)) as Severity;
   const status = normalizeConflictStatus(row.status);
+  const severity = effectiveSeverityLabel(storedSeverity, row.fullScaleWar, status);
   return {
     id: row.id,
     slug: row.slug,

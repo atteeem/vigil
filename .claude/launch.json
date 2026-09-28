@@ -9,6 +9,12 @@
         "DISABLE_INGESTION_SCHEDULER=1 npm run dev"
       ],
       "port": 3000
+    },
+    {
+      "name": "vigil-dev-verify",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000
     }
   ]
 }

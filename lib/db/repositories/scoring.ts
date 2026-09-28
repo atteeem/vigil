@@ -101,7 +101,10 @@ function computeConflictSeverityInput(conflict: Conflict, events: Event[]) {
 export async function scoreConflict(conflictId: string, userCountryCode?: string | null): Promise<EntityScores | null> {
   const conflict = await prisma.conflict.findUnique({ where: { id: conflictId } });
   if (!conflict) return null;
-  const events = await prisma.event.findMany({ where: { conflictId } });
+  // Published-only: an admin draft/unpublished event must never move the PUBLIC Severity number — it isn't
+  // real corroborated intelligence yet, and this is the one score every public surface (conflict page,
+  // homepage, globe, /world) ultimately reads (Pre-Launch Critical Correctness & Security v1).
+  const events = await prisma.event.findMany({ where: { conflictId, published: true } });
   const evidenceEvents = await prisma.event.findMany({
     where: { conflictId, published: true, occurredAt: { gte: new Date(Date.now() - CONFIDENCE_WINDOW_DAYS * 86_400_000) } },
     select: { occurredAt: true, sources: { select: { relationship: true, rawIngestionItem: { select: { originalUrl: true, publishedAt: true, receivedAt: true, source: { select: { id: true, sourceRole: true, independenceClass: true, claimPolicy: true, perspective: true, sourceCategory: true, type: true } } } } } } },

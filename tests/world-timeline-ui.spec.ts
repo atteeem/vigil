@@ -26,6 +26,9 @@ test("1. Selecting a historical preset shows the 'Viewing ...' indicator and his
     // tests/map.spec.ts's "selecting an event from the feed" test.
     test.skip();
   }
+  // The left column defaults to the Pulse tab (Global Discovery v2); the Events tab (with this heading)
+  // is a sibling panel that starts hidden until switched to.
+  await page.getByTestId("left-tab-events").click();
   await expect(page.getByText("Live Event Feed")).toBeVisible();
   await expect(page.getByTestId("historical-indicator")).not.toBeVisible();
 
@@ -57,6 +60,7 @@ test("2. The timeline control and the pre-existing recency filter are two distin
   // Changing the recency filter must not put the map into historical mode.
   await recencyGroup.getByRole("radio", { name: "6H" }).click();
   await expect(page.getByTestId("historical-indicator")).not.toBeVisible();
+  await page.getByTestId("left-tab-events").click();
   await expect(page.getByText("Live Event Feed")).toBeVisible();
 });
 
@@ -104,6 +108,7 @@ test("3. A custom timestamp can be selected via the date/time picker and produce
   await page.getByTestId("timeline-custom-apply").click();
 
   await expect(page.getByTestId("historical-indicator")).toBeVisible();
+  await page.getByTestId("left-tab-events").click();
   await expect(page.getByText(event.title, { exact: false })).toBeVisible({ timeout: 10_000 });
 
   await request.delete(`/api/admin/events/${event.id}`);

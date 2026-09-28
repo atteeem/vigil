@@ -63,14 +63,15 @@ async function findEvent(request: import("@playwright/test").APIRequestContext, 
   return events.find((e) => e.id === eventId);
 }
 
-test("1. A historical timestamp before an event was created hides it entirely", async ({ request }) => {
-  const before = new Date().toISOString();
+test("1. A historical timestamp is gated by the event's real occurredAt, not by when it was ingested/published (Pre-Launch Critical Correctness & Security v1 §5 — the backdated-backlog regression)", async ({ request }) => {
+  // occurredAt is fixed in the past ("2026-09-17T10:00:00.000Z"); the event is created and published just
+  // now (today, well after occurredAt) — exactly the bulk-published-backlog shape that exposed the bug: an
+  // event's real-world timing and its ingestion timing can be far apart.
   const event = await createEvent(request);
   await request.post(`/api/admin/events/${event.id}/publish`);
-  const after = new Date().toISOString();
 
-  expect(await findEvent(request, before, event.id)).toBeUndefined();
-  expect(await findEvent(request, after, event.id)).toBeTruthy();
+  expect(await findEvent(request, "2026-09-17T09:00:00.000Z", event.id)).toBeUndefined(); // before occurredAt: hasn't happened yet
+  expect(await findEvent(request, "2026-09-17T11:00:00.000Z", event.id)).toBeTruthy(); // after occurredAt, even though created/published only today
 
   await request.delete(`/api/admin/events/${event.id}`);
 });

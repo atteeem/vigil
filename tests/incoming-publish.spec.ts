@@ -178,7 +178,12 @@ test.describe("Incoming Reports page", () => {
     const src = await makeSource(request, "filtered");
     const other = await makeSource(request, "unfiltered");
     const a = await addReport(request, src.id, `Libya agrees a new oil deal ${uid()}`, "The agreement was signed on Sunday.");
-    const b = await addReport(request, src.id, `Air raid alert across Zhytomyr Oblast ${uid()}`, "Authorities urged residents to use shelters.");
+    // Deliberately distinct wording/region from other fixtures in this file using "Zhytomyr Oblast air
+    // raid alert" text (e.g. the "publishes exactly the filtered reports" test above) — same-batch
+    // corroboration (lib/ingestion/bulk-publish.ts) now freshly re-checks every candidate against real
+    // published events at publish time, so near-identical fixture wording across tests in this
+    // long-lived shared test DB can otherwise collide and get flagged as a likely duplicate.
+    const b = await addReport(request, src.id, `Curfew extended in Chernihiv Oblast ${uid()}`, "Regional officials extended the overnight curfew by two hours.");
     await addReport(request, src.id, `Markets close higher on Friday ${uid()}`, "Investors welcomed the data.");
     const outsider = await addReport(request, other.id, `Libya cabinet reshuffle ${uid()}`, "A new minister was named.");
 

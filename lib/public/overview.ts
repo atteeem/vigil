@@ -23,6 +23,10 @@ export interface PublicFreshness {
 export interface PublicOverview {
   conflicts: Conflict[];
   events: ConflictEvent[];
+  /** The REAL total published-event count for the 30-day window `events` is drawn from — never
+   * `events.length` (capped at 200), which several public surfaces used to display as if it were a total
+   * (Pre-Launch Critical Correctness & Security v1 §8). */
+  eventsTotal: number;
   territorialChanges: PublicTerritorialChange[];
   freshness: PublicFreshness;
 }
@@ -58,5 +62,5 @@ export async function getPublicOverview(): Promise<PublicOverview> {
     listPublicTerritorialChanges({ limit: 5 }),
     getPublicFreshness(),
   ]);
-  return { conflicts, events: page.events, territorialChanges, freshness };
+  return { conflicts, events: page.events, eventsTotal: page.total, territorialChanges, freshness };
 }

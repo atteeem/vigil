@@ -9,10 +9,14 @@ import type { TimeRange } from "@/lib/types";
 // different, capped event feeds, and counting on those slices gave different (and too small) numbers for the same
 // conflict. Both renderers' conflict markers read this one result.
 //
-// Rules (mirroring /api/events and its ?at= reconstruction):
-//   - live: events published now, occurred within the window before now;
-//   - historical (asOf): events that existed and were published at asOf, occurred within the 45-day window before
-//     asOf, counting only report links attached by asOf;
+// Rules (mirroring /api/events and its ?at= reconstruction, lib/db/repositories/event-reconstruction.ts's
+// reconstructWorldStateAt — the same "what was happening at T" semantic, not "what was known at T"):
+//   - live: currently-published events, occurred within the window before now;
+//   - historical (asOf): currently-published events that had OCCURRED by asOf (not "existed/were published by
+//     asOf" — an event's ingestion/publish timing must never gate whether the real-world incident it describes
+//     counts), occurred within the 45-day window before asOf, counting only report links attached by asOf
+//     (which reports are shown as a source at that reconstructed state IS legitimately an attachment-time
+//     question, unlike whether the underlying event counts at all);
 //   - a report linked to several events of a conflict counts once; unpublished reports never count (a report is only
 //     ever attached to a published event through publishing or a reviewed merge);
 //   - country-level reports (no map point) count toward their conflict like any other.
@@ -44,8 +48,8 @@ export async function conflictReportCounts(q: ReportCountQuery): Promise<Conflic
       ...(q.asOf ? { createdAt: { lte: q.asOf } } : {}),
       event: {
         conflictId: { not: null },
-        occurredAt: { gte: since },
-        ...(q.asOf ? { createdAt: { lte: q.asOf }, publishedAt: { lte: q.asOf } } : { published: true }),
+        occurredAt: { gte: since, lte: ref },
+        published: true,
         ...(q.eventType ? { eventType: q.eventType } : {}),
         ...(q.region ? { region: q.region } : {}),
       },

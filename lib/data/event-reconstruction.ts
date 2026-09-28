@@ -108,13 +108,32 @@ const coord = (v: string | null | undefined): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+export interface ReconstructOptions {
+  /** "createdAt" (default): the event didn't exist YET at `timestamp` if its DB row was created after it —
+   * the "what did Vigil know at T" semantic, used by the single-event admin reconstruction view
+   * (reconstructEventStateAt) and this function's own unit tests. "occurredAt": the event is visible at
+   * `timestamp` from when the real-world incident happened, regardless of when it was ingested/published —
+   * the "what was happening at T" semantic the public /world timeline needs (Pre-Launch Critical
+   * Correctness & Security v1 §5 — a bulk-published backlog event's ingestion time can be days or weeks
+   * after its real occurredAt, and gating on createdAt/publishedAt there made almost the entire backlog
+   * invisible until asOf swept into the recent bulk-publish window, then dump in all at once). */
+  existence?: "createdAt" | "occurredAt";
+  /** "asOf" (default): `published` answers "had this event been published BY `timestamp`" — a knowledge-at-T
+   * question, appropriate for the admin single-event view. "current": `published` is the event's PRESENT
+   * publish status, independent of `timestamp` — appropriate for "what was happening at T", since whether an
+   * incident is publicly visible today doesn't depend on how quickly it was written up after the fact. */
+  published?: "asOf" | "current";
+}
+
 export function reconstructEventState(
   event: Event,
   history: EventHistory[],
   sources: ReconstructableSource[],
   timestamp: Date,
+  options: ReconstructOptions = {},
 ): ReconstructedEventState | null {
-  if (event.createdAt.getTime() > timestamp.getTime()) return null;
+  const existenceAt = options.existence === "occurredAt" ? event.occurredAt : event.createdAt;
+  if (existenceAt.getTime() > timestamp.getTime()) return null;
 
   const state: Record<string, string | null> = {
     eventType: event.eventType,
@@ -175,7 +194,7 @@ export function reconstructEventState(
     casualtiesKilled: state.casualtiesKilled === null ? null : Number(state.casualtiesKilled),
     casualtiesInjured: state.casualtiesInjured === null ? null : Number(state.casualtiesInjured),
     infrastructureDamage,
-    published: event.publishedAt !== null && event.publishedAt.getTime() <= timestamp.getTime(),
+    published: options.published === "current" ? event.published : event.publishedAt !== null && event.publishedAt.getTime() <= timestamp.getTime(),
     sources: relevantSources,
   };
 }

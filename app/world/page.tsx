@@ -130,8 +130,6 @@ export default function WorldPage() {
   const basemapMode = useAppStore((s) => s.mapBasemapMode);
   const setBasemapMode = useAppStore((s) => s.setMapBasemapMode);
   const { events: liveEvents, failed: eventsFailed, retry: retryEvents } = useLiveEventsState();
-  // World Command Center: one aggregated read feeds the status bar, ticker, Pulse, right rail and conflict markers.
-  const cc = useCommandCenter();
   const baseCountry = useAppStore((s) => s.baseCountryCode);
   const [selectedConflictSlug, setSelectedConflictSlug] = useState<string | null>(null);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
@@ -157,6 +155,11 @@ export default function WorldPage() {
     if (deepLinkAt) timeline.selectCustomTimestamp(deepLinkAt);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- apply the deep-link timestamp once
   }, [deepLinkAt]);
+  // World Command Center: one aggregated read feeds the status bar, ticker, Pulse, right rail and conflict
+  // markers — reconstructed as of the Global Timeline's historical moment when one is selected (§6), Live
+  // otherwise. cc.data.meta.asOf tells the panels below which of their sections are historically accurate
+  // vs. still Live-only (see lib/world/command-center.ts's own comment on that split).
+  const cc = useCommandCenter(timeline.isHistorical ? timeline.asOf : null);
   const { events: historicalEvents, loading: historicalLoading } = useWorldEvents(timeline.asOf, timeline.previewNextAsOf);
   // Territorial Control Mode: the SAME asOf/previewNextAsOf drives
   // territorial polygons too (spec §5 "do not create a second timeline

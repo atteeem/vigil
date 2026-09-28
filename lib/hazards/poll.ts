@@ -7,6 +7,7 @@ import { nextPollDelayMinutes, applyRetryAfterFloor } from "@/lib/ingestion/back
 import { recordAttemptStarted, recordIngestionSuccess, recordIngestionError, scheduleNextPoll } from "@/lib/db/repositories/sources";
 import { recordIngestionAttempt } from "@/lib/db/repositories/ingestion-logs";
 import type { FetchResult } from "@/lib/ingestion/poll";
+import { safeFetch } from "@/lib/security/safe-fetch";
 
 // Polls one structured source (earthquakes, thermal detections, alerts...). Shares the news
 // pipeline's bookkeeping exactly: an IngestionLog row per attempt, lastAttemptedAt / lastError /
@@ -17,15 +18,9 @@ const FETCH_TIMEOUT_MS = Number(process.env.INGESTION_FETCH_TIMEOUT_MS) || 60_00
 const DEFAULT_HEADERS = { "User-Agent": "Vigil/1.0 (public intelligence map)", Accept: "application/json, text/csv, */*" };
 
 async function fetchText(url: string, init?: { headers?: Record<string, string> }): Promise<string> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, { headers: { ...DEFAULT_HEADERS, ...init?.headers }, signal: controller.signal });
-    if (!res.ok) throw new HttpFetchError(res.status, res.statusText, parseRetryAfter(res.headers.get("retry-after")));
-    return await res.text();
-  } finally {
-    clearTimeout(timer);
-  }
+  const res = await safeFetch(url, { headers: { ...DEFAULT_HEADERS, ...init?.headers }, timeoutMs: FETCH_TIMEOUT_MS });
+  if (!res.ok) throw new HttpFetchError(res.status, res.statusText, parseRetryAfter(res.headers.get("retry-after")));
+  return await res.text();
 }
 
 let lastRetention = 0;
@@ -56,7 +51,7 @@ export async function pollStructuredSource(source: Source): Promise<FetchResult>
     await scheduleNextPoll(source.id, new Date(Date.now() + nextPollDelayMinutes(updated.pollIntervalMinutes, updated.consecutiveFailures) * 60_000));
     return { fetched, alreadyKnown: fetched - stats.created, new: stats.created, errors: 0 };
   } catch (err) {
-    const message = err instanceof Error ? (err.name === "AbortError" ? `Fetching ${source.name} timed out` : err.message) : String(err);
+    const message = err instanceof Error ? (err.name === "AbortError" || err.name === "TimeoutError" ? `Fetching ${source.name} timed out` : err.message) : String(err);
     const updated = await recordIngestionError(source.id, message);
     await recordIngestionAttempt({ sourceId: source.id, fetched: 0, newCount: 0, alreadyKnown: 0, success: false, errorMessage: message });
     const backoff = nextPollDelayMinutes(updated.pollIntervalMinutes, updated.consecutiveFailures);

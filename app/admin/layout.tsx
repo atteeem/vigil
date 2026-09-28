@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
+import { AdminLogoutButton } from "@/components/admin/logout-button";
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
@@ -11,9 +12,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             <ShieldCheck className="h-5 w-5 text-accent" />
             <span className="text-sm font-semibold uppercase tracking-wide text-ink-faint">Admin</span>
           </div>
-          <Link href="/world" className="text-xs text-accent hover:underline">
-            ← Back to Vigil
-          </Link>
+          <div className="flex items-center gap-4">
+            <AdminLogoutButton />
+            <Link href="/world" className="text-xs text-accent hover:underline">
+              ← Back to Vigil
+            </Link>
+          </div>
         </div>
         <nav className="mb-6 flex items-center gap-1.5 border-b border-border pb-3">
           <Link

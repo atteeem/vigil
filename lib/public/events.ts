@@ -30,6 +30,10 @@ export interface PublicEventPage {
   events: ConflictEvent[];
   /** Pass as `before` to fetch the next (older) page; null when there is nothing older in the window. */
   nextBefore: string | null;
+  /** The REAL total published-event count for this exact window/filters — a database aggregate, never
+   * `events.length` (which is capped at `limit`). Pre-Launch Critical Correctness & Security v1 §8: a
+   * capped array's length must never be presented as though it were a total. */
+  total: number;
 }
 
 export async function listPublicEvents(query: PublicEventQuery = {}): Promise<PublicEventPage> {
@@ -37,21 +41,21 @@ export async function listPublicEvents(query: PublicEventQuery = {}): Promise<Pu
   const upper = query.before ? new Date(query.before) : null;
   const sinceDays = query.sinceDays ?? PUBLIC_EVENT_WINDOW_DAYS;
   const since = new Date((upper ?? new Date()).getTime() - sinceDays * 86_400_000);
-  const rows = await prisma.event.findMany({
-    where: {
-      published: true,
-      occurredAt: { gte: since, ...(upper && !Number.isNaN(upper.getTime()) ? { lt: upper } : {}) },
-      ...(query.conflictId ? { conflictId: query.conflictId } : {}),
-      ...(query.countryCode ? { countryCode: query.countryCode.toUpperCase() } : {}),
-    },
-    include: WITH_SOURCES,
-    orderBy: { occurredAt: "desc" },
-    take: limit + 1,
-  });
+  const where = {
+    published: true,
+    occurredAt: { gte: since, ...(upper && !Number.isNaN(upper.getTime()) ? { lt: upper } : {}) },
+    ...(query.conflictId ? { conflictId: query.conflictId } : {}),
+    ...(query.countryCode ? { countryCode: query.countryCode.toUpperCase() } : {}),
+  };
+  const [rows, total] = await Promise.all([
+    prisma.event.findMany({ where, include: WITH_SOURCES, orderBy: { occurredAt: "desc" }, take: limit + 1 }),
+    prisma.event.count({ where }),
+  ]);
   const page = rows.slice(0, limit);
   return {
     events: page.map((e) => dbEventToConflictEvent(e)),
     nextBefore: rows.length > limit ? page[page.length - 1]!.occurredAt.toISOString() : null,
+    total,
   };
 }
 

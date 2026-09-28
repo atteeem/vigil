@@ -84,5 +84,19 @@ export interface CommandCenter {
   topEntities: Record<EntityWindow, TopEntity[]>;
   globalSignals: GlobalSignal[];
   conflicts: MarkerConflict[];
-  meta: { revision: string; computeMs: number; includePartyClaims: boolean; partyClaimsHidden: number; thresholds: { highTensionMinScore: number; liveMaxMinutes: number } };
+  meta: {
+    revision: string;
+    computeMs: number;
+    includePartyClaims: boolean;
+    partyClaimsHidden: number;
+    thresholds: { highTensionMinScore: number; liveMaxMinutes: number };
+    /** Set when this payload was computed for a historical `asOf` rather than live "now" (Pre-Launch
+     * Critical Correctness & Security v1 §6). Pulse/whatChanged/topEntities/globalSignals ARE reconstructed
+     * as of this timestamp (via the brief engine's own asOf support). `status` (activeConflicts/highTension/
+     * live indicator) and `conflicts` (map marker positions/severity) are NOT — they read the conflict
+     * registry's CURRENT state, which has no version history to reconstruct from — so callers must treat
+     * those two fields as Live-only and label them accordingly whenever `asOf` is set, never presenting them
+     * as though they describe the historical moment. */
+    asOf: string | null;
+  };
 }
