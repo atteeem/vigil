@@ -3,6 +3,7 @@ import { getSource } from "@/lib/db/repositories/sources";
 import { extractDraft } from "@/lib/ingestion/draft";
 import { listIncomingItems, type IncomingFilters } from "@/lib/ingestion/incoming-queue";
 import { PublishError, publishRawItem } from "@/lib/ingestion/publish-item";
+import { findCanonicalEventMatch } from "@/lib/ingestion/event-match";
 import { evidenceRoleOf, isNonIndependentRole } from "@/lib/registry/source-tiers";
 import { CLASSIFICATIONS, type Classification } from "@/lib/ingestion/publish-readiness";
 import type { DraftSuggestionDTO, LocationScope } from "@/lib/types/db";
@@ -34,7 +35,7 @@ export const SKIP_LABEL: Record<SkipReason, string> = {
 export interface BulkItemOutcome {
   id: string;
   title: string;
-  status: "publishable" | "published" | "skipped" | "failed";
+  status: "publishable" | "published" | "merged" | "skipped" | "failed";
   reason?: string;
   reasonCode?: SkipReason;
   scope?: LocationScope;
@@ -56,6 +57,8 @@ export interface BulkPlan {
 
 export interface BulkResult {
   published: number;
+  /** Attached to an existing event instead of creating a new one — see lib/ingestion/event-match.ts. */
+  merged: number;
   skipped: number;
   failed: number;
   outcomes: BulkItemOutcome[];
@@ -95,7 +98,22 @@ async function evaluate(filters: IncomingFilters, ids?: string[]): Promise<{ mat
       else if (c.draft.titleSource === "none") c.skip = "no_title";
       else if (c.draft.summarySource === "title_only" && !item.originalText?.trim()) c.skip = "no_text";
       else if (c.draft.locationScope === "unknown" && !c.draft.conflictId) c.skip = "no_location_or_conflict";
-      else if (item.duplicateLikelihood === "high") c.skip = "likely_duplicate";
+      else if (item.duplicateLikelihood === "high") {
+        // A high raw duplicate score is only safe to publish through automatically when it also clears
+        // the much stricter canonical-merge bar (lib/ingestion/event-match.ts); otherwise it's exactly
+        // the ambiguous case a person should look at individually.
+        const canonical = await findCanonicalEventMatch({
+          title: c.draft.title,
+          eventType: c.draft.eventType as EventType,
+          latitude: c.draft.latitude,
+          longitude: c.draft.longitude,
+          countryCode: c.draft.countryCode,
+          region: c.draft.region,
+          conflictId: c.draft.conflictId,
+          occurredAt: item.publishedAt ?? item.receivedAt,
+        });
+        if (!canonical) c.skip = "likely_duplicate";
+      }
     }
     candidates.push(c);
   }
@@ -140,6 +158,7 @@ export async function runBulkPublish(filters: IncomingFilters, opts: { ids?: str
   }
   const outcomes: BulkItemOutcome[] = [];
   let published = 0;
+  let merged = 0;
   let skipped = 0;
   let failed = 0;
   for (const c of candidates) {
@@ -173,12 +192,18 @@ export async function runBulkPublish(filters: IncomingFilters, opts: { ids?: str
         locationPrecision: d.locationPrecision,
         locationEvidence: d.locationEvidence,
       });
-      published++;
-      outcomes.push({ id: c.id, title: c.title, status: "published", scope: d.locationScope });
+      const finalStatus = await prisma.rawIngestionItem.findUnique({ where: { id: c.id }, select: { processingStatus: true } });
+      if (finalStatus?.processingStatus === "merged") {
+        merged++;
+        outcomes.push({ id: c.id, title: c.title, status: "merged", scope: d.locationScope, reason: "Attached to an existing event (same real-world incident) instead of creating a new one" });
+      } else {
+        published++;
+        outcomes.push({ id: c.id, title: c.title, status: "published", scope: d.locationScope });
+      }
     } catch (err) {
       failed++;
       outcomes.push({ id: c.id, title: c.title, status: "failed", reason: err instanceof Error ? err.message : String(err) });
     }
   }
-  return { published, skipped, failed, outcomes };
+  return { published, merged, skipped, failed, outcomes };
 }

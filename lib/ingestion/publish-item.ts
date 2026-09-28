@@ -4,6 +4,11 @@ import { prisma } from "@/lib/db/client";
 import { propagateEntityLinksToEvent } from "@/lib/military/link-entities";
 import { ADMIN_REGIONS } from "@/lib/geocoding/admin-regions";
 import { gazetteerLookup } from "@/lib/geocoding/gazetteer";
+import { linkEventSource } from "@/lib/db/repositories/event-sources";
+import { setProcessingStatus } from "@/lib/db/repositories/raw-ingestion-items";
+import { proposeEventUpdatesFromReport } from "@/lib/db/repositories/event-updates";
+import { isAggregatorRole } from "@/lib/registry/source-tiers";
+import { findCanonicalEventMatch, type CanonicalEventMatch } from "@/lib/ingestion/event-match";
 import type { EventType, Severity } from "@/lib/types";
 import type { DbVerificationStatus, LocationPrecision, LocationScope } from "@/lib/types/db";
 import { LOCATION_PRECISIONS, LOCATION_SCOPES } from "@/lib/types/db";
@@ -13,6 +18,15 @@ import { LOCATION_PRECISIONS, LOCATION_SCOPES } from "@/lib/types/db";
 // item as its originating source (the item's original URL is untouched: the source link is read from the item),
 // marks the item published, carries linked military entities over and notifies the alert service. It never runs
 // without a person's action (spec §9).
+//
+// Event Clustering v1: before creating a NEW event, checks lib/ingestion/event-match.ts's canonical
+// matcher — if a real, currently-published event strongly matches (same explicit place, tight
+// event-type-specific time window, same event type, real title/fact overlap), this report ATTACHES to it
+// instead (the same mechanism the manual "Merge" admin action already used —
+// app/api/admin/incoming/[id]/merge/route.ts — this just adds an automatic, much stricter trigger for
+// it). The item's processingStatus becomes "merged", not "published", and any conflicting extracted
+// facts (casualties, etc.) become pending EventUpdateProposal rows for a human to resolve — never
+// silently overwritten.
 
 export interface PublishInput {
   title: string;
@@ -109,6 +123,20 @@ function slugify(title: string): string {
   return `${base || "event"}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
+/** Attaches a report to an existing event instead of creating a new one — the automatic counterpart to
+ * app/api/admin/incoming/[id]/merge/route.ts's manual action, same underlying steps. An aggregator/relay
+ * report is never independent confirmation regardless of the match, so it's always attached as "relay". */
+async function attachToExistingEvent(rawItem: { id: string; source: { sourceRole: string | null } }, match: CanonicalEventMatch): Promise<Event> {
+  const relationship = isAggregatorRole(rawItem.source.sourceRole) ? "relay" : "corroborating";
+  const event = await prisma.event.findUniqueOrThrow({ where: { id: match.eventId } });
+  await linkEventSource(match.eventId, rawItem.id, relationship, relationship !== "relay");
+  await setProcessingStatus(rawItem.id, "merged");
+  await proposeEventUpdatesFromReport(match.eventId, rawItem.id); // conflicting facts become pending proposals, never silently overwritten
+  await propagateEntityLinksToEvent(rawItem.id, match.eventId);
+  await alertsForEvent(match.eventId);
+  return event;
+}
+
 export async function publishRawItem(rawItemId: string, input: PublishInput): Promise<Event> {
   if (!input.title?.trim() || !input.summary?.trim() || !input.eventType) throw new PublishError("title, summary and eventType are required");
   if (!input.severity) throw new PublishError("severity is required");
@@ -118,9 +146,21 @@ export async function publishRawItem(rawItemId: string, input: PublishInput): Pr
   if (loc.latitude != null && (loc.latitude < -90 || loc.latitude > 90)) throw new PublishError("Latitude must be between -90 and 90.");
   if (loc.longitude != null && (loc.longitude < -180 || loc.longitude > 180)) throw new PublishError("Longitude must be between -180 and 180.");
 
-  const rawItem = await prisma.rawIngestionItem.findUnique({ where: { id: rawItemId } });
+  const rawItem = await prisma.rawIngestionItem.findUnique({ where: { id: rawItemId }, include: { source: { select: { sourceRole: true } } } });
   if (!rawItem) throw new PublishError("Raw item not found", 404);
-  if (rawItem.processingStatus === "published") throw new PublishError("This item has already been published.", 409);
+  if (rawItem.processingStatus === "published" || rawItem.processingStatus === "merged") throw new PublishError("This item has already been published.", 409);
+
+  const canonicalMatch = await findCanonicalEventMatch({
+    title: input.title,
+    eventType: input.eventType,
+    latitude: loc.latitude,
+    longitude: loc.longitude,
+    countryCode: loc.countryCode,
+    region: input.region ?? null,
+    conflictId: input.conflictId ?? null,
+    occurredAt,
+  });
+  if (canonicalMatch) return attachToExistingEvent(rawItem, canonicalMatch);
 
   const event = await prisma.$transaction(async (tx) => {
     const created = await tx.event.create({

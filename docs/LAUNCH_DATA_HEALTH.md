@@ -189,6 +189,26 @@ Within the remaining NEEDS_REVIEW pool, the no-location share dropped from 77.6%
 
 **Performance**: full-backlog reprocessing (2,866 items across 53 sources) completed in 33s; the 270-item publish batch in 13.6s. No CPU-heavy synchronous loops; no external network calls added to the hot path (the body-fallback pass reuses already-fetched `originalText`, never fetches anything).
 
+## 18. Event Clustering, Corroboration & Final READY Publication v1 (2026-09-28)
+
+**Root cause confirmed by real analysis, not assumption.** Scored every one of the 1,090 published events against every other with the exact existing duplicate scorer (`lib/ingestion/duplicates.ts`, no new heuristic) — 2,414 candidate pairs at score ≥35, 73 at score ≥65. The real answer to this milestone's primary question: **the 100% singleton rate was a genuine bug** — `publishRawItem` never checked for an existing matching event before creating a new one. Confirmed genuine same-incident pairs stayed permanently separate (e.g. two reports of the same Sumy Oblast car-strike 31 minutes apart, score 90; two identical "Netanyahu tours tunnels..." headlines 17 minutes apart, score 100).
+
+**A second, equally important finding from the same manual read**: weak/medium signals alone are dangerously insufficient for *automatic* merging. Two completely unrelated Kherson Oblast reports — a shelling-injury story and a prisoner-repatriation story — scored **86/100** on time+place+type+conflict coincidence alone, with **zero** title overlap. That's far above the "likely duplicate" review threshold (35), proving the existing scorer (correctly tuned for a *human reviewer's* warning) is not by itself safe for an *unattended* merge.
+
+**Canonical matcher built** (`lib/ingestion/event-match.ts`), wired into the real publish path so every caller (single Publish, review form, bulk) gets it: requires a high score (≥80), the *exact* same event type, real title/fact overlap (≥20%), and an event-type-specific time window. The window was tightened by a real finding: a naive 3-hour window pulled in a Syrian ammunition depot's "massive explosions" report 3 hours after the initial blast — plausibly a genuinely separate secondary explosion — so kinetic types now use 90 minutes, not 180. `"other"` and policy/diplomatic types never auto-merge at all.
+
+A match attaches the report the same way the pre-existing manual "Merge" action already did (reused, not duplicated): `relationship: "relay"` for aggregator/relay sources, `"corroborating"` for independent ones; the report's status becomes `"merged"`; disagreeing extracted facts become **pending `EventUpdateProposal`** rows, never a silent overwrite. The readiness pipeline now only `BLOCKED`s a high duplicate score when it does *not* also clear this stricter bar.
+
+**Retroactive dry run** (live-merge criteria, not a looser stand-in): found 5 real same-incident groups (11 events). Manually reviewed all 5 (fewer than 50 existed) — 4 unambiguous, 1 plausible-but-uncertain. Applied all 5: unpublished (never deleted) the 5 redundant events, attached their reports to the canonical event, producing 27 pending `EventUpdateProposal` rows.
+
+**Final READY publication**, recalculated live at each step: 597 READY → published 250 (248 new + 2 merged) → 345 READY remaining → published all 345 (344 new + 1 merged). **1,685 total reports across 1,677 published events** (1,669 singleton, 8 multi-source). 0 skipped, 0 failed.
+
+**Verified, not assumed**: real public pages render with a genuine `LIVE` freshness badge under live ingestion; `/api/status/freshness` returned `{"state":"live"}`. **No loading-hang reproduced** across repeated navigation through Overview/World/Conflicts/For You/Finland/Ukraine/Russia-Ukraine/Mexico/Search/Settings — zero console errors. Report counts and map markers reflect unique reports, not events.
+
+**Tests**: `tests/event-clustering.spec.ts` (6 end-to-end tests: independent-source merge, relay merge with correct independence flag, distinct-incident non-merge, incompatible-type non-merge, party-claim attachment, contested-casualty proposal).
+
+**Performance**: 250-item batch in 27.3s, 345-item batch in 26.4s, retroactive dry run (1,090×1,090 candidate scoring, reusing the existing indexed ±14-day query) in 9.8s.
+
 ## Performance
 
 No performance regressions observed under real, live ingestion. Started the real dev server with the scheduler actually running (not disabled): 3 scheduler ticks completed cleanly over ~2 minutes (12 sources polled per tick), ingesting 791 new real items in a burst (expected after a multi-day gap in polling — feeds return everything published since the last cursor). Warm page loads measured during that live ingestion: `/` 65ms, `/world` 61ms, `/conflicts` 46ms, `/for-you` 43ms, `/country/UA` 447ms, `/conflict/russia-ukraine` 426ms, `/api/world/command-center` 14ms, `/api/public/search` 16ms — no event-loop stalls, no page request blocked by a concurrent scheduler tick. The dedupe fix (§5) held under this real burst: 0 duplicate groups afterward. The per-source snapshot refresh (2,598 items across 53 sources) separately completed in well under a minute; nothing here was slow enough to justify further optimization.
