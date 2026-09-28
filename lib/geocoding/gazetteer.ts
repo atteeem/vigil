@@ -60,6 +60,8 @@ const GAZETTEER: Record<string, GeocodeCandidate[]> = {
   sanaa: [{ label: "Sanaa, Yemen", lat: 15.37, lng: 44.19, countryCode: "YE", region: "Middle East" }],
   aden: [{ label: "Aden, Yemen", lat: 12.78, lng: 45.04, countryCode: "YE", region: "Middle East" }],
   hodeidah: [{ label: "Hodeidah, Yemen", lat: 14.8, lng: 42.95, countryCode: "YE", region: "Middle East" }],
+  taiz: [{ label: "Taiz, Yemen", lat: 13.58, lng: 44.02, countryCode: "YE", region: "Middle East" }],
+  marib: [{ label: "Marib, Yemen", lat: 15.47, lng: 45.32, countryCode: "YE", region: "Middle East" }],
 
   khartoum: [{ label: "Khartoum, Sudan", lat: 15.5, lng: 32.56, countryCode: "SD", region: "Africa" }],
   "el fasher": [{ label: "El Fasher, North Darfur, Sudan", lat: 13.63, lng: 25.35, countryCode: "SD", region: "Africa" }],
@@ -67,15 +69,30 @@ const GAZETTEER: Record<string, GeocodeCandidate[]> = {
   goma: [{ label: "Goma, North Kivu, DRC", lat: -1.68, lng: 29.22, countryCode: "CD", region: "Africa" }],
   bukavu: [{ label: "Bukavu, South Kivu, DRC", lat: -2.5, lng: 28.86, countryCode: "CD", region: "Africa" }],
   kinshasa: [{ label: "Kinshasa, DRC", lat: -4.44, lng: 15.27, countryCode: "CD", region: "Africa" }],
+  inongo: [{ label: "Inongo, Mai-Ndombe, DRC", lat: -1.95, lng: 18.28, countryCode: "CD", region: "Africa" }],
+  kenge: [{ label: "Kenge, Kwango, DRC", lat: -4.87, lng: 17.04, countryCode: "CD", region: "Africa" }],
 
   mogadishu: [{ label: "Mogadishu, Somalia", lat: 2.05, lng: 45.32, countryCode: "SO", region: "Africa" }],
+  kismayo: [{ label: "Kismayo, Somalia", lat: -0.36, lng: 42.55, countryCode: "SO", region: "Africa" }],
+  baidoa: [{ label: "Baidoa, Somalia", lat: 3.12, lng: 43.65, countryCode: "SO", region: "Africa" }],
 
   bamako: [{ label: "Bamako, Mali", lat: 12.65, lng: -8.0, countryCode: "ML", region: "Africa" }],
   niamey: [{ label: "Niamey, Niger", lat: 13.51, lng: 2.11, countryCode: "NE", region: "Africa" }],
+  agadez: [{ label: "Agadez, Niger", lat: 16.97, lng: 7.99, countryCode: "NE", region: "Africa" }],
   ouagadougou: [{ label: "Ouagadougou, Burkina Faso", lat: 12.37, lng: -1.52, countryCode: "BF", region: "Africa" }],
+  "bobo-dioulasso": [{ label: "Bobo-Dioulasso, Burkina Faso", lat: 11.18, lng: -4.3, countryCode: "BF", region: "Africa" }],
+  dedougou: [{ label: "Dédougou, Burkina Faso", lat: 12.46, lng: -3.46, countryCode: "BF", region: "Africa" }],
+
+  tripoli: [{ label: "Tripoli, Libya", lat: 32.89, lng: 13.19, countryCode: "LY", region: "Africa" }],
+  benghazi: [{ label: "Benghazi, Libya", lat: 32.12, lng: 20.07, countryCode: "LY", region: "Africa" }],
+  misrata: [{ label: "Misrata, Libya", lat: 32.38, lng: 15.09, countryCode: "LY", region: "Africa" }],
+  zawia: [{ label: "Zawia, Libya", lat: 32.75, lng: 12.73, countryCode: "LY", region: "Africa" }],
+  sirte: [{ label: "Sirte, Libya", lat: 31.21, lng: 16.59, countryCode: "LY", region: "Africa" }],
+  tobruk: [{ label: "Tobruk, Libya", lat: 32.08, lng: 23.96, countryCode: "LY", region: "Africa" }],
 
   yangon: [{ label: "Yangon, Myanmar", lat: 16.87, lng: 96.2, countryCode: "MM", region: "Asia" }],
   naypyidaw: [{ label: "Naypyidaw, Myanmar", lat: 19.76, lng: 96.08, countryCode: "MM", region: "Asia" }],
+  naypyitaw: [{ label: "Naypyidaw, Myanmar", lat: 19.76, lng: 96.08, countryCode: "MM", region: "Asia" }],
 
   srinagar: [{ label: "Srinagar, Jammu and Kashmir", lat: 34.08, lng: 74.8, countryCode: "IN", region: "Asia" }],
   islamabad: [{ label: "Islamabad, Pakistan", lat: 33.68, lng: 73.05, countryCode: "PK", region: "Asia" }],

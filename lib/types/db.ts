@@ -222,6 +222,9 @@ export interface DraftSuggestionDTO {
   countryName: string | null;
   /** What justified the location assignment. */
   locationEvidence: string;
+  /** "lead" (headline + first sentence — precise enough for city/region) or "body" (the rest of the
+   * article text — country-level only). See lib/geocoding/location-scope.ts's own comment. */
+  locationEvidenceSource: "lead" | "body";
   /** Where the title / summary came from: the source's own headline and text, or a derived fallback. */
   titleSource: "source_title" | "text_excerpt" | "none";
   summarySource: "source_excerpt" | "title_only" | "ai";

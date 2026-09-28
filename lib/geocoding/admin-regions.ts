@@ -103,4 +103,11 @@ export const ADMIN_REGIONS: readonly AdminRegion[] = [
   region("Michoacán", "MX", 19.35, -101.7, "State", true, ["Michoacán", "Michoacan"]),
   region("Guerrero", "MX", 17.55, -99.9, "State", true, ["Guerrero"]),
   region("Chiapas", "MX", 16.75, -92.85, "State", true, ["Chiapas"]),
+  // Iran (persian-gulf-iran conflict — provinces that recur in real backlog reporting)
+  region("Sistan and Baluchestan", "IR", 27.5, 61.7, "Province", true, ["Sistan and Baluchestan", "Sistan-Baluchestan", "Sistan-Balochistan"]),
+  region("Khuzestan", "IR", 31.3, 48.7, "Province", true, ["Khuzestan"]),
+  // Pakistan (afghanistan-pakistan / india-pakistan conflicts)
+  region("Balochistan", "PK", 28.5, 65.5, "Province", true, ["Balochistan"]),
+  region("Khyber Pakhtunkhwa", "PK", 34.5, 72.0, "Province", true, ["Khyber Pakhtunkhwa"]),
+  region("Sindh", "PK", 26.0, 68.5, "Province", true, ["Sindh"]),
 ];

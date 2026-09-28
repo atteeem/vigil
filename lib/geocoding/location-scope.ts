@@ -23,6 +23,9 @@ export function leadOf(title: string, body: string): string {
   return `${title.trim()}. ${first.slice(0, LEAD_CHARS)}`;
 }
 
+export const LOCATION_EVIDENCE_SOURCES = ["lead", "body"] as const;
+export type LocationEvidenceSource = (typeof LOCATION_EVIDENCE_SOURCES)[number];
+
 export interface ResolvedLocationScope {
   scope: LocationScope;
   precision: LocationPrecision;
@@ -34,8 +37,18 @@ export interface ResolvedLocationScope {
   longitude: number | null;
   /** What justified the assignment, in words, for the reviewer and the stored record. */
   evidence: string;
+  /** Which pass of the source's own text produced this: "lead" (headline + first sentence — precise
+   * enough for city/region) or "body" (the rest of the article text — country-level only, see
+   * resolveLocationScope's own comment on why finer precision never comes from here). */
+  evidenceSource: LocationEvidenceSource;
   /** Places named that could not be resolved to one (ambiguous name, several countries...). */
   notes: string[];
+  /** Set only when resolution failed specifically because 2+ DIFFERENT countries were named with nothing
+   * to prefer one over the other — e.g. "Russia attacks Ukraine". A caller with conflict context (the
+   * conflict this report already matched, if any) can safely prefer whichever of these is that conflict's
+   * own fighting-geography country — see lib/ingestion/draft.ts's own use of this. Never used to invent a
+   * location beyond what was actually named. */
+  ambiguousCountryCodes?: string[];
 }
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -46,27 +59,56 @@ function findWord(haystack: string, needle: string): number {
   return m ? m.index : -1;
 }
 
+/** Case-SENSITIVE whole-word search (never folds either side) — for the handful of short country
+ * codes ("UK", "US") that only mean the country when the source itself wrote them upper-case. */
+function findWordCaseSensitive(haystack: string, needle: string): number {
+  const m = new RegExp(`(?<![\\p{L}\\p{N}])${esc(needle)}(?![\\p{L}\\p{N}])`, "u").exec(haystack);
+  return m ? m.index : -1;
+}
+
 interface CountryHit {
   code: string;
   name: string;
   at: number;
+  end: number;
 }
 
-// Names and aliases of at least 4 letters (short aliases such as "US" or "UK" collide with ordinary words).
+// Names and aliases of at least 4 letters (short 2-3 letter codes like "US"/"UK" are handled separately
+// below, case-sensitively, since folded they'd collide with ordinary words like "us").
 const COUNTRY_TERMS = COUNTRY_RECORDS.flatMap((c) => [c.name, ...c.aliases].filter((t) => normalizeName(t).length >= 4).map((t) => ({ term: t, code: c.code, name: c.name })));
+// A short (2-3 letter) alias only ever means the country when it appears in the source's own text
+// ALL-CAPS ("UK", "US") — matched against the original (unfolded, case-preserved) text, never lowercased.
+const SHORT_COUNTRY_TERMS = COUNTRY_RECORDS.flatMap((c) => [c.name, ...c.aliases].filter((t) => { const n = normalizeName(t); return n.length >= 2 && n.length <= 3 && t === t.toUpperCase(); }).map((t) => ({ term: t, code: c.code, name: c.name })));
 
-function countriesIn(text: string): CountryHit[] {
-  const seen = new Map<string, CountryHit>();
+/** Real bug found auditing the NEEDS_REVIEW backlog (Location Resolution v1): "Guinea" is a real,
+ * boundary-delimited word inside "Papua New Guinea", "Guinea-Bissau" and "Equatorial Guinea" — three
+ * DIFFERENT countries — so a report naming only "Papua New Guinea" was scored as naming two ambiguous
+ * countries and left unresolved. Same fix already used for region/city overlap: when one match's span
+ * sits entirely inside another match's span, only the longer (more specific) one counts. */
+function countriesIn(text: string, original: string): CountryHit[] {
+  const raw: CountryHit[] = [];
   for (const { term, code, name } of COUNTRY_TERMS) {
     const at = findWord(text, term);
-    if (at >= 0 && (!seen.has(code) || at < seen.get(code)!.at)) seen.set(code, { code, name, at });
+    if (at >= 0) raw.push({ code, name, at, end: at + fold(term).length });
   }
+  for (const { term, code, name } of SHORT_COUNTRY_TERMS) {
+    const at = findWordCaseSensitive(original, term);
+    if (at >= 0) raw.push({ code, name, at, end: at + term.length });
+  }
+  raw.sort((a, b) => b.end - b.at - (a.end - a.at)); // longest span first
+  const kept: CountryHit[] = [];
+  for (const hit of raw) {
+    if (kept.some((k) => hit.at >= k.at && hit.end <= k.end)) continue; // fully inside an already-kept, longer match
+    kept.push(hit);
+  }
+  const seen = new Map<string, CountryHit>();
+  for (const hit of kept) if (!seen.has(hit.code) || hit.at < seen.get(hit.code)!.at) seen.set(hit.code, hit);
   return [...seen.values()].sort((a, b) => a.at - b.at);
 }
 
 const countryNameOf = (code: string | null) => (code ? (COUNTRY_RECORDS.find((c) => c.code === code)?.name ?? null) : null);
 
-const NONE: ResolvedLocationScope = { scope: "unknown", precision: "unknown", countryCode: null, countryName: null, adminRegion: null, city: null, latitude: null, longitude: null, evidence: "No reliable location in the headline or opening text.", notes: [] };
+const NONE: ResolvedLocationScope = { scope: "unknown", precision: "unknown", countryCode: null, countryName: null, adminRegion: null, city: null, latitude: null, longitude: null, evidence: "No reliable location in the headline or opening text.", evidenceSource: "lead", notes: [] };
 
 /** Region matches in the lead, longest alias first, not overlapping. */
 function regionsIn(text: string): { region: AdminRegion; at: number; alias: string }[] {
@@ -108,7 +150,7 @@ function citiesIn(text: string, claimed: [number, number][]): { name: string; at
 
 const titleCase = (s: string) => s.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
 
-export function resolveLocationScope(title: string, body: string): ResolvedLocationScope {
+function resolveFromLead(title: string, body: string): ResolvedLocationScope {
   const head = title.trim();
   const lead = leadOf(head, body);
   const text = fold(lead);
@@ -136,6 +178,7 @@ export function resolveLocationScope(title: string, body: string): ResolvedLocat
       latitude: c.lat ?? null,
       longitude: c.lng ?? null,
       evidence: `City "${titleCase(c.name)}" named in ${where} (canonical city coordinates, not the incident point).`,
+      evidenceSource: "lead",
       notes,
     };
   }
@@ -159,6 +202,7 @@ export function resolveLocationScope(title: string, body: string): ResolvedLocat
       latitude: r.lat,
       longitude: r.lng,
       evidence: `Region "${r.name}" named in ${where}. Coordinates are the region's centroid, not the incident point.`,
+      evidenceSource: "lead",
       notes,
     };
   }
@@ -171,7 +215,7 @@ export function resolveLocationScope(title: string, body: string): ResolvedLocat
   }
 
   // ---- country
-  const countries = countriesIn(text);
+  const countries = countriesIn(text, lead);
   const inHead = countries.filter((c) => inTitle(c.at));
   const pick = countries.length === 1 ? countries[0]! : inHead.length === 1 ? inHead[0]! : null;
   if (pick) {
@@ -185,9 +229,47 @@ export function resolveLocationScope(title: string, body: string): ResolvedLocat
       latitude: null,
       longitude: null,
       evidence: `Country "${pick.name}" named in ${inTitle(pick.at) ? "the headline" : "the first sentence"}; no place inside it is identified, so no map point is created.`,
+      evidenceSource: "lead",
       notes,
     };
   }
-  if (countries.length > 1) notes.push(`Several countries named (${countries.map((c) => c.name).join(", ")}); none is singled out.`);
+  if (countries.length > 1) {
+    notes.push(`Several countries named (${countries.map((c) => c.name).join(", ")}); none is singled out.`);
+    return { ...NONE, notes, ambiguousCountryCodes: countries.map((c) => c.code) };
+  }
   return { ...NONE, notes };
+}
+
+/** Country-only fallback over the FULL article body (not just the 200-char lead), used only when the
+ * lead itself gave nothing reliable. This is deliberately country-level only, never city/region: a place
+ * named deep in background text doesn't say where the event physically happened (that's still exactly
+ * what resolveFromLead's own reasoning already established), but a COUNTRY the whole article is about is
+ * much safer to infer from anywhere in the text — and per this milestone's own explicit instruction,
+ * leaving a country-level development in NEEDS_REVIEW merely because no city is known is a readiness bug,
+ * not a location-quality safeguard. Exactly one unambiguous country match is required; several distinct
+ * countries anywhere in the body is exactly as ambiguous as it would be in the lead. */
+function countryFromBody(title: string, body: string): ResolvedLocationScope | null {
+  const full = `${title.trim()} ${body.trim()}`;
+  if (!full.trim()) return null;
+  const text = fold(full);
+  const countries = countriesIn(text, full);
+  if (countries.length !== 1) return null;
+  const c = countries[0]!;
+  return {
+    ...NONE,
+    scope: "country",
+    precision: "country",
+    countryCode: c.code,
+    countryName: c.name,
+    evidence: `Country "${c.name}" named in the article body (not the headline or opening sentence); no place inside it is identified, so no map point is created.`,
+    evidenceSource: "body",
+  };
+}
+
+export function resolveLocationScope(title: string, body: string): ResolvedLocationScope {
+  const fromLead = resolveFromLead(title, body);
+  if (fromLead.scope !== "unknown") return fromLead;
+  const fromBody = countryFromBody(title, body);
+  if (fromBody) return { ...fromBody, notes: fromLead.notes };
+  return fromLead;
 }

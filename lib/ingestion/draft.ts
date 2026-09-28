@@ -6,7 +6,7 @@ import { gazetteerPlaceNames, gazetteerLookup } from "@/lib/geocoding/gazetteer"
 import { resolveLocationScope, leadOf } from "@/lib/geocoding/location-scope";
 import { deriveSummary, deriveTitle, cleanText } from "@/lib/ingestion/text-summary";
 import { getCountryRecord } from "@/lib/countries/registry";
-import { matchConflict } from "@/lib/ingestion/conflict-match";
+import { matchConflict, disambiguateCountryByConflictGeography } from "@/lib/ingestion/conflict-match";
 import { findDuplicateCandidates } from "@/lib/ingestion/duplicates";
 
 /**
@@ -33,7 +33,22 @@ export async function extractDraft(item: RawIngestionItemDTO, source: Source, op
 
   // Hierarchical location (city > region > country > unknown) from the headline and the opening text only.
   // Ambiguous gazetteer names are surfaced as candidates for the reviewer, never auto-picked.
-  const loc = resolveLocationScope(title, cleanText(item.originalText));
+  let loc = resolveLocationScope(title, cleanText(item.originalText));
+  // "Russia attacks Ukraine..." named two different countries with nothing to prefer between them — if
+  // they're the two sides of ONE tracked conflict, its own fighting geography (not a guess) disambiguates.
+  if (loc.scope === "unknown" && loc.ambiguousCountryCodes) {
+    const disambiguated = await disambiguateCountryByConflictGeography(loc.ambiguousCountryCodes);
+    if (disambiguated) {
+      loc = {
+        ...loc,
+        scope: "country",
+        precision: "country",
+        countryCode: disambiguated.code,
+        countryName: disambiguated.name,
+        evidence: `${loc.evidence} "${disambiguated.name}" is where the tracked conflict's fighting actually happens, so the report is kept at that country's level.`,
+      };
+    }
+  }
   const lowerLead = leadOf(title, cleanText(item.originalText)).toLowerCase();
   const ambiguousName = gazetteerPlaceNames().find((n) => gazetteerLookup(n).length > 1 && lowerLead.includes(n));
   const candidates = ambiguousName ? gazetteerLookup(ambiguousName) : loc.scope === "city" ? gazetteerLookup(loc.city!.toLowerCase()) : [];
@@ -76,6 +91,7 @@ export async function extractDraft(item: RawIngestionItemDTO, source: Source, op
     locationPrecision: loc.precision,
     locationScope: loc.scope,
     locationEvidence: [loc.evidence, ...loc.notes].join(" "),
+    locationEvidenceSource: loc.evidenceSource,
     locationCandidates: candidates,
     duplicates,
   };

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/client";
 import { findConflictByCountryCode } from "@/lib/db/repositories/conflicts";
 import { parseCodes } from "@/lib/registry/geography";
 import { CONFLICT_ALIASES } from "@/lib/conflicts/resolve";
+import { getCountryRecord } from "@/lib/countries/registry";
 import { ACTOR_REGISTRY, type ActorAlias } from "@/lib/actors/registry";
 import type { Conflict } from "@prisma/client";
 import type { EventType } from "@/lib/types";
@@ -156,4 +157,25 @@ export async function matchConflict(input: {
   }
 
   return { conflictId: conflict.id, conflictName: conflict.name, matchConfidence: confidence, matchReasons: reasons };
+}
+
+/** Location Resolution v1 finding: "Russia attacks Ukraine with 138 drones" (and the equivalent for
+ * every other conflict where the belligerents' own countries both get named) resolved to NO location at
+ * all — two different countries were explicitly named with nothing to prefer one over the other. When
+ * BOTH named countries belong to the SAME single tracked conflict, the conflict's own fighting geography
+ * (where combat actually happens, never a supporter/participant-only country) is real, source-grounded
+ * evidence for which of the two the report is actually ABOUT — this is disambiguation from what the
+ * source already said, never an invented location. Returns null whenever this doesn't cleanly apply
+ * (the two countries don't share one conflict, or neither/both are the fighting side). */
+export async function disambiguateCountryByConflictGeography(codes: readonly string[]): Promise<{ code: string; name: string } | null> {
+  if (codes.length !== 2) return null;
+  const [a, b] = codes as [string, string];
+  const [conflictA, conflictB] = await Promise.all([findConflictByCountryCode(a), findConflictByCountryCode(b)]);
+  if (!conflictA || !conflictB || conflictA.id !== conflictB.id) return null;
+  const fighting = new Set(parseCodes(conflictA.fightingCountries));
+  const aFights = fighting.has(a.toUpperCase());
+  const bFights = fighting.has(b.toUpperCase());
+  if (aFights === bFights) return null; // both or neither fight there — no real preference
+  const code = aFights ? a : b;
+  return { code, name: getCountryRecord(code)?.name ?? code };
 }

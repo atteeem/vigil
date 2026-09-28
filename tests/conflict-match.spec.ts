@@ -154,6 +154,7 @@ test.describe("Publish readiness derivation (lib/ingestion/publish-readiness.ts)
       city: null,
       adminRegion: null,
       locationEvidence: "Country named in the headline.",
+      locationEvidenceSource: "lead",
       locationCandidates: [],
       duplicates: [],
       ...overrides,
