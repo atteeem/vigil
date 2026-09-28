@@ -2,6 +2,7 @@ import type { Severity } from "@/lib/types/severity";
 import { severityFromScore } from "@/lib/utils/severity";
 import { clamp } from "@/lib/utils/format";
 import type { ConflictStatusLike, SeverityScoreResult } from "./types";
+import type { Conflict } from "@/lib/types";
 
 // Midpoint of each label's own band in severityFromScore's thresholds
 // (stable <30, guarded <50, elevated <70, high <80, severe <90, extreme
@@ -157,4 +158,21 @@ export function computeSeverityScore(input: SeverityScoreInput): SeverityScoreRe
   // Never 100 here — 100 is reserved exclusively for the hard rule above.
   const finalScore = Math.round(clamp(score, 0, 99));
   return { severityScore: finalScore, severityLabel: severityFromScore(finalScore), reasons };
+}
+
+/** The canonical Severity SCORE for a public `Conflict` object — the same number every public surface's
+ * Severity display must agree with (Final Intelligence Consistency & Map Correctness v1 §8: a page must
+ * never show this number's canonical label next to the legacy raw `intensity` field as though they were
+ * two competing 0-100 conflict-danger scores). Pure and dependency-free (no DB access), so it is safe to
+ * call from a client component that already has a `Conflict` object in hand, not just from server code —
+ * moved here (out of lib/world/command-center.ts, which pulls in server-only DB modules) for exactly that
+ * reason; command-center.ts re-exports it unchanged for its own existing callers. */
+export function conflictSeverityScore(c: Conflict): number {
+  return computeSeverityScore({
+    severityLabel: effectiveSeverityLabel(c.severity, c.fullScaleWar, c.status),
+    status: c.status as ConflictStatusLike,
+    intensity: c.intensity,
+    eventCount: c.eventCount,
+    escalationTrend: c.intensityChange24h,
+  }).severityScore;
 }

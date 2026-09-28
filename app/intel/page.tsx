@@ -5,6 +5,7 @@ import { SeverityBadge } from "@/components/ui/severity-badge";
 import { REGIONS } from "@/lib/types";
 import { getGlobalStatus } from "@/lib/data/global-status";
 import { SEVERITY_LABEL, severityFromScore } from "@/lib/utils/severity";
+import { conflictSeverityScore } from "@/lib/scoring/severity";
 
 // Real registry conflicts, read on demand.
 export const dynamic = "force-dynamic";
@@ -33,7 +34,7 @@ export default async function IntelPage() {
       <div className="mt-8 space-y-8">
         {REGIONS.map((region) => {
           const conflicts = allConflicts.filter((c) => c.region === region && (c.status === "active" || c.status === "reduced")).sort(
-            (a, b) => b.intensity - a.intensity,
+            (a, b) => conflictSeverityScore(b) - conflictSeverityScore(a),
           );
           if (conflicts.length === 0) return null;
           const publishedEvents = conflicts.reduce((a, c) => a + c.eventCount, 0);
@@ -47,8 +48,8 @@ export default async function IntelPage() {
 
               <p className="mt-2 text-sm leading-relaxed text-ink-dim">
                 {conflicts.length} active conflict{conflicts.length === 1 ? "" : "s"} tracked
-                in this region, led by {conflicts[0]!.shortName} at intensity{" "}
-                {conflicts[0]!.intensity}.
+                in this region, led by {conflicts[0]!.shortName} at severity{" "}
+                {conflictSeverityScore(conflicts[0]!)}.
               </p>
 
               <div className="mt-4 space-y-2">
@@ -60,7 +61,7 @@ export default async function IntelPage() {
                   >
                     <span className="text-sm text-ink">{c.shortName}</span>
                     <div className="flex items-center gap-3">
-                      <span className="text-xs text-ink-faint">Intensity {c.intensity}</span>
+                      <span className="text-xs text-ink-faint">Severity {conflictSeverityScore(c)}</span>
                       <SeverityBadge severity={c.severity} size="sm" />
                     </div>
                   </Link>

@@ -38,6 +38,13 @@ export interface ConflictReportCounts {
   since: string;
   /** conflictId -> unique published reports. Conflicts with none are absent. */
   conflicts: Record<string, number>;
+  /** conflictId -> the subset of `conflicts[id]` attached to events that HAVE a map point (locationScope
+   * "region"/"city"/"point" with real coordinates). `conflicts[id] - mapped[id]` is the country-level/
+   * unknown-scope count with no point at all — Final Intelligence Consistency & Map Correctness v1 §9:
+   * the map needs this split so a conflict's aggregate marker can say "18 mapped · 23 country-level"
+   * instead of implying every report occurred at one marker's exact coordinates, and so that count is
+   * never silently dropped once the map zooms past the aggregate marker's own visibility range. */
+  mapped: Record<string, number>;
 }
 
 export async function conflictReportCounts(q: ReportCountQuery): Promise<ConflictReportCounts> {
@@ -54,14 +61,26 @@ export async function conflictReportCounts(q: ReportCountQuery): Promise<Conflic
         ...(q.region ? { region: q.region } : {}),
       },
     },
-    select: { rawIngestionItemId: true, event: { select: { conflictId: true } } },
+    select: { rawIngestionItemId: true, event: { select: { conflictId: true, latitude: true, longitude: true } } },
   });
   const sets = new Map<string, Set<string>>();
+  const mappedSets = new Map<string, Set<string>>();
   for (const l of links) {
     const c = l.event.conflictId!;
     let s = sets.get(c);
     if (!s) sets.set(c, (s = new Set()));
     s.add(l.rawIngestionItemId);
+    if (l.event.latitude != null && l.event.longitude != null) {
+      let ms = mappedSets.get(c);
+      if (!ms) mappedSets.set(c, (ms = new Set()));
+      ms.add(l.rawIngestionItemId);
+    }
   }
-  return { window: q.window, asOf: q.asOf ? q.asOf.toISOString() : null, since: since.toISOString(), conflicts: Object.fromEntries([...sets].map(([id, s]) => [id, s.size])) };
+  return {
+    window: q.window,
+    asOf: q.asOf ? q.asOf.toISOString() : null,
+    since: since.toISOString(),
+    conflicts: Object.fromEntries([...sets].map(([id, s]) => [id, s.size])),
+    mapped: Object.fromEntries([...mappedSets].map(([id, s]) => [id, s.size])),
+  };
 }

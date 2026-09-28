@@ -100,9 +100,15 @@ export function deriveReadinessSnapshot(input: ReadinessInput): ReadinessResult 
 }
 
 /** Downgrades a snapshot verdict using a freshly-computed duplicate likelihood — never upgrades one, and
- * never itself queries anything (the caller already has duplicateLikelihood from lib/ingestion/duplicates.ts). */
-export function applyDuplicateSignal(snapshot: ReadinessResult, duplicateLikelihood: DuplicateLikelihood): ReadinessResult {
+ * never itself queries anything (the caller already has duplicateLikelihood from lib/ingestion/duplicates.ts).
+ * `hasCanonicalMatch` (Final Intelligence Consistency & Map Correctness v1): a "high" raw duplicate score
+ * that ALSO clears the much stricter canonical-merge bar (lib/ingestion/event-match.ts) is safe to leave
+ * READY — it will attach to the matching event automatically at publish time (lib/ingestion/publish-item.ts),
+ * never create a fragmented duplicate. A "high" score that does NOT clear that bar stays exactly as
+ * conservative as before: BLOCKED for a person to look at individually. */
+export function applyDuplicateSignal(snapshot: ReadinessResult, duplicateLikelihood: DuplicateLikelihood, hasCanonicalMatch = false): ReadinessResult {
   if (duplicateLikelihood === "high") {
+    if (hasCanonicalMatch) return snapshot;
     return { classification: "DUPLICATE", readiness: "BLOCKED", reasons: ["scores as a likely duplicate of an already-published event"] };
   }
   if (duplicateLikelihood === "medium" && snapshot.readiness === "READY") {

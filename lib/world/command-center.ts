@@ -1,10 +1,8 @@
 import { getBrief } from "@/lib/brief/brief";
 import { listPublicConflicts } from "@/lib/public/conflicts";
 import { getPublicFreshness } from "@/lib/public/overview";
-import { computeSeverityScore, effectiveSeverityLabel } from "@/lib/scoring/severity";
-import type { ConflictStatusLike } from "@/lib/scoring/types";
+import { conflictSeverityScore } from "@/lib/scoring/severity";
 import { getCountryRecord } from "@/lib/countries/registry";
-import type { Conflict } from "@/lib/types";
 import { HIGH_TENSION_MIN_SCORE, LIVE_MAX_MINUTES, buildSignals, dedupeItems, buildTicker, liveState, rankEntities, toWorldItem } from "./derive";
 import type { CommandCenter, MarkerConflict } from "./types";
 
@@ -16,15 +14,8 @@ const PULSE_MAX = 60;
 const WHAT_CHANGED_MAX = 5;
 const RECENT_MS = 24 * 3_600_000;
 
-export function conflictSeverityScore(c: Conflict): number {
-  return computeSeverityScore({
-    severityLabel: effectiveSeverityLabel(c.severity, c.fullScaleWar, c.status),
-    status: c.status as ConflictStatusLike,
-    intensity: c.intensity,
-    eventCount: c.eventCount,
-    escalationTrend: c.intensityChange24h,
-  }).severityScore;
-}
+// Re-exported for existing callers — the real definition is lib/scoring/severity.ts's (pure, client-safe).
+export { conflictSeverityScore };
 
 export async function getCommandCenter(opts: { includePartyClaims?: boolean; asOf?: Date | null } = {}, now: Date = new Date()): Promise<CommandCenter> {
   const started = Date.now();

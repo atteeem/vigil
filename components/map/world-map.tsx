@@ -437,12 +437,16 @@ const HAZARD_CLICK_LAYERS = ["hz-quake-circle", "hz-thermal-point", "hz-fire-poi
 const QUAKE_RADIUS: DataDrivenPropertyValueSpecification<number> = ["interpolate", ["linear"], ["coalesce", ["get", "value"], 2.5], 2.5, 4, 4, 7, 5, 11, 6, 18, 7, 28, 8, 38];
 const AREA_FILTER: ExpressionSpecification = ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]];
 
-const CONFLICT_MARKER_LAYERS = ["conflict-halo", "conflict-core", "conflict-count", "conflict-label"];
+const CONFLICT_MARKER_LAYERS = ["conflict-halo", "conflict-core", "conflict-count", "conflict-label", "conflict-nonspatial-count"];
 
 function conflictMarkersToGeoJSON(list: readonly MarkerConflict[]): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
-    features: list.map((c) => ({ type: "Feature", geometry: { type: "Point", coordinates: [c.lng, c.lat] }, properties: { slug: c.slug, name: c.name, severity: c.severity, score: c.severityScore, recent: c.recent ? 1 : 0, reports: c.reportCount ?? 0 } })),
+    features: list.map((c) => {
+      const reports = c.reportCount ?? 0;
+      const mapped = Math.min(c.mappedReportCount ?? 0, reports);
+      return { type: "Feature", geometry: { type: "Point", coordinates: [c.lng, c.lat] }, properties: { slug: c.slug, name: c.name, severity: c.severity, score: c.severityScore, recent: c.recent ? 1 : 0, reports, nonSpatial: reports - mapped } };
+    }),
   };
 }
 
@@ -461,6 +465,33 @@ function addConflictMarkerLayers(map: MapLibreMap, list: readonly MarkerConflict
   map.addLayer({ id: "conflict-core", type: "circle", source: "active-conflicts", maxzoom: 7, paint: { "circle-radius": ["case", [">", ["get", "reports"], 0], 12, 4], "circle-color": SEVERITY_MATCH, "circle-stroke-color": "#0B0E12", "circle-stroke-width": 1.5 } }, before);
   map.addLayer({ id: "conflict-count", type: "symbol", source: "active-conflicts", maxzoom: 7, filter: [">", ["get", "reports"], 0], layout: { "text-field": REPORT_LABEL_EXPRESSION(["get", "reports"]), "text-font": ["Noto Sans Regular"], "text-size": 13, "text-allow-overlap": true, "text-ignore-placement": true }, paint: { "text-color": "#FFFFFF", "text-halo-color": "rgba(8,10,13,0.75)", "text-halo-width": 1.3 } }, before);
   map.addLayer({ id: "conflict-label", type: "symbol", source: "active-conflicts", minzoom: 2.5, maxzoom: 7, layout: { "text-field": ["get", "name"], "text-font": ["Noto Sans Medium"], "text-size": 11, "text-offset": [0, 1.6], "text-anchor": "top", "text-optional": true, "symbol-sort-key": ["-", 100, ["get", "score"]] }, paint: { "text-color": "#F3F5F7", "text-halo-color": "rgba(8,10,13,0.9)", "text-halo-width": 1.3 } }, before);
+  // Past zoom 7, the aggregate marker above steps aside for individual geolocated event markers/clusters —
+  // but a conflict's country-level (non-spatial) reports have no point to become one of those, so without
+  // this they simply vanish with no indication they still exist (spec "no report should silently cease to
+  // be represented merely because the user changed zoom"). A small, explicitly-labelled text badge (never
+  // a filled point — it must not look like a precise location) picks up exactly where the aggregate marker
+  // stops, and only appears where there IS a non-spatial remainder; `text-allow-overlap: false` lets it
+  // gracefully give way to denser event markers rather than stacking on top of them.
+  map.addLayer(
+    {
+      id: "conflict-nonspatial-count",
+      type: "symbol",
+      source: "active-conflicts",
+      minzoom: 7,
+      filter: [">", ["get", "nonSpatial"], 0],
+      layout: {
+        "text-field": ["concat", ["get", "nonSpatial"], " country-level"],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": 10,
+        "text-anchor": "center",
+        "text-allow-overlap": false,
+        "text-ignore-placement": false,
+        "symbol-sort-key": ["-", 100, ["get", "score"]],
+      },
+      paint: { "text-color": "#F3F5F7", "text-halo-color": "rgba(8,10,13,0.85)", "text-halo-width": 1.5 },
+    },
+    before,
+  );
 }
 
 function addHazardLayers(map: MapLibreMap, initial: HazardSourceData) {

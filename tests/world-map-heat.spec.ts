@@ -116,7 +116,10 @@ test.describe("Globe heat layer", () => {
     const globe = page.locator('[aria-label="Interactive global conflict map"]');
     await expect(globe).toHaveAttribute("data-heat-signature", /^[0-9a-f]{8}$/, { timeout: 30000 });
     await expect(page.getByTestId("heat-legend")).toBeVisible();
-    expect(Number(await globe.getAttribute("data-heat-peak"))).toBeGreaterThanOrEqual(90);
+    // Poll rather than a one-shot read: the signature regex above matches as soon as ANY field exists,
+    // including the transient one computed from the still-loading empty conflicts/events before
+    // overview.data arrives (peak = HEAT_BASELINE then) — real conflict data can land a beat later.
+    await expect.poll(async () => Number(await globe.getAttribute("data-heat-peak")), { timeout: 30000 }).toBeGreaterThanOrEqual(90);
 
     await page.getByRole("button", { name: "Globe layers" }).click();
     const heat = page.getByRole("checkbox", { name: "Heat" });

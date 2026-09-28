@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/db/client";
 import type { Prisma } from "@prisma/client";
 import { findDuplicateCandidates } from "@/lib/ingestion/duplicates";
+import { findCanonicalEventMatch } from "@/lib/ingestion/event-match";
 import { applyDuplicateSignal, type Classification, type ReadinessStatus } from "@/lib/ingestion/publish-readiness";
 import type { ProcessingStatus, IncomingSort, DuplicateLikelihood } from "@/lib/types/db";
+import type { EventType } from "@/lib/types";
 
 function likelihoodFromScore(score: number | undefined): DuplicateLikelihood {
   if (score === undefined) return "none";
@@ -96,20 +98,38 @@ export async function listIncomingItems(filters: IncomingFilters) {
         });
         topDuplicate = candidates[0] ?? null;
       }
+      const likelihood = likelihoodFromScore(topDuplicate?.score);
+      // Only worth the extra query when it could actually change the verdict (see applyDuplicateSignal's
+      // own comment) — a "high" score is a candidate for safe auto-merge; anything less never gets BLOCKED
+      // by duplicate likelihood alone regardless, so there's nothing for a canonical match to unblock.
+      const hasCanonicalMatch =
+        likelihood === "high"
+          ? !!(await findCanonicalEventMatch({
+              title: item.originalTitle ?? "",
+              eventType: (item.suggestedEventType ?? "other") as EventType,
+              latitude: item.suggestedLat,
+              longitude: item.suggestedLng,
+              countryCode: item.suggestedCountryCode,
+              region: item.suggestedRegion,
+              conflictId: item.suggestedConflictId,
+              occurredAt: item.publishedAt ?? item.receivedAt,
+            }))
+          : false;
       const finalVerdict = applyDuplicateSignal(
         {
           classification: (item.suggestedClassification as Classification) ?? "OTHER",
           readiness: (item.suggestedReadiness as ReadinessStatus) ?? "NEEDS_REVIEW",
           reasons: item.suggestedReadinessReasons ? (JSON.parse(item.suggestedReadinessReasons) as string[]) : [],
         },
-        likelihoodFromScore(topDuplicate?.score),
+        likelihood,
+        hasCanonicalMatch,
       );
       return {
         ...item,
         mediaUrls: item.mediaUrls ? (JSON.parse(item.mediaUrls) as string[]) : [],
         rawMetadata: item.rawMetadata ? (JSON.parse(item.rawMetadata) as Record<string, unknown>) : null,
         topDuplicate,
-        duplicateLikelihood: likelihoodFromScore(topDuplicate?.score),
+        duplicateLikelihood: likelihood,
         finalClassification: finalVerdict.classification,
         finalReadiness: finalVerdict.readiness,
         finalReadinessReasons: finalVerdict.reasons,

@@ -146,7 +146,14 @@ test.describe.serial("Stage 1: end-to-end pipeline integrity", () => {
     expect(publishedItem.originalUrl).toBe(expectedUrl);
 
     await page.goto("/admin/incoming");
-    await page.getByLabel("Status").selectOption("published");
+    // getByLabel("Status") alone is ambiguous: it also matches the global
+    // freshness badge (components/layout/live-indicator.tsx), whose
+    // aria-label is "Data status: ...checking data freshness" — Playwright's
+    // getByLabel does a case-insensitive substring match on accessible name,
+    // so "status" inside that aria-label matches too. Scope to the filter
+    // bar (data-testid="incoming-filters") to target only the actual
+    // <select> filter.
+    await page.getByTestId("incoming-filters").getByLabel("Status").selectOption("published");
     const adminLink = page.getByTestId(`incoming-item-${publishedItem.id}`).getByRole("link", { name: /Original source/ });
     await expect(adminLink).toHaveAttribute("href", expectedUrl);
   });

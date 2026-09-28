@@ -245,6 +245,64 @@ test.describe("Inputs: what does and does not set the heat", () => {
     expect(at(f, -3, -60)).toBe(HEAT_BASELINE); // Amazon
   });
 
+  test("border safety: a Severity-100 war does not paint a directly bordering, non-fighting country orange/red merely from proximity (Final Intelligence Consistency & Map Correctness v1 §6)", () => {
+    // Real-world regression case named in the spec: Russia-Ukraine, canonical Severity 100 (active
+    // full-scale war), must not make Belarus/Poland/Moldova read as though fighting is happening there —
+    // they are not in fightingCountryCodes ["UA", "RU"], so under the fix they can only warm from genuine
+    // anchor proximity (a short, anchor-distance-only decay), never from the country-wide "whole fighting
+    // nation is core" treatment that legitimately keeps Kyiv hot.
+    const ua = MOCK_CONFLICTS.find((c) => c.slug === "russia-ukraine")!;
+    expect(ua.fullScaleWar).toBe(true);
+    const f = computeHeatField(buildHeatInput({ conflicts: [ua], events: [], nowIso: MOCK_NOW }));
+    // Kyiv still reads as a real war zone (unchanged from the test above).
+    expect(at(f, 50.4, 30.5)).toBeGreaterThan(50);
+    // Neighbors: nowhere near "red" (76+) or even "orange" (61+) — the old country-mask-edge decay put
+    // a cell just across the border at ~0 km from "core", i.e. close to full amplitude; the fix requires
+    // real distance from an actual anchor instead.
+    const minsk = at(f, 53.9, 27.57); // Belarus
+    const warsaw = at(f, 52.23, 21.0); // Poland
+    const chisinau = at(f, 47.01, 28.86); // Moldova
+    for (const [place, v] of [["Minsk", minsk], ["Warsaw", warsaw], ["Chisinau", chisinau]] as const) {
+      expect(v, place).toBeLessThan(61);
+    }
+    // Warsaw, being farthest, is at least as cool as the two nearer neighbors.
+    expect(warsaw).toBeLessThanOrEqual(minsk + 1e-6);
+    expect(warsaw).toBeLessThanOrEqual(chisinau + 1e-6);
+  });
+
+  test("border safety generalizes beyond the named Russia-Ukraine case: Sudan, Myanmar and Israel-Palestine neighbors (§6)", () => {
+    // The fix is generic (per-cell inCountry branch in conflictContribution, no conflict-specific logic),
+    // but §6 explicitly asks that Israel-Palestine, Sudan and Myanmar also be inspected, not assumed.
+    const sudan = MOCK_CONFLICTS.find((c) => c.slug === "sudan")!;
+    const fSudan = computeHeatField(buildHeatInput({ conflicts: [sudan], events: [], nowIso: MOCK_NOW }));
+    expect(at(fSudan, 15.5, 32.5)).toBeGreaterThan(50); // Khartoum area, inside the fighting country (SD)
+    const ndjamena = at(fSudan, 12.1, 15.0); // Chad
+    const cairo = at(fSudan, 30.0, 31.2); // Egypt
+    for (const [place, v] of [["N'Djamena", ndjamena], ["Cairo", cairo]] as const) {
+      expect(v, place).toBeLessThan(61);
+    }
+
+    const myanmar = MOCK_CONFLICTS.find((c) => c.slug === "myanmar")!;
+    const fMyanmar = computeHeatField(buildHeatInput({ conflicts: [myanmar], events: [], nowIso: MOCK_NOW }));
+    expect(at(fMyanmar, 21.9, 96.0)).toBeGreaterThan(30); // inside Myanmar (MM)
+    const maesot = at(fMyanmar, 16.7, 98.57); // Thailand
+    const coxsbazar = at(fMyanmar, 21.45, 91.97); // Bangladesh
+    for (const [place, v] of [["Mae Sot", maesot], ["Cox's Bazar", coxsbazar]] as const) {
+      expect(v, place).toBeLessThan(61);
+    }
+
+    const israelPalestine = MOCK_CONFLICTS.find((c) => c.slug === "israel-palestine")!;
+    const fIP = computeHeatField(buildHeatInput({ conflicts: [israelPalestine], events: [], nowIso: MOCK_NOW }));
+    // Jordan/Sinai sit genuinely close to Gaza/the West Bank (~100-150 km) — real, evidence-based proximity
+    // decay legitimately keeps them warmer than Ukraine's 900+ km neighbors, which is not the failure mode
+    // §6 guards against. Riyadh and Baghdad are comparably distant, uninvolved neighbors instead.
+    const riyadh = at(fIP, 24.71, 46.68); // Saudi Arabia
+    const baghdad = at(fIP, 33.31, 44.36); // Iraq
+    for (const [place, v] of [["Riyadh", riyadh], ["Baghdad", baghdad]] as const) {
+      expect(v, place).toBeLessThan(61);
+    }
+  });
+
   test("historical asOf: only events known at that time count, and ages are measured from asOf", () => {
     const events = [makeEvent({ id: "past", occurredAt: "2026-09-10T12:00:00Z", lat: 50, lng: 10, severity: "severe", conflictId: "c-hist" }), makeEvent({ id: "later", occurredAt: "2026-09-14T12:00:00Z", lat: -3, lng: -60, severity: "extreme", conflictId: "c-later" })];
     const early = computeHeatField(buildHeatInput({ events, nowIso: "2026-09-10T18:00:00Z" }));

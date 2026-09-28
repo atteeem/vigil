@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db/client";
 import { propagateEntityLinksToEvent } from "@/lib/military/link-entities";
 import { ADMIN_REGIONS } from "@/lib/geocoding/admin-regions";
 import { gazetteerLookup } from "@/lib/geocoding/gazetteer";
+import { findCanonicalEventMatch } from "@/lib/ingestion/event-match";
+import { mergeReportIntoEvent } from "@/lib/ingestion/merge-report";
 import type { EventType, Severity } from "@/lib/types";
 import type { DbVerificationStatus, LocationPrecision, LocationScope } from "@/lib/types/db";
 import { LOCATION_PRECISIONS, LOCATION_SCOPES } from "@/lib/types/db";
@@ -13,6 +15,18 @@ import { LOCATION_PRECISIONS, LOCATION_SCOPES } from "@/lib/types/db";
 // item as its originating source (the item's original URL is untouched: the source link is read from the item),
 // marks the item published, carries linked military entities over and notifies the alert service. It never runs
 // without a person's action (spec §9).
+//
+// Final Intelligence Consistency & Map Correctness v1 — canonical event matching: before creating a NEW
+// event, checks lib/ingestion/event-match.ts's deliberately strict matcher. A real, currently-published
+// event that strongly matches (same explicit place, tight event-type-specific time window, same event
+// type, real title/fact overlap) gets this report ATTACHED to it instead (mergeReportIntoEvent — the same
+// mechanism the admin's manual "Merge" action uses), rather than creating a fragmented duplicate. Because
+// this lives HERE (not bulk-publish-only), single-item publish, the review form, and "Publish filtered"
+// all get the same automatic behavior for free, and each successive publish call sees every earlier one's
+// event already committed — so a same-incident cluster spread across one bulk batch is caught without any
+// batch-specific logic. The item's processingStatus becomes "merged", not "published"; any conflicting
+// extracted facts become pending EventUpdateProposal rows for a human to resolve — never silently
+// overwritten (mergeReportIntoEvent -> proposeEventUpdatesFromReport).
 
 export interface PublishInput {
   title: string;
@@ -120,7 +134,22 @@ export async function publishRawItem(rawItemId: string, input: PublishInput): Pr
 
   const rawItem = await prisma.rawIngestionItem.findUnique({ where: { id: rawItemId } });
   if (!rawItem) throw new PublishError("Raw item not found", 404);
-  if (rawItem.processingStatus === "published") throw new PublishError("This item has already been published.", 409);
+  if (rawItem.processingStatus === "published" || rawItem.processingStatus === "merged") throw new PublishError("This item has already been published.", 409);
+
+  const canonicalMatch = await findCanonicalEventMatch({
+    title: input.title,
+    eventType: input.eventType,
+    latitude: loc.latitude,
+    longitude: loc.longitude,
+    countryCode: loc.countryCode,
+    region: input.region ?? null,
+    conflictId: input.conflictId ?? null,
+    occurredAt,
+  });
+  if (canonicalMatch) {
+    await mergeReportIntoEvent(rawItem.id, canonicalMatch.eventId);
+    return prisma.event.findUniqueOrThrow({ where: { id: canonicalMatch.eventId } });
+  }
 
   const event = await prisma.$transaction(async (tx) => {
     const created = await tx.event.create({

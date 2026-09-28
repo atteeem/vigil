@@ -4,6 +4,7 @@ import { RSSAdapter } from "@/lib/ingestion/rss-adapter";
 import { ManualSourceAdapter } from "@/lib/ingestion/manual-adapter";
 import { TelegramAuthorizedSourceAdapter } from "@/lib/ingestion/telegram-adapter";
 import { safeFetch } from "@/lib/security/safe-fetch";
+import { isLocalFixtureUrl, fetchLocalFixture } from "@/lib/testing/local-fixture-transport";
 
 // Structured sensor/official feeds bypass the news adapter path entirely (lib/hazards/poll.ts is
 // dispatched from pollSource); this entry only satisfies the registry's exhaustive type.
@@ -18,7 +19,8 @@ const StructuredSourceAdapter: SourceAdapter = {
     const url = source.feedUrl ?? source.url;
     if (!url) return { ok: false, message: "No feed URL configured." };
     try {
-      const res = await safeFetch(url, { method: "GET", headers: { "User-Agent": "Vigil/1.0 (public intelligence map)" } });
+      const headers = { "User-Agent": "Vigil/1.0 (public intelligence map)" };
+      const res = isLocalFixtureUrl(url) ? await fetchLocalFixture(url, { method: "GET" }) : await safeFetch(url, { method: "GET", headers });
       return res.ok ? { ok: true } : { ok: false, message: `HTTP ${res.status}` };
     } catch (err) {
       return { ok: false, message: err instanceof Error ? err.message : "Fetch failed" };

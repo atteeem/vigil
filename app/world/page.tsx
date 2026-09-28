@@ -40,6 +40,7 @@ import { WorldRail } from "@/components/world/world-rail";
 import { ConflictContextPanel, CountryContextPanel } from "@/components/world/context-panels";
 import type { TopEntity, WorldItem } from "@/lib/world/types";
 import { useConflictReportCounts } from "@/hooks/use-conflict-report-counts";
+import type { CountWindow } from "@/lib/public/report-counts";
 import { useIsPhone } from "@/hooks/use-is-phone";
 import { MapLegendContent } from "@/components/map/map-legend";
 
@@ -356,14 +357,23 @@ export default function WorldPage() {
   // Conflict markers carry the unique published reports of their conflict in the CURRENT state (timeline, period and
   // filters). The number comes from the ONE canonical server aggregate (lib/public/report-counts.ts), which the homepage
   // globe reads too — never from this page's bounded event feed, which is capped and would undercount.
+  // The historical Timeline's OWN preset (1H/6H/24H/7D/30D relative to its asOf) drives the count window
+  // while historical, not a fixed 45D regardless of which preset is selected (Final Intelligence
+  // Consistency & Map Correctness v1 §12 — "1H may show e.g. 41 reports; 24H must also show the correct
+  // count when selected... no fixed hidden 45D count behind historical controls"). Only "custom" (an
+  // exact timestamp with no inherent duration) falls back to the wider 45D window.
+  const historicalWindow: CountWindow = timeline.preset === "custom" || timeline.preset === "live" ? "45D" : timeline.preset;
   const reportCounts = useConflictReportCounts({
-    window: timeline.isHistorical ? "45D" : timeRange,
+    window: timeline.isHistorical ? historicalWindow : timeRange,
     asOf: timeline.asOf,
     eventType: typeFilter === "all" ? null : typeFilter,
     region: region === "Global" ? null : region,
     dataVersion: `${allEvents.length}:${allEvents[0]?.id ?? ""}:${allEvents[0]?.sources.length ?? 0}`,
   });
-  const markerConflicts = useMemo(() => cc.data?.conflicts.map((c) => ({ ...c, reportCount: reportCounts.data?.conflicts[c.id] ?? 0 })), [cc.data, reportCounts.data]);
+  const markerConflicts = useMemo(
+    () => cc.data?.conflicts.map((c) => ({ ...c, reportCount: reportCounts.data?.conflicts[c.id] ?? 0, mappedReportCount: reportCounts.data?.mapped[c.id] ?? 0 })),
+    [cc.data, reportCounts.data],
+  );
 
   const filterProps = {
     typeFilter,

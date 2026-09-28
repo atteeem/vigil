@@ -8,6 +8,7 @@ import { recordAttemptStarted, recordIngestionSuccess, recordIngestionError, sch
 import { recordIngestionAttempt } from "@/lib/db/repositories/ingestion-logs";
 import type { FetchResult } from "@/lib/ingestion/poll";
 import { safeFetch } from "@/lib/security/safe-fetch";
+import { isLocalFixtureUrl, fetchLocalFixture } from "@/lib/testing/local-fixture-transport";
 
 // Polls one structured source (earthquakes, thermal detections, alerts...). Shares the news
 // pipeline's bookkeeping exactly: an IngestionLog row per attempt, lastAttemptedAt / lastError /
@@ -18,7 +19,8 @@ const FETCH_TIMEOUT_MS = Number(process.env.INGESTION_FETCH_TIMEOUT_MS) || 60_00
 const DEFAULT_HEADERS = { "User-Agent": "Vigil/1.0 (public intelligence map)", Accept: "application/json, text/csv, */*" };
 
 async function fetchText(url: string, init?: { headers?: Record<string, string> }): Promise<string> {
-  const res = await safeFetch(url, { headers: { ...DEFAULT_HEADERS, ...init?.headers }, timeoutMs: FETCH_TIMEOUT_MS });
+  const opts = { headers: { ...DEFAULT_HEADERS, ...init?.headers }, timeoutMs: FETCH_TIMEOUT_MS };
+  const res = isLocalFixtureUrl(url) ? await fetchLocalFixture(url, opts) : await safeFetch(url, opts);
   if (!res.ok) throw new HttpFetchError(res.status, res.statusText, parseRetryAfter(res.headers.get("retry-after")));
   return await res.text();
 }

@@ -13,6 +13,7 @@ import { RelativeTime } from "@/components/ui/relative-time";
 import type { Conflict } from "@/lib/types";
 import { computeImpact, DIMENSION_LABEL } from "@/lib/data/impact";
 import { getCountryByCode } from "@/lib/reference/countries";
+import { conflictSeverityScore } from "@/lib/scoring/severity";
 
 function PreviewContent({ conflict, impactScore }: { conflict: Conflict; impactScore: number }) {
   return (
@@ -24,9 +25,12 @@ function PreviewContent({ conflict, impactScore }: { conflict: Conflict; impactS
 
       <div className="mt-4 grid grid-cols-2 gap-4">
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-wide text-ink-faint">Intensity</p>
+          {/* The canonical Severity score — never the legacy raw `intensity` field beside the badge
+              above, which would look like a second, contradictory conflict-danger number (Final
+              Intelligence Consistency & Map Correctness v1 §8). */}
+          <p className="text-[11px] font-medium uppercase tracking-wide text-ink-faint">Severity</p>
           <p className="mt-0.5 text-2xl font-semibold tabular-nums text-ink">
-            {conflict.intensity}
+            {conflictSeverityScore(conflict)}
             <span className="text-sm font-medium text-ink-faint"> / 100</span>
           </p>
         </div>

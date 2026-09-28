@@ -73,6 +73,12 @@ export interface MarkerConflict {
   latestTitle: string | null;
   /** Unique published reports associated with the conflict in the currently displayed state (set by the map page). */
   reportCount?: number;
+  /** The subset of `reportCount` attached to a geolocated event (has a map point) — `reportCount -
+   * mappedReportCount` is country-level/unknown-scope with no point at all. Lets the map keep representing
+   * that portion once zoomed in far enough that the aggregate marker itself steps aside for individual
+   * event markers (Final Intelligence Consistency & Map Correctness v1 §9), instead of it silently
+   * disappearing. */
+  mappedReportCount?: number;
 }
 
 export interface CommandCenter {

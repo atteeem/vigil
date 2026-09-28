@@ -2,7 +2,16 @@ import type { Source } from "@prisma/client";
 import type { SourceAdapter, NormalizedItem, HealthCheckResult } from "@/lib/ingestion/types";
 import { HttpFetchError, parseRetryAfter } from "@/lib/ingestion/errors";
 import { resolveFeedUrl } from "@/lib/ingestion/rsshub";
-import { safeFetch } from "@/lib/security/safe-fetch";
+import { safeFetch, type SafeFetchOptions } from "@/lib/security/safe-fetch";
+import { isLocalFixtureUrl, fetchLocalFixture } from "@/lib/testing/local-fixture-transport";
+
+/** Routes to the in-process Playwright fixture transport for this project's own test-fixture routes
+ * (test server only — see lib/testing/local-fixture-transport.ts), otherwise the real, fully SSRF-hardened
+ * safeFetch. The one shared entry point every RSS fetch goes through, so production behavior is identical
+ * to safeFetch's own in every case that matters. */
+function fetchRss(url: string, opts: SafeFetchOptions): Promise<Response> {
+  return isLocalFixtureUrl(url) ? fetchLocalFixture(url, opts) : safeFetch(url, opts);
+}
 
 interface RssItem {
   title?: string;
@@ -106,7 +115,7 @@ export const RSSAdapter: SourceAdapter = {
     // stops waiting for it), so a hung feed cannot keep a socket open after it has been given up on.
     const timeoutMs = Number(process.env.INGESTION_FETCH_TIMEOUT_MS) || 20_000;
     try {
-      const res = await safeFetch(resolveFeedUrl(source.url), { headers: RSS_REQUEST_HEADERS, timeoutMs });
+      const res = await fetchRss(resolveFeedUrl(source.url), { headers: RSS_REQUEST_HEADERS, timeoutMs });
       if (!res.ok) throw new HttpFetchError(res.status, res.statusText, parseRetryAfter(res.headers.get("retry-after")));
       return parseRss(await res.text());
     } catch (err) {
@@ -144,7 +153,7 @@ export const RSSAdapter: SourceAdapter = {
   async healthCheck(source: Source): Promise<HealthCheckResult> {
     if (!source.url) return { ok: false, message: "No feed URL configured." };
     try {
-      const res = await safeFetch(resolveFeedUrl(source.url), { method: "GET", headers: RSS_REQUEST_HEADERS });
+      const res = await fetchRss(resolveFeedUrl(source.url), { method: "GET", headers: RSS_REQUEST_HEADERS });
       if (!res.ok) return { ok: false, message: `HTTP ${res.status}` };
       return { ok: true };
     } catch (err) {

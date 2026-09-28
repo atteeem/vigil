@@ -176,10 +176,12 @@ test.describe("Homepage and globe read the database", () => {
     expect(labels.length).toBeLessThanOrEqual(pinned.length);
     for (const name of labels) expect(pinnedNames.has(name as string), name).toBe(true);
 
-    // The heat field signature is the one computed from the API's own conflicts and events.
+    // The heat field signature is the one computed from the API's own conflicts and events. Poll rather
+    // than a one-shot read: the regex above matches as soon as ANY field exists, including the transient
+    // one computed from the still-loading empty conflicts/events before overview.data arrives.
     const signatureAt = (t: number) => computeHeatField(buildHeatInput({ conflicts: pinned, events: overview.events as ConflictEvent[], nowIso: new Date(t).toISOString(), live: true })).signature;
-    const shown = (await globe.getAttribute("data-heat-signature"))!;
-    expect([signatureAt(before), signatureAt(Date.now()), signatureAt(before - 3_600_000), signatureAt(Date.now() + 3_600_000)]).toContain(shown);
+    const expected = new Set([signatureAt(before), signatureAt(Date.now()), signatureAt(before - 3_600_000), signatureAt(Date.now() + 3_600_000)]);
+    await expect.poll(async () => expected.has((await globe.getAttribute("data-heat-signature")) ?? ""), { timeout: 30_000 }).toBe(true);
   });
 
   test("/world (live) shows database events only", async ({ page, request, isMobile }) => {

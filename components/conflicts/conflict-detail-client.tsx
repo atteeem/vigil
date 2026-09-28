@@ -115,7 +115,7 @@ export function ConflictDetailClient({ intel }: { intel: ConflictIntelligence })
             scoreKey="severity"
             label="Severity"
             value={sev.value}
-            sub={`${sev.label ?? ""} · intensity ${conflict.intensity} / 100 · `}
+            sub={`${sev.label ?? ""} · `}
             extra={
               <span className="inline-flex items-center gap-0.5">
                 <TrendIcon className="h-3 w-3" />

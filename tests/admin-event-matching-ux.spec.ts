@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { prisma } from "@/lib/db/client";
 
 // Deterministic suite for the "Admin Event-Matching UX" stage —
 // /admin/incoming's enriched duplicate-candidate display (event type,
@@ -127,9 +128,13 @@ test.describe.serial("Admin event-matching UX", () => {
     const candidateItem = items.find((i: { originalTitle: string }) => i.originalTitle.includes("Second drone strike"));
 
     const eventsBefore = await request.get("/api/events").then((r) => r.json());
-    const before = eventsBefore.find((e: { id: string }) => e.id === kyivEventId);
-    const countBefore = before.sourceCount;
     const totalEventsBefore = eventsBefore.length;
+    // Raw EventSource link count, not the public API's independentSourceCount — both reports here
+    // deliberately share the same admin Source record (feedSourceId), so independence-wise they're
+    // correctly ONE group either way (lib/data/independence.ts's "one outlet = one group" rule); what this
+    // regression actually checks is that the SECOND link is recorded and rendered at all (the React
+    // duplicate-key bug this test guards against was about the raw links list, not independence counting).
+    const linksBefore = await prisma.eventSource.count({ where: { eventId: kyivEventId } });
 
     await page.goto("/admin/incoming");
     const card = page.getByTestId(`incoming-item-${candidateItem.id}`);
@@ -147,7 +152,8 @@ test.describe.serial("Admin event-matching UX", () => {
     const eventsAfter = await request.get("/api/events").then((r) => r.json());
     expect(eventsAfter.length).toBe(totalEventsBefore);
     const after = eventsAfter.find((e: { id: string }) => e.id === kyivEventId);
-    expect(after.sourceCount).toBe(countBefore + 1);
+    const linksAfter = await prisma.eventSource.count({ where: { eventId: kyivEventId } });
+    expect(linksAfter).toBe(linksBefore + 1);
 
     // The incoming report itself is retained (audit trail), not deleted,
     // and its original source/URL is preserved.
@@ -200,7 +206,11 @@ test.describe.serial("Admin event-matching UX", () => {
     expect(published.id).toBeTruthy();
     expect(published.id).not.toBe(kyivEventId);
 
-    const events = await request.get("/api/events").then((r) => r.json());
-    expect(events.some((e: { id: string }) => e.id === published.id)).toBe(true);
+    // Not /api/events (bounded to the last 45 days): this fixture's pubDate is fixed at 2026-01-01, which
+    // is well outside that window by now, so a real published-and-public event would still legitimately
+    // never appear there — the actual thing this test checks (a genuine, published, non-duplicate Event
+    // row exists) is a direct lookup, unaffected by the public feed's own recency bound.
+    const createdEvent = await prisma.event.findUnique({ where: { id: published.id } });
+    expect(createdEvent?.published).toBe(true);
   });
 });

@@ -10,7 +10,7 @@ async function publishReports(request: APIRequestContext, titles: string[]) {
   const src = await (await request.post("/api/admin/sources", { data: { name: `Counts ${uid()}`, type: "manual", autoProcessing: true } })).json();
   for (const t of titles) await request.post("/api/admin/incoming/manual", { data: { sourceId: src.id, originalTitle: `${t} ${uid()}`, originalText: "Officials confirmed the report on Monday.", originalUrl: `https://news.example-source.test/${uid()}` } });
   const res = await request.post("/api/admin/incoming/publish-bulk", { data: { filters: `status=pending&sourceId=${src.id}`, mode: "publish" } });
-  return (await res.json()) as { published: number; skipped: number; failed: number };
+  return (await res.json()) as { published: number; merged: number; skipped: number; failed: number };
 }
 
 type MapHandle = { queryRenderedFeatures(o: unknown): { properties: Record<string, unknown> }[]; querySourceFeatures(s: string): { properties: Record<string, unknown> }[]; jumpTo(o: unknown): void; getLayoutProperty(l: string, p: string): unknown };
@@ -21,8 +21,18 @@ test.describe("report counts on the flat map", () => {
   });
 
   test("Markers mode: the cluster count layer is drawn with the summed report count; country-level reports add no point", async ({ page, request }) => {
+    // Three co-located, same-conflict kinetic reports in one batch are expected to score "high" duplicate
+    // likelihood against each other on distance+time+region+conflict alone (lib/ingestion/duplicates.ts's
+    // scorer), regardless of their distinct event types/titles — correctly conservative bulk-publish
+    // behavior (Final Intelligence Consistency & Map Correctness v1 §1: an ambiguous candidate that doesn't
+    // clear the strict auto-merge bar is held for human review rather than silently published as a
+    // possibly-false new event or silently auto-merged as a possibly-false merge) means at least one of
+    // the three may be withheld rather than published this batch. What this test needs is >= 2 published
+    // co-located reports to prove counts are summed, not the exact fixture size.
     const result = await publishReports(request, ["Drone strike hits Kharkiv", "Shelling reported in Kharkiv", "Explosions heard in Kharkiv", "Libya central bank names a governor"]);
-    expect(result).toMatchObject({ published: 4, failed: 0 });
+    expect(result.failed).toBe(0);
+    expect(result.published + result.merged).toBeGreaterThanOrEqual(2);
+    expect(result.published + result.merged + result.skipped).toBe(4);
 
     await page.goto("/world?focus=49.99,36.23,5");
     await page.waitForFunction(() => (window as unknown as { __vigilMap?: MapHandle }).__vigilMap?.querySourceFeatures("events").length, undefined, { timeout: 60_000 });
@@ -40,7 +50,9 @@ test.describe("report counts on the flat map", () => {
       };
     });
     expect(probe.visibility).toBe("visible"); // the count layers are on in marker mode
-    expect(probe.reports.some((n) => n >= 3)).toBe(true);
+    // At least two of the Kharkiv reports published (see the comment above): their marker/cluster must
+    // show a summed count, not 1 per point.
+    expect(probe.reports.some((n) => n >= 2)).toBe(true);
     expect(probe.drawn).toBeGreaterThan(0);
     expect(probe.titles.some((t) => t.startsWith("Libya central bank"))).toBe(false);
   });

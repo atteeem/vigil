@@ -119,7 +119,7 @@ export function BulkPublishDialog({ filters, ids, onClose, onDone }: { filters: 
         {result && (
           <div data-testid="bulk-result">
             <p className="text-sm text-ink" data-testid="bulk-result-line">
-              Published: <strong data-testid="bulk-published">{result.published}</strong> · Corroborated: <strong data-testid="bulk-corroborated" title="Attached to an existing event from this same batch or already published, instead of creating a duplicate">{result.corroborated}</strong> · Skipped: <strong data-testid="bulk-result-skipped">{result.skipped}</strong> · Failed: <strong data-testid="bulk-failed">{result.failed}</strong>
+              Published: <strong data-testid="bulk-published">{result.published}</strong> · Merged: <strong data-testid="bulk-merged" title="Attached to an existing event (same real-world incident) instead of creating a duplicate">{result.merged}</strong> · Skipped: <strong data-testid="bulk-result-skipped">{result.skipped}</strong> · Failed: <strong data-testid="bulk-failed">{result.failed}</strong>
             </p>
             {failed.length > 0 && (
               <details open className="mt-3 text-xs text-ink-dim" data-testid="bulk-failed-list">

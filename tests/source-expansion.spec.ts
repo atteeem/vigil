@@ -388,12 +388,24 @@ test.describe("Liveuamap Telegram (aggregator/discovery)", () => {
     const c = await makeConflict(request, ["ZI"]);
     const agg = await makeSource(request, { type: "telegram", url: null, telegramHandle: "@vigil_fixture_aggregator", sourceRole: "aggregator" });
     const local = await makeSource(request, { country: "ZI", url: `${FIXTURE}/expansion-local-feed`, sourceRole: "local_media" });
+    // independentSourceCount (lib/data/independence.ts) groups reports by
+    // OUTLET (the admin Source record), not by article: however many distinct
+    // articles a single outlet files, they are one independence group. So the
+    // "genuinely different independent report" below must come from a
+    // SECOND, distinct Source record — reusing `local` for both the upstream
+    // report and this one (as the test previously did, taking two different
+    // articles off the same `expansion-local-feed` fixture) would never be
+    // able to raise the count past 1, no matter how different the articles'
+    // content or URLs are. This second source is a genuinely different
+    // outlet (own Source id), matching the test's own stated intent.
+    const monitor = await makeSource(request, { url: `${FIXTURE}/expansion-specialist-feed`, sourceRole: "specialist_research" });
     await fetchNow(request, agg.id);
     await fetchNow(request, local.id);
+    await fetchNow(request, monitor.id);
     const aggItem = (await itemsOf(request, agg.id)).find((i) => i.externalId === "102")!;
     const localItems = await itemsOf(request, local.id);
     const upstream = localItems.find((i) => i.originalUrl.endsWith("fixcity-market"))!;
-    const another = localItems.find((i) => i.originalUrl.endsWith("fixridge-shelling"))!;
+    const another = (await itemsOf(request, monitor.id)).find((i) => i.originalUrl.endsWith("fixland-assessment"))!;
 
     // Publish from the aggregator's post.
     const published = await request.post(`/api/admin/incoming/${aggItem.id}/publish`, {

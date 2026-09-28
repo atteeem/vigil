@@ -100,7 +100,21 @@ const round = (v: number, p = 100) => Math.round(v * p) / p;
 
 interface Geography {
   dAnchor: Float32Array;
-  dCore: Float32Array;
+  /** Decay distance for cells INSIDE one of the conflict's own fighting countries — the country's whole
+   * territory is "core" within reach of a real anchor (a full-scale war plausibly affects the whole
+   * fighting nation, not just the exact incident point). */
+  dCoreCountry: Float32Array;
+  /** Decay distance for cells OUTSIDE every fighting country (every other country, including direct
+   * neighbors) — deliberately NEVER inherits the country mask: it is always distance to the nearest REAL
+   * anchor, so a neighboring country can only warm up from genuine nearby evidence, never merely from
+   * bordering a country that is (elsewhere, far from that border) a fighting country. Final Intelligence
+   * Consistency & Map Correctness v1 §4 — this is the fix for a Severity-100 war painting Belarus/Poland/
+   * Moldova-style neighbors orange/red purely from being within the old reach radius of ANY anchor: the
+   * old single `dCore` used the country-extended core mask everywhere, so a neighbor cell sitting right
+   * across the border was ~0 km from that core (the mask reached the political border) regardless of how
+   * far it actually was from a real incident. */
+  dCoreOutside: Float32Array;
+  inCountry: Uint8Array;
   reachKm: number;
   /** Cells that can be influenced at all: reach + the widest decay (a full-scale war's). */
   window: GridWindow;
@@ -135,14 +149,30 @@ function geographyOf(c: HeatConflict): Geography {
   const window = windowAround(anchors, reachKm + 3 * maxDecayKm);
   const dAnchor = distanceTransformKm(anchorMask, window);
   const country = countriesMask(codes);
-  const core = new Uint8Array(N);
+  // The anchor-only disc is unconditional (a real incident's own immediate vicinity is always core,
+  // in or out of a fighting country); the country-extended core additionally treats the WHOLE fighting
+  // country as core within reach — but only that mask, never a neighbor's.
+  const coreAnchorOnly = new Uint8Array(N);
+  const coreCountry = new Uint8Array(N);
+  const inCountry = new Uint8Array(N);
   for (let r = window.r0; r < window.r1; r++) {
     for (let cc = window.c0; cc < window.c1; cc++) {
       const i = r * HEAT_GRID.cols + ((cc + HEAT_GRID.cols) % HEAT_GRID.cols);
-      if (dAnchor[i]! <= discKm || (country && country[i] && dAnchor[i]! <= reachKm)) core[i] = 1;
+      const disc = dAnchor[i]! <= discKm;
+      if (disc) coreAnchorOnly[i] = 1;
+      const within = country && country[i] === 1;
+      if (within) inCountry[i] = 1;
+      if (disc || (within && dAnchor[i]! <= reachKm)) coreCountry[i] = 1;
     }
   }
-  return remember(geographyCache, key, { dAnchor, dCore: distanceTransformKm(core, window), reachKm, window });
+  return remember(geographyCache, key, {
+    dAnchor,
+    dCoreCountry: distanceTransformKm(coreCountry, window),
+    dCoreOutside: distanceTransformKm(coreAnchorOnly, window),
+    inCountry,
+    reachKm,
+    window,
+  });
 }
 
 /** Excess-over-baseline contribution of one conflict's sustained base. */
@@ -161,7 +191,11 @@ function conflictContribution(c: HeatConflict): Float32Array {
       for (let cc = w.c0; cc < w.c1; cc++) {
         const i = r * HEAT_GRID.cols + ((cc + HEAT_GRID.cols) % HEAT_GRID.cols);
         const ease = 1 - HEAT_MODEL.insideEase * Math.min(1, geo.dAnchor[i]! / geo.reachKm);
-        const x = geo.dCore[i]! / decayKm;
+        // Outside every fighting country, decay is measured from the nearest REAL anchor (never from the
+        // country-extended core, which would put a neighbor cell ~0 km from "core" merely for sitting
+        // across the border) — see the Geography interface's own comment.
+        const d = geo.inCountry[i] ? geo.dCoreCountry[i]! : geo.dCoreOutside[i]!;
+        const x = d / decayKm;
         if (x > 3) continue; // exp(-9) ~ 1e-4: negligible
         out[i] = amp * ease * Math.exp(-x * x);
       }
