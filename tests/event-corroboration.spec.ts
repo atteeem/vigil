@@ -12,6 +12,7 @@ test.describe.serial("Event corroboration metadata", () => {
   let newsSourceId: string;
   let officialSourceId: string;
   let eventId: string;
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const t0 = Date.now() - 3 * 60 * 60_000; // 3h ago: originating report
 
   test("setup: two categorized sources, a published event, a corroborating report, and a relay of the same source", async ({
@@ -42,8 +43,8 @@ test.describe.serial("Event corroboration metadata", () => {
         data: {
           sourceId: newsSourceId,
           externalId: `corrob-originating-${Date.now()}`,
-          originalUrl: "https://fixture.test/corroboration/originating",
-          originalTitle: "Warehouse fire reported in Lagos industrial district",
+          originalUrl: `https://fixture.test/corroboration/originating-${suffix}`,
+          originalTitle: `Warehouse fire reported in Lagos industrial district (ref ${suffix})`,
           originalText: "A fire broke out at a warehouse in the Lagos industrial district.",
           publishedAt: new Date(t0).toISOString(),
         },
@@ -53,7 +54,7 @@ test.describe.serial("Event corroboration metadata", () => {
     const published = await request
       .post(`/api/admin/incoming/${originating.id}/publish`, {
         data: {
-          title: "Warehouse fire reported in Lagos industrial district",
+          title: `Warehouse fire reported in Lagos industrial district (ref ${suffix})`,
           summary: "Independently written summary for the corroboration metadata test event.",
           eventType: "fire",
           latitude: 6.45,
@@ -76,8 +77,8 @@ test.describe.serial("Event corroboration metadata", () => {
         data: {
           sourceId: officialSourceId,
           externalId: `corrob-independent-${Date.now()}`,
-          originalUrl: "https://fixture.test/corroboration/official-statement",
-          originalTitle: "Official statement confirms warehouse fire in Lagos",
+          originalUrl: `https://fixture.test/corroboration/official-statement-${suffix}`,
+          originalTitle: `Official statement confirms warehouse fire in Lagos (ref ${suffix})`,
           originalText: "A government statement confirmed the fire at the Lagos warehouse.",
           publishedAt: new Date(t0 + 60 * 60_000).toISOString(),
         },
@@ -94,8 +95,8 @@ test.describe.serial("Event corroboration metadata", () => {
         data: {
           sourceId: newsSourceId,
           externalId: `corrob-relay-${Date.now()}`,
-          originalUrl: "https://fixture.test/corroboration/relay",
-          originalTitle: "Warehouse fire reported in Lagos industrial district (repost)",
+          originalUrl: `https://fixture.test/corroboration/relay-${suffix}`,
+          originalTitle: `Warehouse fire reported in Lagos industrial district (repost) (ref ${suffix})`,
           originalText: "Repost of the original warehouse fire report.",
           publishedAt: new Date(t0 + 2 * 60 * 60_000).toISOString(),
         },
@@ -147,7 +148,7 @@ test.describe.serial("Event corroboration metadata", () => {
     // (added by the event-lifecycle-management work) whose accessible
     // names also contain "Warehouse fire", so a loose substring match is
     // now ambiguous — only the title link's name is the bare title.
-    await row.getByRole("link", { name: "Warehouse fire reported in Lagos industrial district", exact: true }).click();
+    await row.getByRole("link", { name: `Warehouse fire reported in Lagos industrial district (ref ${suffix})`, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/admin/events/${eventId}$`));
     await expect(page.getByTestId("admin-event-detail")).toBeVisible();
   });

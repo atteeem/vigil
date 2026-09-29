@@ -477,6 +477,7 @@ test.describe.serial("World map UI", () => {
 
   test("hazard layers do not change the conflict heat surface", async ({ page }) => {
     await openWorld(page);
+    await openWorldControls(page, "layers");
     await page.getByRole("button", { name: "Heatmap" }).click();
     const signature = () => page.locator("[data-heat-signature]").first().getAttribute("data-heat-signature");
     await expect.poll(signature).toBeTruthy();
@@ -488,11 +489,16 @@ test.describe.serial("World map UI", () => {
 
   test("earthquake markers render: clustered when zoomed out, individual (ring sized by magnitude) when zoomed in", async ({ page }) => {
     await openWorld(page);
+    // hooks/use-hazards.ts fetches viewport-scoped data (a deliberate bound — "the server only ever
+    // returns a bounded, zoom-aggregated set, never raw observation tables") — the app's own default
+    // initial camera does not cover the fixture earthquakes' real Pacific coordinates, so the source has
+    // nothing yet until the viewport actually includes them. Move there first, matching the pattern the
+    // "clicking a hazard marker" test below already uses successfully.
+    await mapEval(page, (m) => m.jumpTo({ center: [135, 0], zoom: 1.6 }));
     await enableLayer(page, "earthquakes");
     await expect.poll(() => mapEval(page, (m) => m.querySourceFeatures("hz-quakes").length)).toBeGreaterThan(0);
     await expect.poll(() => mapEval(page, (m) => m.getLayoutProperty("hz-quake-circle", "visibility"))).toBe("visible");
     // World view: the three nearby quakes in the Pacific fall into a cluster, not three rings.
-    await mapEval(page, (m) => m.jumpTo({ center: [135, 0], zoom: 1.6 })); // the Pacific quakes in view
     await expect.poll(() => mapEval(page, (m) => m.queryRenderedFeatures({ layers: ["hz-quake-cluster"] }).length)).toBeGreaterThan(0);
     await mapEval(page, (m) => m.jumpTo({ center: [145.1, -6.2], zoom: 8 }));
     await expect.poll(() => mapEval(page, (m) => m.queryRenderedFeatures({ layers: ["hz-quake-circle"] }).map((f) => f.properties.label))).toContain("M6.4");

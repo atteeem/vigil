@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { SCORE_COPY, SOURCE_CLASS_COPY, IMPACT_COUNTRY_COPY } from "@/lib/copy/scores";
+import { warmRoute } from "./helpers/warmup";
 
 // Launch readiness / first-user experience: the first-run introduction and impact-country question, the map legend,
 // one wording for the three scores, Watch confirmation, For You empty state, the source-label explanation, the LIVE
@@ -14,7 +15,7 @@ test.describe("First visit", () => {
   test.use({ storageState: EMPTY_STATE });
 
   test("four-step introduction with Back / Next / Done, then the impact-country question; completion persists", async ({ page }) => {
-    await page.goto("/");
+    await warmRoute(page, "/"); // see tests/helpers/warmup.ts
     const dialog = page.getByTestId("onboarding");
     await expect(dialog).toBeVisible();
     await expect(dialog).toHaveAttribute("aria-modal", "true");
@@ -121,7 +122,7 @@ test.describe("Map legend", () => {
 
 test.describe("Watch and For You", () => {
   test("Watch shows a confirmation that only promises existing features", async ({ page }) => {
-    await page.goto("/country/FI");
+    await warmRoute(page, "/country/FI"); // see tests/helpers/warmup.ts
     const watch = page.locator('[data-testid="follow-button"]:visible').first();
     await expect(watch).toHaveAttribute("data-following", "false");
     await watch.click();

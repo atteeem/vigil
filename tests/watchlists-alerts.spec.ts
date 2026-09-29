@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext, type Page } from "@playwright/tes
 import { acceptDevelopment, computePriority, fingerprintOf, type Development } from "@/lib/alerts/decide";
 import { effectiveRules, validateRules, validateSettingsPatch, ruleSchemaFor, WATCH_ENTITY_TYPES, DEFAULT_SETTINGS, inQuietHours } from "@/lib/alerts/types";
 import { countryFromPlace } from "@/lib/hazards/reference";
+import { warmRoute } from "./helpers/warmup";
 
 // Watchlists, notifications and alert rules. The alert service reads developments from the EXISTING
 // systems (conflict events, territorial review, GlobalEvent providers, claims); nothing here adds a
@@ -582,7 +583,7 @@ test.describe.serial("Notification centre, Watchlist page and deep links (UI)", 
   });
 
   test("Follow button, Watchlist page: follow, mode, custom rule editing, mute, pause, unfollow; preferences persist", async ({ page }) => {
-    await page.goto("/country/FI");
+    await warmRoute(page, "/country/FI"); // see tests/helpers/warmup.ts
     const btn = page.getByTestId("follow-button").first();
     await expect(btn).toHaveAttribute("data-following", "false");
     await btn.click();

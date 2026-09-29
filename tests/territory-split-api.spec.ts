@@ -46,8 +46,10 @@ async function rows(request: Api, conflictId: string) {
   return all.filter((t) => t.conflictId === conflictId);
 }
 
-async function publicAt(request: Api, at: Date) {
-  const collection = await request.get(`/api/territorial-control?at=${encodeURIComponent(at.toISOString())}`).then((r) => r.json());
+async function publicAt(request: Api, at: Date, conflictId: string) {
+  // The route ships geometry only for datasets the caller explicitly asks for (never every territory on
+  // Earth by default) — "conflict:<id>" is the editorially-drawn-territory dataset id for one conflict.
+  const collection = await request.get(`/api/territorial-control?at=${encodeURIComponent(at.toISOString())}&datasets=conflict:${conflictId}`).then((r) => r.json());
   return collection.features as { id: string; geometry: TerritorialGeometry; properties: Record<string, any> }[];
 }
 
@@ -170,13 +172,13 @@ test.describe("Split / partial control change", () => {
     await request.post(`/api/admin/territorial-control/${draft.id}/publish`);
 
     const mine = (fs: Awaited<ReturnType<typeof publicAt>>) => fs.filter((f) => f.properties.conflictId === w.conflictId);
-    const before = mine(await publicAt(request, new Date(changeAt.getTime() - 60_000)));
+    const before = mine(await publicAt(request, new Date(changeAt.getTime() - 60_000), w.conflictId));
     expect(before).toHaveLength(1);
     expect(before[0]!.id).toBe(w.baseId);
     expect(before[0]!.properties.actorName).toBe(w.a.name);
     expect(sameArea(before[0]!.geometry, BASE)).toBe(true);
 
-    const after = mine(await publicAt(request, new Date()));
+    const after = mine(await publicAt(request, new Date(), w.conflictId));
     expect(after).toHaveLength(2);
     expect(after.map((f) => f.properties.actorName).sort()).toEqual([w.a.name, w.b.name].sort());
     expect(after.some((f) => f.id === w.baseId)).toBe(false);

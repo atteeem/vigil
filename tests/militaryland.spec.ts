@@ -8,7 +8,7 @@ import { test, expect } from "@playwright/test";
 // (lib/testing/rss-fixtures.ts's "militaryland-feed") for deterministic
 // coverage; the last test hits the real live site once as the "one real
 // MilitaryLand news article" proof (spec "Initial verification"), mirroring
-// how tests/rss-ingestion.spec.ts is the one real-network proof for the
+// how tests/rss-ingestion.live.spec.ts is the one real-network proof for the
 // core RSS path while everything else uses fixtures.
 test.describe.serial("MilitaryLand Phase 1", () => {
   let sourceId: string;

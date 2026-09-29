@@ -295,8 +295,10 @@ async function territoriesFor(request: APIRequestContext, conflictId: string) {
   return all.filter((t) => t.conflictId === conflictId);
 }
 
-async function publicAt(request: APIRequestContext, at: Date) {
-  const collection = await request.get(`/api/territorial-control?at=${encodeURIComponent(at.toISOString())}`).then((r) => r.json());
+async function publicAt(request: APIRequestContext, at: Date, conflictId: string) {
+  // The route ships geometry only for datasets the caller explicitly asks for (never every territory on
+  // Earth by default) — "conflict:<id>" is the editorially-drawn-territory dataset id for one conflict.
+  const collection = await request.get(`/api/territorial-control?at=${encodeURIComponent(at.toISOString())}&datasets=conflict:${conflictId}`).then((r) => r.json());
   return collection.features as { id: string; properties: Record<string, any> }[];
 }
 
@@ -338,10 +340,10 @@ test.describe("Territorial change review workflow", () => {
     expect(created.geometry).toEqual(old.geometry); // reused, not invented
 
     // Historical playback: before the change A holds it, after the change B does.
-    const before = await publicAt(request, new Date(changeAt.getTime() - 60_000));
+    const before = await publicAt(request, new Date(changeAt.getTime() - 60_000), w.conflictId);
     expect(before.find((f) => f.id === w.territoryId)?.properties.actorName).toBe(w.a.name);
     expect(before.find((f) => f.id === created.id)).toBeUndefined();
-    const after = await publicAt(request, new Date());
+    const after = await publicAt(request, new Date(), w.conflictId);
     expect(after.find((f) => f.id === created.id)?.properties.actorName).toBe(w.b.name);
     expect(after.find((f) => f.id === w.territoryId)).toBeUndefined();
 

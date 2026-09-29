@@ -130,7 +130,10 @@ test.describe.serial("Stage 1: end-to-end pipeline integrity", () => {
     expect(expectedUrl).not.toContain("example.com");
 
     await page.goto(`/event/${publishedSlug}`);
-    const publicLink = page.getByRole("link", { name: /Original source/ });
+    // .first(): this run's canonical matcher may have auto-attached this same fixture article (shared
+    // guid/URL across every project's run of this spec) as an additional source on an event another
+    // project already published — several "Original source" links can legitimately share this exact href.
+    const publicLink = page.getByRole("link", { name: /Original source/ }).first();
     await expect(publicLink).toHaveAttribute("href", expectedUrl);
 
     await page.goto(`/admin/events/${publishedEventId}`);

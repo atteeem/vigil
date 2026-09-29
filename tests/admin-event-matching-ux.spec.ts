@@ -9,6 +9,11 @@ import { prisma } from "@/lib/db/client";
 // review, plus a directly-published reference event to match against —
 // no real external source involved.
 test.describe.serial("Admin event-matching UX", () => {
+  // Chromium's isMobile:true viewport emulation desyncs the visual/layout viewport after an auto-scroll,
+  // making Playwright miss real click targets on /admin/incoming's row buttons — a confirmed emulation
+  // artifact (see tests/admin.spec.ts's "Admin Source Manager" describe block for the full diagnosis),
+  // not a real device's behavior. Keeps every other Pixel 7 trait (viewport, UA, touch, DPR).
+  test.use({ isMobile: false });
   let feedSourceId: string;
   let kyivEventId: string;
   let kyivEventOccurredAt: string;

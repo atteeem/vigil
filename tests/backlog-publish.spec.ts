@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { prisma } from "@/lib/db/client";
+import { fixtureId } from "./helpers/fixture-identity";
 
 // Backlog Triage & Safe Publication v1 — integration coverage for the parts that only make sense end to
 // end through the real HTTP API: the "Publish READY filtered" bulk action (readiness is a snapshot column
@@ -8,8 +9,8 @@ import { prisma } from "@/lib/db/client";
 // "just now" (spec §20-22).
 
 test.describe("Publish READY filtered", () => {
-  test("publishes only READY items, preserves the report's original timestamp, and skips a duplicate", async ({ request }) => {
-    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  test("publishes only READY items, preserves the report's original timestamp, and skips a duplicate", async ({ request }, testInfo) => {
+    const suffix = fixtureId(testInfo, "readiness"); // deterministic — see tests/helpers/fixture-identity.ts
     const source = await (
       await request.post("/api/admin/sources", { data: { name: `Readiness test ${suffix}`, type: "manual" } })
     ).json();

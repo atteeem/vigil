@@ -481,9 +481,11 @@ test.describe("Public map", () => {
       .then((r) => r.json());
     await request.post(`/api/admin/territorial-control/${draft.id}/publish`);
 
-    // The exact endpoint the map's asOf timeline reads.
+    // The exact endpoint the map's asOf timeline reads — it ships geometry only for datasets the caller
+    // explicitly asks for (never every territory on Earth by default); "conflict:<id>" is the
+    // editorially-drawn-territory dataset id for one conflict.
     const at = async (d: Date) => {
-      const c = await request.get(`/api/territorial-control?at=${encodeURIComponent(d.toISOString())}`).then((r) => r.json());
+      const c = await request.get(`/api/territorial-control?at=${encodeURIComponent(d.toISOString())}&datasets=conflict:${w.conflict.id}`).then((r) => r.json());
       return (c.features as { id: string; geometry: TerritorialGeometry; properties: Record<string, any> }[]).filter((f) => f.properties.conflictId === w.conflict.id);
     };
     const before = await at(new Date(changeAt.getTime() - 60_000));

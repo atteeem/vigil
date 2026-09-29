@@ -1,5 +1,6 @@
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
 import { enableTerritory } from "./helpers/territory";
+import { openWorldControls } from "./helpers/world-controls";
 import { aggregateReportBuckets, formatReportCount, hotspotCellDegrees, reportCountOf, sumReportCounts } from "@/lib/map/report-counts";
 import { clusterEvents, formatClusterCount } from "@/lib/globe/event-clusters";
 import { eventsToGeoJSON } from "@/lib/map/events-to-geojson";
@@ -184,6 +185,7 @@ test.describe.serial("Report counts on the rendered map", () => {
   test("5. Heatmap mode: unobtrusive hotspot labels that regroup with zoom, and marker counts step aside", async ({ page }) => {
     await page.goto("/world");
     await page.waitForFunction(() => Boolean((window as unknown as { __vigilMap?: unknown }).__vigilMap));
+    await openWorldControls(page, "layers");
     await page.getByRole("button", { name: "Heatmap" }).click();
     await expect(page.getByRole("button", { name: "Heatmap" })).toHaveAttribute("aria-pressed", "true");
 

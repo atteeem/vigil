@@ -10,37 +10,26 @@ import { replaceExtractedFacts } from "@/lib/db/repositories/extracted-facts";
 // These tests exercise that real path end to end (manual source + "Publish filtered", same as production)
 // rather than re-testing the underlying scorer, which tests/backlog-publish.spec.ts and
 // lib/ingestion/duplicates.ts's own design already cover.
-
-// A per-run offset (genuinely random, spread across ~8 years — NOT derived from the wall clock: two runs
-// only minutes apart would otherwise land only minutes apart after a mere modulo, since modulo does not
-// decorrelate nearby inputs) shifted into every fixed test timestamp below — see the comment at its call
-// site for why a title tag alone is not enough to keep two projects' runs from colliding.
-function offsetIso(iso: string, offsetMs: number): string {
-  return new Date(new Date(iso).getTime() + offsetMs).toISOString();
-}
+//
+// Fixture timestamps are fixed (not randomized): each Playwright project (Desktop, Mobile) runs against
+// its own fresh test DB (scripts/test-e2e.mjs), so a fixture published here can only ever collide with
+// something else from THIS SAME project's own run — and nothing else in this suite uses this exact
+// Kharkiv/Odesa/Aleppo/Kherson/Sumy content. The `(ref ${suffix})` title tag and per-run externalId/URL
+// still guard against a rare same-file rerun leaving a stale row behind.
 
 async function publishSequential(sourceName: string, items: { externalId: string; title: string; text: string; publishedAt: string }[], opts: { sourceRole?: string; claimPolicy?: string } = {}, request: import("@playwright/test").APIRequestContext) {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const offsetMs = Math.floor(Math.random() * 8 * 365 * 86_400_000);
   const source = await (
     await request.post("/api/admin/sources", { data: { name: `${sourceName} ${suffix}`, type: "manual", ...opts } })
   ).json();
   const ids: string[] = [];
   for (const item of items) {
-    // Tag the title with this run's unique suffix AND shift its fixed publishedAt by a large,
-    // run-specific offset (shared across a pair's two items, so their OWN relative spacing is preserved)
-    // so a fixed fixture title/time never coincides with another PROJECT's (Desktop vs Mobile) earlier run
-    // of the SAME spec against the SAME accumulating test.db. A title tag alone is not enough: the
-    // matcher's title-similarity gate only needs 20% word overlap, and one extra tag barely dents the
-    // Jaccard similarity of two otherwise-identical fixture titles — the canonical matcher then correctly
-    // (if confusingly, for this test's own assertions) auto-merges this run's "first" report into an
-    // identical-looking, identically-timed event a previous project already published.
     const created = await (
       await request.post("/api/admin/incoming/manual", {
         data: { sourceId: source.id, externalId: `${item.externalId}-${suffix}`, originalUrl: `https://news.example-source.test/${item.externalId}-${suffix}`, originalTitle: `${item.title} (ref ${suffix})`, originalText: item.text },
       })
     ).json();
-    await prisma.rawIngestionItem.update({ where: { id: created.id }, data: { publishedAt: new Date(offsetIso(item.publishedAt, offsetMs)) } });
+    await prisma.rawIngestionItem.update({ where: { id: created.id }, data: { publishedAt: new Date(item.publishedAt) } });
     ids.push(created.id);
     // Publish one at a time so each subsequent item's canonical-match check sees the prior one as already published.
     const preview = await (await request.post("/api/admin/incoming/publish-bulk", { data: { filters: `sourceId=${source.id}&status=pending`, ids: [created.id], mode: "preview" } })).json();
@@ -124,7 +113,6 @@ test.describe("Canonical event matching at publish time", () => {
 
   test("a party claim still attaches to an independent report's event, but never counts as independent", async ({ request }) => {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const offsetMs = Math.floor(Math.random() * 8 * 365 * 86_400_000);
     const independentSource = await (await request.post("/api/admin/sources", { data: { name: `Independent ${suffix}`, type: "manual" } })).json();
     const partySource = await (await request.post("/api/admin/sources", { data: { name: `Party outlet ${suffix}`, type: "manual", claimPolicy: "party_claim" } })).json();
 
@@ -133,7 +121,7 @@ test.describe("Canonical event matching at publish time", () => {
         data: { sourceId: independentSource.id, externalId: `a-${suffix}`, originalUrl: `https://news.example-source.test/a-${suffix}`, originalTitle: `Artillery strike hits market in Kherson Oblast, five injured (ref ${suffix})`, originalText: "Emergency services responded to the scene." },
       })
     ).json();
-    await prisma.rawIngestionItem.update({ where: { id: first.id }, data: { publishedAt: new Date(offsetIso("2026-09-19T09:00:00.000Z", offsetMs)) } });
+    await prisma.rawIngestionItem.update({ where: { id: first.id }, data: { publishedAt: new Date("2026-09-19T09:00:00.000Z") } });
     const p1 = await (await request.post("/api/admin/incoming/publish-bulk", { data: { filters: `sourceId=${independentSource.id}&status=pending`, ids: [first.id], mode: "preview" } })).json();
     await request.post("/api/admin/incoming/publish-bulk", { data: { filters: `sourceId=${independentSource.id}&status=pending`, ids: [first.id], mode: "publish", expectedCount: p1.matching } });
 
@@ -142,7 +130,7 @@ test.describe("Canonical event matching at publish time", () => {
         data: { sourceId: partySource.id, externalId: `b-${suffix}`, originalUrl: `https://news.example-source.test/b-${suffix}`, originalTitle: `Artillery strike hits market in Kherson Oblast, official says (ref ${suffix})`, originalText: "The ministry issued a statement about the strike." },
       })
     ).json();
-    await prisma.rawIngestionItem.update({ where: { id: claim.id }, data: { publishedAt: new Date(offsetIso("2026-09-19T09:10:00.000Z", offsetMs)) } });
+    await prisma.rawIngestionItem.update({ where: { id: claim.id }, data: { publishedAt: new Date("2026-09-19T09:10:00.000Z") } });
     const p2 = await (await request.post("/api/admin/incoming/publish-bulk", { data: { filters: `sourceId=${partySource.id}&status=pending`, ids: [claim.id], mode: "preview" } })).json();
     await request.post("/api/admin/incoming/publish-bulk", { data: { filters: `sourceId=${partySource.id}&status=pending`, ids: [claim.id], mode: "publish", expectedCount: p2.matching } });
 
@@ -155,7 +143,6 @@ test.describe("Canonical event matching at publish time", () => {
 
   test("disagreeing casualty figures on a merged report become a pending, reviewable proposal — never silently overwritten", async ({ request }) => {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const offsetMs = Math.floor(Math.random() * 8 * 365 * 86_400_000);
     const source = await (await request.post("/api/admin/sources", { data: { name: `Casualty test outlet ${suffix}`, type: "manual" } })).json();
 
     const first = await (
@@ -163,7 +150,7 @@ test.describe("Canonical event matching at publish time", () => {
         data: { sourceId: source.id, externalId: `a-${suffix}`, originalUrl: `https://news.example-source.test/a-${suffix}`, originalTitle: `Drone strike hits residential block in Sumy Oblast, two killed (ref ${suffix})`, originalText: "Two people were confirmed dead at the scene." },
       })
     ).json();
-    await prisma.rawIngestionItem.update({ where: { id: first.id }, data: { publishedAt: new Date(offsetIso("2026-09-19T09:00:00.000Z", offsetMs)) } });
+    await prisma.rawIngestionItem.update({ where: { id: first.id }, data: { publishedAt: new Date("2026-09-19T09:00:00.000Z") } });
     const p1 = await (await request.post("/api/admin/incoming/publish-bulk", { data: { filters: `sourceId=${source.id}&status=pending`, ids: [first.id], mode: "preview" } })).json();
     await request.post("/api/admin/incoming/publish-bulk", { data: { filters: `sourceId=${source.id}&status=pending`, ids: [first.id], mode: "publish", expectedCount: p1.matching } });
 
@@ -172,7 +159,7 @@ test.describe("Canonical event matching at publish time", () => {
         data: { sourceId: source.id, externalId: `b-${suffix}`, originalUrl: `https://news.example-source.test/b-${suffix}`, originalTitle: `Drone strike on residential block in Sumy Oblast leaves two killed, five injured (ref ${suffix})`, originalText: "Officials revised the toll to five injured as rescue work continued." },
       })
     ).json();
-    await prisma.rawIngestionItem.update({ where: { id: second.id }, data: { publishedAt: new Date(offsetIso("2026-09-19T09:20:00.000Z", offsetMs)) } });
+    await prisma.rawIngestionItem.update({ where: { id: second.id }, data: { publishedAt: new Date("2026-09-19T09:20:00.000Z") } });
     // Manual submission (unlike real ingestion) never runs Structured Event Intelligence on its own —
     // run the real extractor and persist its facts exactly the way lib/ingestion/poll.ts's
     // computeAndStoreFacts does, so the casualty figure this test cares about actually exists to compare.
