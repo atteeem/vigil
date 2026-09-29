@@ -37,13 +37,6 @@ test.describe("Publish filtered (API)", () => {
     const region = await addReport(request, mine.id, `Aid convoy delayed entering North Darfur ${uid()}`, "Regional authorities urged residents to use shelters.");
     const city = await addReport(request, mine.id, `Shelling reported near El Fasher ${uid()}`, "Local officials reported damage to several buildings.");
     const outsider = await addReport(request, other.id, `Libya parliament debates budget ${uid()}`, "Lawmakers met on Sunday.");
-    // Both region/city Sudan reports still default to "now", so Desktop's and Mobile's own runs of this
-    // SAME test (moments apart, same conflict/region/type) can otherwise collide with each other exactly
-    // like a different project's leftover event — a random multi-year backdate (this test asserts nothing
-    // about relative "X ago" display) keeps them apart without affecting any location-precision assertion.
-    for (const r of [region, city]) {
-      await prisma.rawIngestionItem.update({ where: { id: r.id }, data: { publishedAt: new Date(Date.now() - Math.floor(Math.random() * 8 * 365 * 86_400_000)) } });
-    }
 
     // Exact recount before anything is written.
     const preview = await (await bulk(request, mine.id, { mode: "preview" })).json();

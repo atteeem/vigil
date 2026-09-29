@@ -13,7 +13,9 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "node prisma/seed.mjs",
     "db:studio": "prisma studio",
-    "test": "playwright test",
+    "test": "node scripts/test-e2e.mjs",
+    "test:e2e": "node scripts/test-e2e.mjs",
+    "test:live": "playwright test --project=Live",
     "test:ui": "playwright test --ui",
     "territory:import-yemen": "node scripts/import-acaps-yemen.mjs",
     "territory:seed": "node scripts/seed-territorial-datasets.mjs"

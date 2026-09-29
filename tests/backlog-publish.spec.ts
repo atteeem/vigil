@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { prisma } from "@/lib/db/client";
+import { fixtureId } from "./helpers/fixture-identity";
 
 // Backlog Triage & Safe Publication v1 — integration coverage for the parts that only make sense end to
 // end through the real HTTP API: the "Publish READY filtered" bulk action (readiness is a snapshot column
@@ -8,8 +9,8 @@ import { prisma } from "@/lib/db/client";
 // "just now" (spec §20-22).
 
 test.describe("Publish READY filtered", () => {
-  test("publishes only READY items, preserves the report's original timestamp, and skips a duplicate", async ({ request }) => {
-    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  test("publishes only READY items, preserves the report's original timestamp, and skips a duplicate", async ({ request }, testInfo) => {
+    const suffix = fixtureId(testInfo, "readiness"); // deterministic — see tests/helpers/fixture-identity.ts
     const source = await (
       await request.post("/api/admin/sources", { data: { name: `Readiness test ${suffix}`, type: "manual" } })
     ).json();
@@ -60,13 +61,9 @@ test.describe("Publish READY filtered", () => {
       })
     ).json();
 
-    // Backdate the READY item to a real historical publish time (10+ days before "now") — the whole
-    // point of this test is confirming the eventual Event keeps THIS date, not the publish moment. The
-    // extra random jitter (still comfortably "more than 9 days ago") keeps two projects' runs of this
-    // SAME Russia-Ukraine/Kyiv/drone fixture, moments apart in real time, from landing close enough to
-    // each other that the canonical matcher (correctly) treats the second as a duplicate of the first's
-    // leftover event — title tags alone don't prevent that; distance-in-time does.
-    const historicalPublishedAt = new Date(Date.now() - 10 * 86_400_000 - Math.floor(Math.random() * 8 * 365 * 86_400_000));
+    // Backdate the READY item to a real historical publish time (10 days before "now") — the whole
+    // point of this test is confirming the eventual Event keeps THIS date, not the publish moment.
+    const historicalPublishedAt = new Date(Date.now() - 10 * 86_400_000);
     await prisma.rawIngestionItem.update({ where: { id: ready.id }, data: { publishedAt: historicalPublishedAt } });
 
     // Compute the real readiness/classification snapshot the same way ingestion would (two sources: the

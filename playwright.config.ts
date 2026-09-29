@@ -33,9 +33,13 @@ export default defineConfig({
     // the real unauthenticated path.
     extraHTTPHeaders: { "x-admin-test-bypass": ADMIN_TEST_BYPASS_SECRET },
   },
+  // *.live.spec.ts hits a real external feed (today's actual BBC World RSS content) — excluded from the
+  // deterministic Desktop/Mobile gate (whose whole point is "reproducible regardless of the outside
+  // world") and run only explicitly via `npm run test:live`, which selects this project by name.
   projects: [
-    { name: "Desktop", use: { ...devices["Desktop Chrome"] } },
-    { name: "Mobile", use: { ...devices["Pixel 7"] } },
+    { name: "Desktop", testIgnore: /\.live\.spec\.ts$/, use: { ...devices["Desktop Chrome"] } },
+    { name: "Mobile", testIgnore: /\.live\.spec\.ts$/, use: { ...devices["Pixel 7"] } },
+    { name: "Live", testMatch: /\.live\.spec\.ts$/, use: { ...devices["Desktop Chrome"] } },
   ],
   webServer: {
     command: `node scripts/prepare-test-db.mjs && npx next dev -p ${TEST_PORT}`,

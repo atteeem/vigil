@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 // Core deterministic suite for the "classifiable and manageable at scale"
 // milestone (spec: conflict management, duplicate-candidate engine,
 // automated draft extraction, geocoding, source independence, review UI).
-// Unlike tests/rss-ingestion.spec.ts (kept as a manual/smoke test against
+// Unlike tests/rss-ingestion.live.spec.ts (kept as a manual/smoke test against
 // the live BBC feed), everything here uses a fixture RSS feed
 // (app/api/test-fixtures/rss/[name]/route.ts) or the manual-submission API
 // so the suite never depends on external network state.
@@ -13,11 +13,10 @@ test.describe.serial("Classification & scale milestone", () => {
   // behavior (see tests/admin.spec.ts's "Admin Source Manager" describe block for the full diagnosis).
   test.use({ isMobile: false });
   let fixtureSourceId: string;
-  // Tracked explicitly rather than re-derived by title filtering: this
-  // suite's two Playwright projects (Desktop/Mobile) run serially against
-  // the SAME dev-server database, each creating its own "Fixture Feed A"
-  // source and publishing a same-titled Kyiv event — filtering /api/events
-  // by title would pick up the other project's leftover event too.
+  // Tracked explicitly rather than re-derived by title filtering: each Playwright project (Desktop,
+  // Mobile) gets its own fresh test DB (scripts/test-e2e.mjs), but WITHIN one project's own
+  // continuously-accumulating run, another spec file could plausibly publish a same-titled Kyiv event —
+  // filtering /api/events by title could pick that up instead of this suite's own event.
   let kyivEventId: string;
 
   test("0. Fixture RSS source can be created and points at the local fixture feed", async ({ request }) => {
@@ -182,8 +181,11 @@ test.describe.serial("Classification & scale milestone", () => {
   test("7. Duplicate-candidate engine: a similar second report surfaces the published Kyiv event with a ranked score", async ({
     request,
   }) => {
-    const source = await request.get("/api/admin/sources").then((r) => r.json());
-    const fixture = source.find((s: { id: string }) => s.id === fixtureSourceId);
+    // A genuinely SEPARATE outlet: lib/data/independence.ts's independentSourceCount() groups reports by
+    // outlet ("one outlet is ONE group however many reports it files"), so a follow-up filed under the
+    // same Fixture Feed A source as the original Kyiv report would never raise the independent count —
+    // test "8." below needs the merge to add a real second, independent corroborating source.
+    const corroboratingSource = await request.post("/api/admin/sources", { data: { name: `Corroborating outlet ${fixtureSourceId}`, type: "manual" } }).then((r) => r.json());
 
     // The duplicate window is ±14 days of the CANDIDATE's occurredAt, not
     // "now" — the published Kyiv event's occurredAt came from the fixture's
@@ -201,7 +203,7 @@ test.describe.serial("Classification & scale milestone", () => {
     const dupItem = await request
       .post("/api/admin/incoming/manual", {
         data: {
-          sourceId: fixture.id,
+          sourceId: corroboratingSource.id,
           externalId: `dup-kyiv-${Date.now()}`,
           originalUrl: "https://fixture.test/dup-kyiv",
           originalTitle: dupTitle,
@@ -224,7 +226,7 @@ test.describe.serial("Classification & scale milestone", () => {
     });
     // Repeated local suite runs can leave earlier runs' similarly-timed
     // Kyiv events in the DB too (this suite never resets it — same
-    // convention as tests/rss-ingestion.spec.ts) — find THIS run's event
+    // convention as tests/rss-ingestion.live.spec.ts) — find THIS run's event
     // by id among the candidates rather than assuming it ranks first.
     const candidates = await dupRes.json();
     expect(candidates.length).toBeGreaterThan(0);
@@ -278,10 +280,15 @@ test.describe.serial("Classification & scale milestone", () => {
   test("9. Source independence: a relay of the same originating report does NOT increase the independent source count", async ({
     request,
   }) => {
-    const eventsRes = await request.get("/api/events");
-    const events = await eventsRes.json();
-    const kyivEvent = events.find((e: { id: string }) => e.id === kyivEventId);
-    const countBefore = kyivEvent.sourceCount;
+    // Direct DB lookup, not the public /api/events feed — that feed is windowed to the last 45 days, and
+    // this fixture's fixed 2026-01-01 pubDate is long outside it (see test "7." above for the same fix).
+    const { prisma } = await import("@/lib/db/client");
+    const { independentSourceCount } = await import("@/lib/data/independence");
+    const includeSources = { sources: { include: { rawIngestionItem: { include: { source: true } } } } } as const;
+    const kyivEventRow = await prisma.event.findUnique({ where: { id: kyivEventId }, include: includeSources });
+    expect(kyivEventRow).toBeTruthy();
+    const countBefore = independentSourceCount(kyivEventRow!.sources);
+    const kyivOccurredAt = kyivEventRow!.occurredAt;
 
     const source = await request.get("/api/admin/sources").then((r) => r.json());
     const fixture = source.find((s: { id: string }) => s.id === fixtureSourceId);
@@ -294,19 +301,17 @@ test.describe.serial("Classification & scale milestone", () => {
           originalUrl: "https://fixture.test/relay-kyiv",
           originalTitle: `RT: drone strike near Kyiv fuel depot [${fixtureSourceId}]`,
           originalText: "Wire relay of the same Kyiv fuel depot drone strike report.",
-          publishedAt: new Date(new Date(kyivEvent.occurredAt).getTime() + 30 * 60_000).toISOString(),
+          publishedAt: new Date(kyivOccurredAt.getTime() + 30 * 60_000).toISOString(),
         },
       })
       .then((r) => r.json());
 
     await request.post(`/api/admin/incoming/${relayItem.id}/merge`, {
-      data: { eventId: kyivEvent.id, relationship: "relay" },
+      data: { eventId: kyivEventId, relationship: "relay" },
     });
 
-    const afterRes = await request.get("/api/events");
-    const after = await afterRes.json();
-    const kyivAfter = after.find((e: { id: string }) => e.id === kyivEventId);
-    expect(kyivAfter.sourceCount).toBe(countBefore); // relay must not inflate independent-source count
+    const afterRow = await prisma.event.findUnique({ where: { id: kyivEventId }, include: includeSources });
+    expect(independentSourceCount(afterRow!.sources)).toBe(countBefore); // relay must not inflate independent-source count
   });
 
   test("10. Ignore suggestion removes a duplicate candidate from the review list without merging or rejecting", async ({

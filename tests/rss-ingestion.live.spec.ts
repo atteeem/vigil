@@ -51,21 +51,16 @@ test.describe.serial("RSS ingestion proof (BBC World)", () => {
     await expect(bbcCard.getByRole("button", { name: "Reject" })).toBeVisible();
   });
 
-  // Chromium's isMobile:true viewport emulation desyncs the visual/layout viewport after this form's
-  // scrollIntoView-driven scroll, missing real click/fill targets on /admin/incoming — a confirmed
-  // emulation artifact, not a real device's behavior (see tests/admin.spec.ts's "Admin Source Manager"
-  // describe block for the full diagnosis). Scoped narrowly (not file-wide) because test "8-9." below
-  // reads the isMobile fixture itself for its own conditional logic.
-  test.describe("review-form click workaround", () => {
-    test.use({ isMobile: false });
-
-    test("5-7. Review opens, fields are editable, Conflict picker offers Russia–Ukraine, Publish creates a real event", async ({
-      page,
-      request,
-    }) => {
-      // Pick a raw item directly via the API — deterministic id, avoids
-      // depending on which specific BBC headline is first in the feed today.
-      const itemsRes = await request.get("/api/admin/incoming?status=pending");
+  // This file only ever runs under the "Live" project (playwright.config.ts pins it to the Desktop Chrome
+  // device, never Mobile), so the Chromium isMobile:true viewport-emulation click-interception bug (see
+  // tests/admin.spec.ts's "Admin Source Manager" describe block) does not apply here — no workaround needed.
+  test("5-7. Review opens, fields are editable, Conflict picker offers Russia–Ukraine, Publish creates a real event", async ({
+    page,
+    request,
+  }) => {
+    // Pick a raw item directly via the API — deterministic id, avoids
+    // depending on which specific BBC headline is first in the feed today.
+    const itemsRes = await request.get("/api/admin/incoming?status=pending");
     const items = await itemsRes.json();
     const bbcItem = items.find((i: { source: { name: string } }) => i.source.name === "BBC World");
     expect(bbcItem).toBeTruthy();
@@ -121,7 +116,6 @@ test.describe.serial("RSS ingestion proof (BBC World)", () => {
       }),
     ).toBeVisible();
     await expect(sourcesSection.getByText("Originating report")).toBeVisible();
-    });
   });
 
   test("8-9. Published event appears on /world map and in the chronological feed", async ({ page, request, isMobile }) => {
