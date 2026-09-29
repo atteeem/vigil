@@ -12,16 +12,18 @@ test.describe.serial("Event corroboration metadata", () => {
   let newsSourceId: string;
   let officialSourceId: string;
   let eventId: string;
-  // A genuinely random per-run offset (spread across ~8 years — NOT clock-derived: two projects' runs
-  // only minutes apart would otherwise land only minutes apart after a mere subtraction) shifted into
-  // every timestamp below, and a matching suffix tagged onto every title, so this test's fixed "Lagos
-  // warehouse fire" content never coincides with another PROJECT's (Desktop vs Mobile) earlier run of the
-  // SAME spec against the SAME accumulating test.db — otherwise the canonical matcher correctly (if
-  // confusingly, for this test's own report-count assertions) auto-attaches this run's "originating"
-  // report to an identical-looking event a previous project already published and corroborated.
+  // This test's own assertions need occurredAt to stay genuinely ~1-3 REAL hours before "now" (it checks
+  // relative "1h ago"/"2h ago" display), so — unlike event-clustering.spec.ts's fixed-calendar-date
+  // fixtures — time itself can't be shifted to dodge another project's (Desktop vs Mobile) run of the SAME
+  // spec against the SAME accumulating test.db. Instead a small per-run coordinate jitter (below) keeps
+  // the "originating" report's real distance from any other run's identical-content leftover event beyond
+  // lib/ingestion/duplicates.ts's 25 km full-credit radius, and a suffix tagged onto every title keeps
+  // Jaccard title similarity down too — together enough that the canonical matcher's strict auto-merge
+  // gate (score >= 80 AND same exact event type AND >= 20% title overlap) doesn't fire on this pairing,
+  // without breaking this test's own real-time-relative corroboration-recency assertions.
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const runOffsetMs = Math.floor(Math.random() * 8 * 365 * 86_400_000);
-  const t0 = Date.now() - 3 * 60 * 60_000 + runOffsetMs; // 3h ago: originating report
+  const jitter = () => (Math.random() - 0.5) * 2; // +/- 1 degree (~111 km at the equator)
+  const t0 = Date.now() - 3 * 60 * 60_000; // 3h ago: originating report
 
   test("setup: two categorized sources, a published event, a corroborating report, and a relay of the same source", async ({
     request,
@@ -65,8 +67,8 @@ test.describe.serial("Event corroboration metadata", () => {
           title: `Warehouse fire reported in Lagos industrial district (ref ${suffix})`,
           summary: "Independently written summary for the corroboration metadata test event.",
           eventType: "fire",
-          latitude: 6.45,
-          longitude: 3.39,
+          latitude: 6.45 + jitter(),
+          longitude: 3.39 + jitter(),
           countryCode: "NG",
           region: "Africa",
           occurredAt: new Date(t0).toISOString(),

@@ -240,10 +240,16 @@ test.describe.serial("Classification & scale milestone", () => {
   test("8. Merge attaches the duplicate as a new source on the SAME event — no second public event, source count increments", async ({
     request,
   }) => {
-    const eventsRes = await request.get("/api/events");
-    const events = await eventsRes.json();
-    const kyivEvent = events.find((e: { id: string }) => e.id === kyivEventId);
-    expect(kyivEvent).toBeTruthy();
+    // Direct DB lookup, not the public /api/events feed — that feed is windowed to the last 45 days, and
+    // this fixture's fixed 2026-01-01 pubDate is long outside it (see test "7." above for the same fix).
+    const { prisma } = await import("@/lib/db/client");
+    const { independentSourceCount } = await import("@/lib/data/independence");
+    const kyivEventRow = await prisma.event.findUnique({
+      where: { id: kyivEventId },
+      include: { sources: { include: { rawIngestionItem: { include: { source: true } } } } },
+    });
+    expect(kyivEventRow).toBeTruthy();
+    const kyivEvent = { id: kyivEventRow!.id, sourceCount: independentSourceCount(kyivEventRow!.sources) };
     const countBefore = kyivEvent.sourceCount;
 
     const pendingRes = await request.get("/api/admin/incoming?status=pending");
@@ -256,11 +262,13 @@ test.describe.serial("Classification & scale milestone", () => {
     });
     expect(mergeRes.ok()).toBeTruthy();
 
-    const afterRes = await request.get("/api/events");
-    const after = await afterRes.json();
-    const kyivEventsMatching = after.filter((e: { id: string }) => e.id === kyivEventId);
-    expect(kyivEventsMatching).toHaveLength(1); // merge never creates a second public event
-    expect(kyivEventsMatching[0].sourceCount).toBe(countBefore + 1);
+    // Direct DB lookup again — see the comment above.
+    const afterRow = await prisma.event.findUnique({
+      where: { id: kyivEventId },
+      include: { sources: { include: { rawIngestionItem: { include: { source: true } } } } },
+    });
+    expect(afterRow).toBeTruthy(); // merge never creates a second event
+    expect(independentSourceCount(afterRow!.sources)).toBe(countBefore + 1);
 
     const mergedItemRes = await request.get(`/api/admin/incoming?status=merged`);
     const merged = await mergedItemRes.json();
