@@ -57,6 +57,10 @@ test.describe("Admin Source Manager (/admin/sources)", () => {
 });
 
 test.describe("Admin Incoming Reports (/admin/incoming)", () => {
+  // See the "Admin Source Manager" describe block above for the full diagnosis: Chromium's isMobile:true
+  // viewport emulation desyncs the visual/layout viewport after an auto-scroll, missing real click targets.
+  test.use({ isMobile: false });
+
   test("manual submission → publish removes it from the pending queue and it reaches /api/events", async ({
     page,
     request,

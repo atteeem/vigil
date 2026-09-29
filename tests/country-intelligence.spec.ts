@@ -416,9 +416,8 @@ test.describe.serial("Country page UI", () => {
 
   test("country brief window switching uses the same brief engine", async ({ page }) => {
     await openCountry(page, "/country/NA");
+    await expandAll(page); // secondary sections (including the brief) start collapsed on phones
     const brief = page.getByTestId("section-brief");
-    // Secondary on phones: collapsed until opened.
-    if (!(await brief.evaluate((el) => (el as HTMLDetailsElement).open))) await brief.locator("summary").click();
     await expect(brief.getByTestId("brief-headline")).toContainText("Last 24 hours", { timeout: 60_000 });
     await expect(brief.getByTestId("window-custom")).toHaveCount(0);
     await brief.getByTestId("window-6h").click();

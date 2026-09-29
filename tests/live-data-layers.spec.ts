@@ -477,6 +477,7 @@ test.describe.serial("World map UI", () => {
 
   test("hazard layers do not change the conflict heat surface", async ({ page }) => {
     await openWorld(page);
+    await openWorldControls(page, "layers");
     await page.getByRole("button", { name: "Heatmap" }).click();
     const signature = () => page.locator("[data-heat-signature]").first().getAttribute("data-heat-signature");
     await expect.poll(signature).toBeTruthy();

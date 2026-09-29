@@ -118,36 +118,42 @@ test.describe.serial("Event lifecycle management (admin)", () => {
     }
   });
 
-  test("6. Editing the event preserves its supporting-source relationship and manual source URL", async ({
-    page,
-    request,
-  }) => {
-    expect((await request.patch(`/api/admin/events/${eventId}`, { data: {
-      verificationStatus: "disputed", locationName: "Paris", occurredAt: "2026-09-17T10:12:34.567Z",
-    } })).ok()).toBe(true);
-    const before = await request.get(`/api/admin/events/${eventId}`).then((r) => r.json());
-    expect(before.sources).toHaveLength(1);
+  // Same "grid gap-3 sm:grid-cols-2" edit-form layout as the create-form workaround above (this form's
+  // Save button sits past a scrollIntoView-triggered scroll on Mobile) — see that block's own comment.
+  test.describe("edit-form click workaround", () => {
+    test.use({ isMobile: false });
 
-    await page.goto(`/admin/events/${eventId}`);
-    await page.getByTestId("edit-event-button").click();
-    await expect(page.getByTestId("edit-event-form")).toBeVisible();
+    test("6. Editing the event preserves its supporting-source relationship and manual source URL", async ({
+      page,
+      request,
+    }) => {
+      expect((await request.patch(`/api/admin/events/${eventId}`, { data: {
+        verificationStatus: "disputed", locationName: "Paris", occurredAt: "2026-09-17T10:12:34.567Z",
+      } })).ok()).toBe(true);
+      const before = await request.get(`/api/admin/events/${eventId}`).then((r) => r.json());
+      expect(before.sources).toHaveLength(1);
 
-    const editedTitle = `${title} (edited)`;
-    const titleInput = page.getByTestId("edit-event-form").getByLabel("Title");
-    await titleInput.fill(editedTitle);
-    await page.getByTestId("save-event-button").click();
+      await page.goto(`/admin/events/${eventId}`);
+      await page.getByTestId("edit-event-button").click();
+      await expect(page.getByTestId("edit-event-form")).toBeVisible();
 
-    await expect(page.getByText(editedTitle)).toBeVisible();
+      const editedTitle = `${title} (edited)`;
+      const titleInput = page.getByTestId("edit-event-form").getByLabel("Title");
+      await titleInput.fill(editedTitle);
+      await page.getByTestId("save-event-button").click();
 
-    const after = await request.get(`/api/admin/events/${eventId}`).then((r) => r.json());
-    expect(after.title).toBe(editedTitle);
-    // Editing ordinary fields must never touch EventSource links.
-    expect(after.sources).toHaveLength(1);
-    expect(after.sources[0].url).toBe(sourceUrl);
-    expect(after.sourceCount).toBe(before.sourceCount);
-    expect(after.occurredAt).toBe(before.occurredAt);
-    expect(after.disputed).toBe(true);
-    expect(after.locationName).toBe("Paris");
+      await expect(page.getByText(editedTitle)).toBeVisible();
+
+      const after = await request.get(`/api/admin/events/${eventId}`).then((r) => r.json());
+      expect(after.title).toBe(editedTitle);
+      // Editing ordinary fields must never touch EventSource links.
+      expect(after.sources).toHaveLength(1);
+      expect(after.sources[0].url).toBe(sourceUrl);
+      expect(after.sourceCount).toBe(before.sourceCount);
+      expect(after.occurredAt).toBe(before.occurredAt);
+      expect(after.disputed).toBe(true);
+      expect(after.locationName).toBe("Paris");
+    });
   });
 
   test("7. Delete removes the event from admin and public views; its supporting report returns to pending rather than being deleted", async ({

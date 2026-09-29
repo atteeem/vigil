@@ -582,6 +582,11 @@ test.describe.serial("Notification centre, Watchlist page and deep links (UI)", 
   });
 
   test("Follow button, Watchlist page: follow, mode, custom rule editing, mute, pause, unfollow; preferences persist", async ({ page }) => {
+    // Warm up Turbopack's compile of /country/[code] before the timing-sensitive click below: a cold
+    // first hit in dev mode ships the SSR'd HTML (with data-following="false" already present) well
+    // before the client JS bundle finishes compiling and hydrating, so an immediate automated click can
+    // land before the button's onClick handler is attached — a race real, humanly-paced usage never hits.
+    await page.goto("/country/FI");
     await page.goto("/country/FI");
     const btn = page.getByTestId("follow-button").first();
     await expect(btn).toHaveAttribute("data-following", "false");

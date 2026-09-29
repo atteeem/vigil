@@ -27,9 +27,15 @@ test.describe("Publish filtered (API)", () => {
   test("publishes exactly the filtered reports: country-level news without coordinates, region and city with their precision, original URLs kept", async ({ request }) => {
     const mine = await makeSource(request, "A");
     const other = await makeSource(request, "B");
+    // Region/city examples deliberately avoid Russia-Ukraine (Kyiv/Kharkiv/Odesa/Sumy/Kherson): it is by
+    // far the most fixture-saturated conflict across this whole suite, so a generic same-day kinetic
+    // report there routinely scores "high" duplicate likelihood against some OTHER spec's leftover event
+    // and gets conservatively held for review — exactly the correct, intended behavior (§1: an ambiguous
+    // candidate stays for human review), but not what this test is trying to isolate (location-scope
+    // precision handling). Sudan is a real tracked conflict too but far less saturated in practice.
     const country = await addReport(request, mine.id, `Libya central bank names a new governor ${uid()}`, "The appointment follows a dispute over the bank's leadership. Officials gave no date.");
-    const region = await addReport(request, mine.id, `Air raid alert across Zhytomyr Oblast ${uid()}`, "Regional authorities urged residents to use shelters.");
-    const city = await addReport(request, mine.id, `Drone strike hits Kharkiv ${uid()}`, "Local officials reported damage to several buildings.");
+    const region = await addReport(request, mine.id, `Aid convoy delayed entering North Darfur ${uid()}`, "Regional authorities urged residents to use shelters.");
+    const city = await addReport(request, mine.id, `Shelling reported near El Fasher ${uid()}`, "Local officials reported damage to several buildings.");
     const outsider = await addReport(request, other.id, `Libya parliament debates budget ${uid()}`, "Lawmakers met on Sunday.");
 
     // Exact recount before anything is written.
@@ -45,16 +51,16 @@ test.describe("Publish filtered (API)", () => {
     const byTitle = (t: string) => events.find((e) => e.title.startsWith(t))!;
     const libya = byTitle("Libya central bank");
     expect(libya).toMatchObject({ lat: null, lng: null, locationScope: "country", locationPrecision: "country" });
-    const zhy = byTitle("Air raid alert across Zhytomyr");
-    expect(zhy).toMatchObject({ locationScope: "region", locationPrecision: "region", adminRegion: "Zhytomyr Oblast" });
-    expect(zhy.lat).toBeCloseTo(50.6, 0);
-    expect(zhy.locationPrecision).not.toBe("exact");
-    const khk = byTitle("Drone strike hits Kharkiv");
-    expect(khk).toMatchObject({ locationScope: "city", locationPrecision: "city", city: "Kharkiv" });
+    const darfur = byTitle("Aid convoy delayed entering North Darfur");
+    expect(darfur).toMatchObject({ locationScope: "region", locationPrecision: "region", adminRegion: "North Darfur" });
+    expect(darfur.lat).toBeCloseTo(16.0, 0);
+    expect(darfur.locationPrecision).not.toBe("exact");
+    const fasher = byTitle("Shelling reported near El Fasher");
+    expect(fasher).toMatchObject({ locationScope: "city", locationPrecision: "city", city: "El Fasher" });
     // The source's own link and headline are preserved, and nothing outside the filter was touched.
     expect(libya.sources[0]?.url).toBe(country.url);
-    expect(zhy.sources[0]?.url).toBe(region.url);
-    expect(khk.sources[0]?.url).toBe(city.url);
+    expect(darfur.sources[0]?.url).toBe(region.url);
+    expect(fasher.sources[0]?.url).toBe(city.url);
     expect(events.some((e) => e.sources.some((s) => s.url === outsider.url))).toBe(false);
     const stillPending = await (await bulk(request, other.id, { mode: "preview" })).json();
     expect(stillPending.matching).toBe(1);

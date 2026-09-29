@@ -60,9 +60,13 @@ test.describe("Publish READY filtered", () => {
       })
     ).json();
 
-    // Backdate the READY item to a real historical publish time (10 days before "now") — the whole
-    // point of this test is confirming the eventual Event keeps THIS date, not the publish moment.
-    const historicalPublishedAt = new Date(Date.now() - 10 * 86_400_000);
+    // Backdate the READY item to a real historical publish time (10+ days before "now") — the whole
+    // point of this test is confirming the eventual Event keeps THIS date, not the publish moment. The
+    // extra random jitter (still comfortably "more than 9 days ago") keeps two projects' runs of this
+    // SAME Russia-Ukraine/Kyiv/drone fixture, moments apart in real time, from landing close enough to
+    // each other that the canonical matcher (correctly) treats the second as a duplicate of the first's
+    // leftover event — title tags alone don't prevent that; distance-in-time does.
+    const historicalPublishedAt = new Date(Date.now() - 10 * 86_400_000 - Math.floor(Math.random() * 8 * 365 * 86_400_000));
     await prisma.rawIngestionItem.update({ where: { id: ready.id }, data: { publishedAt: historicalPublishedAt } });
 
     // Compute the real readiness/classification snapshot the same way ingestion would (two sources: the

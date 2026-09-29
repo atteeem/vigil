@@ -127,9 +127,14 @@ test.describe("Seeded records", () => {
   test("each plug-in source exists exactly once; identity fields are kept separate; no feed URL is shared", async ({ request }) => {
     const all = await sources(request);
     for (const s of plugin.sources) expect(all.filter((r) => r.name === s.name), s.name).toHaveLength(1);
-    const feeds = all.map((r) => r.feedUrl).filter(Boolean) as string[];
+    // Scoped to THIS plug-in's own seeded rows: `all` is every admin Source in the DB, and plenty of other
+    // specs create their own ad-hoc sources (often pointed at the same shared RSS/Telegram test fixture
+    // URLs) that legitimately have nothing to do with this registry's own internal identity-uniqueness.
+    const pluginNames = new Set(plugin.sources.map((s) => s.name));
+    const ours = all.filter((r) => pluginNames.has(r.name));
+    const feeds = ours.map((r) => r.feedUrl).filter(Boolean) as string[];
     expect(new Set(feeds.map((f) => urlKey(f))).size).toBe(feeds.length);
-    const handles = all.filter((r) => r.platform === "telegram" && r.platformHandle).map((r) => r.platformHandle!.toLowerCase());
+    const handles = ours.filter((r) => r.platform === "telegram" && r.platformHandle).map((r) => r.platformHandle!.toLowerCase());
     expect(new Set(handles).size).toBe(handles.length);
 
     const primicias = all.find((r) => r.name === "Primicias (Telegram)")!;

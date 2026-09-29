@@ -14,6 +14,11 @@ test.describe("First visit", () => {
   test.use({ storageState: EMPTY_STATE });
 
   test("four-step introduction with Back / Next / Done, then the impact-country question; completion persists", async ({ page }) => {
+    // Warm up Turbopack's compile of "/" (homepage + globe chunk) before the rapid-fire onboarding clicks
+    // below: a cold first hit in dev mode can leave client JS still hydrating/erroring (surfacing the
+    // Next.js dev error overlay, which then intercepts clicks) well after the SSR'd dialog is already
+    // visible — a race real, humanly-paced first-visits never hit.
+    await page.goto("/");
     await page.goto("/");
     const dialog = page.getByTestId("onboarding");
     await expect(dialog).toBeVisible();
@@ -121,6 +126,9 @@ test.describe("Map legend", () => {
 
 test.describe("Watch and For You", () => {
   test("Watch shows a confirmation that only promises existing features", async ({ page }) => {
+    // Warm up Turbopack's compile of /country/[code] before the timing-sensitive click below — see the
+    // matching comment in tests/watchlists-alerts.spec.ts.
+    await page.goto("/country/FI");
     await page.goto("/country/FI");
     const watch = page.locator('[data-testid="follow-button"]:visible').first();
     await expect(watch).toHaveAttribute("data-following", "false");

@@ -472,6 +472,7 @@ test.describe.serial("World map UI (v2 layers)", () => {
     await enableLayer(page, "internet");
     const count = () => page.locator("[data-hazard-count]").first().getAttribute("data-hazard-count");
     await expect.poll(count).toBe("1");
+    await openWorldControls(page, "timeline");
     await page.getByRole("radiogroup", { name: "Playback" }).getByRole("radio", { name: "24H", exact: true }).click();
     await expect(page.getByTestId("historical-indicator")).toBeVisible();
     await expect.poll(count).toBe("0"); // the Lebanon anomaly began ~6 h ago

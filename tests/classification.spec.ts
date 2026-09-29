@@ -8,6 +8,10 @@ import { test, expect } from "@playwright/test";
 // (app/api/test-fixtures/rss/[name]/route.ts) or the manual-submission API
 // so the suite never depends on external network state.
 test.describe.serial("Classification & scale milestone", () => {
+  // Chromium's isMobile:true viewport emulation desyncs the visual/layout viewport after an auto-scroll,
+  // missing real click targets on admin table rows — a confirmed emulation artifact, not a real device's
+  // behavior (see tests/admin.spec.ts's "Admin Source Manager" describe block for the full diagnosis).
+  test.use({ isMobile: false });
   let fixtureSourceId: string;
   // Tracked explicitly rather than re-derived by title filtering: this
   // suite's two Playwright projects (Desktop/Mobile) run serially against
@@ -183,14 +187,15 @@ test.describe.serial("Classification & scale milestone", () => {
 
     // The duplicate window is ±14 days of the CANDIDATE's occurredAt, not
     // "now" — the published Kyiv event's occurredAt came from the fixture's
-    // fixed pubDate, so the follow-up report must be timed relative to that
-    // actual stored value (read back via the API) rather than the current
-    // wall-clock time, or it would fall outside the scoring window entirely.
-    const eventsRes = await request.get("/api/events");
-    const events = await eventsRes.json();
-    const kyivEvent = events.find((e: { id: string }) => e.id === kyivEventId);
+    // fixed 2026-01-01 pubDate, so the follow-up report must be timed relative
+    // to that actual stored value rather than the current wall-clock time, or
+    // it would fall outside the scoring window entirely. Read it back via a
+    // direct DB lookup, not the public /api/events feed — that feed is
+    // windowed to the last 45 days, and this fixed pubDate is long outside it.
+    const { prisma } = await import("@/lib/db/client");
+    const kyivEvent = await prisma.event.findUnique({ where: { id: kyivEventId } });
     expect(kyivEvent).toBeTruthy();
-    const followUpAt = new Date(new Date(kyivEvent.occurredAt).getTime() + 12 * 60_000).toISOString();
+    const followUpAt = new Date(kyivEvent!.occurredAt.getTime() + 12 * 60_000).toISOString();
 
     const dupTitle = `Second drone strike reported near Kyiv fuel depot [${fixtureSourceId}]`;
     const dupItem = await request
@@ -373,6 +378,8 @@ test.describe.serial("Classification & scale milestone", () => {
 });
 
 test.describe.serial("Conflict management (admin)", () => {
+  // See the "Classification & scale milestone" describe block above for the full diagnosis.
+  test.use({ isMobile: false });
   let conflictId: string;
   const slug = `e2e-test-conflict-${Date.now()}`;
 

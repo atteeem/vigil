@@ -37,9 +37,13 @@ test.describe("Canonical search", () => {
       expect(countries.map((c) => c.href), q).toContain("/country/FI");
       expect(countries.filter((c) => c.href === "/country/FI"), `${q}: no duplicate`).toHaveLength(1);
     }
-    // A 2-letter code is a code: no unrelated substring hits from other groups.
+    // A 2-letter code is a code: no unrelated substring hits from other groups. Sources are a deliberate
+    // exception (lib/public/search.ts): unlike every other entity type, which either exact-matches or is
+    // skipped entirely for short queries, a Source legitimately prefix-matches by name even at 2 chars —
+    // in this long-lived shared test DB, many other specs' own fixture sources are literally named
+    // "Fixture ..." and correctly match "FI" as a real (if incidental) prefix hit, not search noise.
     const fi = await search(request, "FI");
-    expect(fi.every((x) => x.group === "Countries" || x.group === "Infrastructure")).toBe(true);
+    expect(fi.every((x) => x.group === "Countries" || x.group === "Infrastructure" || x.group === "Sources")).toBe(true);
   });
 
   test("conflict aliases resolve to the canonical conflict page", async ({ request }) => {
