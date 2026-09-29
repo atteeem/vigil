@@ -320,12 +320,17 @@ test.describe.serial("Classification & scale milestone", () => {
   }) => {
     const source = await request.get("/api/admin/sources").then((r) => r.json());
     const fixture = source.find((s: { id: string }) => s.id === fixtureSourceId);
-    const eventsRes = await request.get("/api/events");
-    const events = await eventsRes.json();
-    const kyivEvent = events.find((e: { id: string }) => e.id === kyivEventId);
+    // Direct DB lookup, not the public /api/events feed — that feed is windowed to the last 45 days, and
+    // this fixture's fixed 2026-01-01 pubDate is long outside it (see test "7." above for the same fix).
+    const { prisma } = await import("@/lib/db/client");
+    const { independentSourceCount } = await import("@/lib/data/independence");
+    const includeSources = { sources: { include: { rawIngestionItem: { include: { source: true } } } } } as const;
+    const kyivEvent = await prisma.event.findUnique({ where: { id: kyivEventId }, include: includeSources });
+    expect(kyivEvent).toBeTruthy();
+    const countBefore = independentSourceCount(kyivEvent!.sources);
     // Same ±14-day window constraint as test 7 — anchor to the event's
     // actual stored occurredAt, not wall-clock "now".
-    const followUpAt = new Date(new Date(kyivEvent.occurredAt).getTime() + 20 * 60_000).toISOString();
+    const followUpAt = new Date(kyivEvent!.occurredAt.getTime() + 20 * 60_000).toISOString();
 
     const ignoreItem = await request
       .post("/api/admin/incoming/manual", {
@@ -363,10 +368,8 @@ test.describe.serial("Classification & scale milestone", () => {
     const pending = await pendingRes.json();
     expect(pending.some((i: { id: string }) => i.id === ignoreItem.id)).toBe(true);
 
-    const finalEventsRes = await request.get("/api/events");
-    const finalEvents = await finalEventsRes.json();
-    const kyivFinal = finalEvents.find((e: { id: string }) => e.id === kyivEvent.id);
-    expect(kyivFinal.sourceCount).toBe(kyivEvent.sourceCount); // untouched by the ignored suggestion
+    const kyivFinal = await prisma.event.findUnique({ where: { id: kyivEventId }, include: includeSources });
+    expect(independentSourceCount(kyivFinal!.sources)).toBe(countBefore); // untouched by the ignored suggestion
   });
 
   test("11. Rejection leaves the item stored but creates no event", async ({ request, page }) => {

@@ -84,8 +84,11 @@ test.describe.serial("RSS ingestion proof (BBC World)", () => {
     await card.getByLabel("Geographic scope").selectOption("point");
     await card.getByLabel("Latitude").fill("50.45");
     await card.getByLabel("Longitude").fill("30.52");
-    await card.getByLabel("Country code").fill("UA");
-    await card.getByLabel("Region").fill("Europe");
+    // components/admin/location-scope-fields.tsx: SCOPE_RULES["point"].country is false — an exact point
+    // needs no separately-typed Country code field (only region/city/country scopes do). The free-text
+    // field is labelled "Map region" (not "Region" alone) — "Region" also substring-matches the Geographic
+    // scope <select>, whose accessible name picks up its own "Region" option text.
+    await card.getByLabel("Map region").fill("Europe");
 
     await card.getByRole("button", { name: "Publish" }).click();
     await expect(page.getByTestId(`incoming-item-${bbcItem.id}`)).toHaveCount(0);
