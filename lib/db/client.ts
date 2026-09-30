@@ -3,8 +3,13 @@ import { PrismaPg } from "@prisma/adapter-pg";
 
 // Prisma 7's driver-adapter model: the runtime client connects via an
 // explicit adapter instead of reading a connection string out of
-// schema.prisma. PrismaPg takes a standard Postgres connection string
-// (the Supabase Session Pooler URL, port 5432) directly as `connectionString`.
+// schema.prisma. PrismaPg takes a standard Postgres connection string —
+// Supabase's pooled Transaction Pooler URL, sized for many short-lived
+// serverless-style connections (migrations use DIRECT_URL instead, via
+// prisma.config.ts, since they need a real session-held connection —
+// see that file's own comment). @prisma/adapter-pg issues unnamed
+// prepared statements by default (no statementNameGenerator configured),
+// which is what makes it safe to use under transaction-mode pooling.
 function createPrismaClient() {
   const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
   return new PrismaClient({ adapter });
