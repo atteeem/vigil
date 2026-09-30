@@ -24,15 +24,46 @@ const inFlightSourceIds = new Set<string>();
 // individually moments later (see Decisions.md "Source polling"). A
 // worker-pool of a few concurrent slots — a free slot immediately picks
 // up the next due source — keeps total connections bounded without
-// making a slow/hung source (bounded anyway by pollSource's own fetch
-// timeout) block sources behind it in a queue.
+// making a slow/hung source block sources behind it in a queue (see
+// SOURCE_TIMEOUT_MS below for why "slow/hung" isn't only the fetch).
 const MAX_CONCURRENT_FETCHES = Math.max(1, Number(process.env.INGESTION_MAX_CONCURRENCY) || 4);
+
+// pollSource()'s own INGESTION_FETCH_TIMEOUT_MS only bounds the initial feed fetch — the per-new-item
+// pipeline that runs after it (draft/snapshot, fact extraction, military-entity extraction,
+// territorial-change detection; lib/ingestion/poll.ts) has no timeout of its own, so a source that
+// returns many new items, or one whose pipeline hits a genuinely slow path on a particular item, could
+// otherwise occupy a worker-pool slot indefinitely — confirmed directly: a production-mode run against
+// a large real backlog left one worker stuck for minutes past the fetch timeout with zero further
+// progress logged. This is the outer bound on the ENTIRE pollSource() call, fetch and pipeline together.
+const SOURCE_TIMEOUT_MS = Number(process.env.INGESTION_SOURCE_TIMEOUT_MS) || 90_000;
+function withSourceTimeout<T>(promise: Promise<T>, source: Source): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Polling ${source.name} timed out after ${SOURCE_TIMEOUT_MS}ms (fetch + processing combined)`)), SOURCE_TIMEOUT_MS);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
 
 // A tick starts at most this many sources. After a long idle period (or on a fresh database) every source is due at
 // once; processing each new item is synchronous database work on the server's only thread, so starting dozens at
 // once starves page requests. The remainder simply stays due and is picked up by the following ticks (30 s apart),
-// so every source is still polled. Development defaults to a small burst; production is unlimited unless set.
-const MAX_SOURCES_PER_TICK = Number(process.env.INGESTION_MAX_SOURCES_PER_TICK) || (process.env.NODE_ENV === "production" ? Infinity : 12);
+// so every source is still polled, in bounded, resumable batches. This cap applies in every environment, including
+// production — an earlier "unlimited unless set" production default defeated the very design this comment
+// describes: with every source due at once (a fresh deploy, or any long idle period), an unbounded tick tries to
+// process all of them in one pass. Each source's own progress (nextPollAt/lastAttemptedAt) does commit durably as
+// soon as that source finishes — an interruption never re-does already-completed sources — but an unbounded tick
+// has no predictable worst-case duration and gives an operator no visibility into whether it's "still working
+// through a real backlog" or genuinely stuck; a bounded, same-size-every-environment batch keeps each tick's
+// duration predictable and the backlog's drain rate observable via /api/health's scheduler.lastTickResult.
+const MAX_SOURCES_PER_TICK = Number(process.env.INGESTION_MAX_SOURCES_PER_TICK) || 20;
 
 /** Runs `worker` over every item in `items`, at most `limit` concurrently.
  * A worker-pool, not batching by chunks — a slot frees up and immediately
@@ -95,7 +126,14 @@ export async function schedulerTick(now = new Date(), sourceIds?: string[]): Pro
   await runWithConcurrencyLimit(batch, MAX_CONCURRENT_FETCHES, async (source: Source) => {
     inFlightSourceIds.add(source.id);
     try {
-      await pollSource(source);
+      // pollSource() itself never throws for an ordinary per-source failure (see its own doc comment) —
+      // only withSourceTimeout's own timeout rejects here. Caught locally, same as any other per-source
+      // failure, so one slow source can never abort its concurrent siblings in the same batch (the
+      // underlying pollSource() call is not cancelled — Node has no true promise cancellation — it keeps
+      // running in the background and still records its own real result whenever it does finish).
+      await withSourceTimeout(pollSource(source), source);
+    } catch (err) {
+      console.error(`[ingestion] ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       inFlightSourceIds.delete(source.id);
     }
@@ -106,6 +144,28 @@ export async function schedulerTick(now = new Date(), sourceIds?: string[]): Pro
 
 const DEFAULT_TICK_INTERVAL_MS = 30_000;
 
+/** Runtime state for the health endpoint and any other observability consumer — deliberately just
+ * timestamps, the last result shape, and a short sanitized error message, never source names/URLs/DB
+ * detail. Kept on globalThis, same as the __vigilScheduler start-guard below, so it survives a dev-mode
+ * hot reload and is visible from any module that imports this file. */
+export interface SchedulerState {
+  startedAt: string | null;
+  lastTickStartedAt: string | null;
+  lastTickFinishedAt: string | null;
+  lastTickResult: SchedulerTickResult | null;
+  lastTickError: string | null;
+}
+const g = globalThis as unknown as { __vigilScheduler?: boolean; __vigilSchedulerState?: SchedulerState };
+function state(): SchedulerState {
+  return (g.__vigilSchedulerState ??= { startedAt: null, lastTickStartedAt: null, lastTickFinishedAt: null, lastTickResult: null, lastTickError: null });
+}
+export function getSchedulerState(): SchedulerState {
+  return { ...state() };
+}
+// A raw error's own .message can be verbose (and, for some driver errors, includes query text); cap it
+// hard and never touch .stack, so a sanitized-looking field can never accidentally leak detail.
+const sanitizeError = (err: unknown): string => (err instanceof Error ? err.message : String(err)).slice(0, 200);
+
 /** Starts the server-side scheduler loop once per server process. Guarded
  * by a global flag the same way lib/db/client.ts guards the PrismaClient
  * singleton, so a dev-mode hot reload never stacks up duplicate intervals.
@@ -114,9 +174,9 @@ const DEFAULT_TICK_INTERVAL_MS = 30_000;
  * RSS) — it's cheap (one indexed query when nothing is due) and is what
  * lets each source's own interval/backoff take effect promptly. */
 export function startScheduler(tickIntervalMs = DEFAULT_TICK_INTERVAL_MS) {
-  const g = globalThis as unknown as { __vigilScheduler?: boolean };
   if (g.__vigilScheduler) return;
   g.__vigilScheduler = true;
+  state().startedAt = new Date().toISOString();
 
   console.log(`[ingestion] scheduler started (tick every ${tickIntervalMs}ms)`);
   // Ticks never overlap: a slow pass (many due sources, slow feeds) is allowed to finish before the next starts.
@@ -124,12 +184,19 @@ export function startScheduler(tickIntervalMs = DEFAULT_TICK_INTERVAL_MS) {
   const tick = () => {
     if (running) return;
     running = true;
+    state().lastTickStartedAt = new Date().toISOString();
     schedulerTick()
-      .then(({ due, polled, skippedInFlight }) => {
-        if (polled > 0) console.log(`[ingestion] scheduler tick: ${polled}/${due} due source(s) polled${skippedInFlight ? `, ${skippedInFlight} already in flight` : ""}`);
+      .then((result) => {
+        state().lastTickResult = result;
+        state().lastTickError = null;
+        if (result.polled > 0) console.log(`[ingestion] scheduler tick: ${result.polled}/${result.due} due source(s) polled${result.skippedInFlight ? `, ${result.skippedInFlight} already in flight` : ""}`);
       })
-      .catch((err) => console.error("[ingestion] scheduler tick failed:", err))
+      .catch((err) => {
+        state().lastTickError = sanitizeError(err);
+        console.error("[ingestion] scheduler tick failed:", err);
+      })
       .finally(() => {
+        state().lastTickFinishedAt = new Date().toISOString();
         running = false;
       });
   };

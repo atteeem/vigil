@@ -12,6 +12,10 @@
 // IPv4-first resolution (a documented Node API for exactly this failure
 // mode, not a per-host workaround) fixed every affected feed immediately.
 export async function register() {
+  // Startup diagnostics only — never logs an env VALUE, only which runtime this is and which named
+  // toggles are set (as booleans), so this is safe to leave on in any deployment's logs.
+  console.log(`[instrumentation] register() called, NEXT_RUNTIME=${process.env.NEXT_RUNTIME ?? "(unset)"}`);
+
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const dns = await import("node:dns");
     dns.setDefaultResultOrder("ipv4first");
@@ -26,7 +30,9 @@ export async function register() {
     // assertion runs, which is exactly the kind of nondeterminism this
     // suite exists to avoid. Real local dev (no this env var) still gets
     // the live background scheduler as normal.
-    if (process.env.DISABLE_BACKGROUND_SCHEDULER !== "true" && process.env.DISABLE_INGESTION_SCHEDULER !== "1") {
+    const disabled = process.env.DISABLE_BACKGROUND_SCHEDULER === "true" || process.env.DISABLE_INGESTION_SCHEDULER === "1";
+    console.log(`[instrumentation] scheduler startup ${disabled ? "DISABLED" : "enabled"} (DISABLE_BACKGROUND_SCHEDULER=${process.env.DISABLE_BACKGROUND_SCHEDULER === "true"}, DISABLE_INGESTION_SCHEDULER=${process.env.DISABLE_INGESTION_SCHEDULER === "1"})`);
+    if (!disabled) {
       const { startScheduler } = await import("@/lib/ingestion/scheduler");
       const tickIntervalMs = Number(process.env.SCHEDULER_TICK_INTERVAL_MS) || 30_000;
       startScheduler(tickIntervalMs);
