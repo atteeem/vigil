@@ -4,7 +4,7 @@
 // Plain .mjs (not .ts) so it runs with a bare `node prisma/seed.mjs` —
 // no ts-node/tsx dependency needed for a one-off local setup script.
 import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { seedSourcePlugin } from "./seed-source-plugin.mjs";
 import { seedMilitaryKnowledge } from "./seed-military-knowledge.mjs";
 import { seedLiveData } from "./seed-live-data.mjs";
@@ -12,7 +12,7 @@ import { seedTerritorialDatasets } from "./seed-territorial-datasets.mjs";
 
 // No dotenv dependency needed: DATABASE_URL defaults to the same value
 // .env holds, so `node prisma/seed.mjs` just works without extra setup.
-const adapter = new PrismaBetterSqlite3({ url: (process.env.DATABASE_URL ?? "file:./prisma/dev.db").replace(/^file:/, "") });
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
 const sources = [
