@@ -9,7 +9,14 @@
 // event_sources / extracted_facts / any other link table (checked before every delete).
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import "dotenv/config";
+import { config as loadEnv } from "dotenv";
+
+// .env then .env.local (overriding), without ever overriding a variable the calling process
+// already set for real — see prisma/seed.mjs's own comment for why.
+const preExistingEnv = { ...process.env };
+loadEnv();
+loadEnv({ path: ".env.local", override: true });
+Object.assign(process.env, preExistingEnv);
 
 // The normalizer is TypeScript (import-mapped via "@/..."); this script runs directly under Node, so the logic is
 // duplicated here in plain JS rather than pulled through a build step. Keep in sync with lib/ingestion/url-normalize.ts.

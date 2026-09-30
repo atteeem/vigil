@@ -14,7 +14,18 @@ import { defineConfig, env } from "prisma/config";
 // Prisma 7's CLI no longer auto-loads .env before evaluating this config
 // file, unlike earlier versions — load it explicitly so `npx prisma
 // generate`/`migrate` work without having to export DIRECT_URL by hand.
-import "dotenv/config";
+// dotenv's default config() only reads .env, not .env.local — load both,
+// same precedence Next.js itself uses (.env.local overrides .env), since
+// real secrets (DIRECT_URL included) live in the gitignored .env.local.
+// Neither file may override a variable the CALLING process already set for
+// real (e.g. playwright.config.ts's webServer explicitly exports DATABASE_URL
+// for the disposable test DB when it spawns `prisma migrate deploy`) — snapshot
+// first, load both files, then restore anything that was already real.
+import { config as loadEnv } from "dotenv";
+const preExistingEnv = { ...process.env };
+loadEnv();
+loadEnv({ path: ".env.local", override: true });
+Object.assign(process.env, preExistingEnv);
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
