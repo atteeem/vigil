@@ -2,14 +2,21 @@
 // lib/db/repositories/raw-ingestion-items.ts and lib/ingestion/url-normalize.ts for why it exists: some real feeds
 // mint a different guid for the same article across polls, which created real duplicate raw_ingestion_items).
 //
-// Run against any database that predates the migration (dev.db; a production database at deploy time):
+// Run against any database that predates the migration (local dev DB; a production database at deploy time):
 //   node scripts/backfill-original-url-key.mjs
 // Add --delete-duplicates to also remove exact (source, key) duplicate PENDING rows, keeping the earliest received
 // one. Never touches a row that has already been published, merged or rejected, or that is referenced by
 // event_sources / extracted_facts / any other link table (checked before every delete).
 import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-import "dotenv/config";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { config as loadEnv } from "dotenv";
+
+// .env then .env.local (overriding), without ever overriding a variable the calling process
+// already set for real — see prisma/seed.mjs's own comment for why.
+const preExistingEnv = { ...process.env };
+loadEnv();
+loadEnv({ path: ".env.local", override: true });
+Object.assign(process.env, preExistingEnv);
 
 // The normalizer is TypeScript (import-mapped via "@/..."); this script runs directly under Node, so the logic is
 // duplicated here in plain JS rather than pulled through a build step. Keep in sync with lib/ingestion/url-normalize.ts.
@@ -35,7 +42,7 @@ function normalizeUrl(raw) {
 }
 
 const deleteDuplicates = process.argv.includes("--delete-duplicates");
-const adapter = new PrismaBetterSqlite3({ url: (process.env.DATABASE_URL ?? "file:./prisma/dev.db").replace(/^file:/, "") });
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
 const rows = await prisma.rawIngestionItem.findMany({ select: { id: true, sourceId: true, originalUrl: true, originalUrlKey: true } });

@@ -4,15 +4,23 @@
 // Plain .mjs (not .ts) so it runs with a bare `node prisma/seed.mjs` —
 // no ts-node/tsx dependency needed for a one-off local setup script.
 import { PrismaClient } from "@prisma/client";
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { config as loadEnv } from "dotenv";
 import { seedSourcePlugin } from "./seed-source-plugin.mjs";
 import { seedMilitaryKnowledge } from "./seed-military-knowledge.mjs";
 import { seedLiveData } from "./seed-live-data.mjs";
 import { seedTerritorialDatasets } from "./seed-territorial-datasets.mjs";
 
-// No dotenv dependency needed: DATABASE_URL defaults to the same value
-// .env holds, so `node prisma/seed.mjs` just works without extra setup.
-const adapter = new PrismaBetterSqlite3({ url: (process.env.DATABASE_URL ?? "file:./prisma/dev.db").replace(/^file:/, "") });
+// Load .env then .env.local (overriding) so a bare `node prisma/seed.mjs` picks up DATABASE_URL the
+// same way Next.js's own env-file precedence does — real values live in the gitignored .env.local.
+// Neither file may override a variable the CALLING process already set for real (e.g.
+// scripts/prepare-test-db.mjs spawns this with DATABASE_URL already pointed at the disposable test
+// DB) — snapshot first, load both files, then restore anything that was already real.
+const preExistingEnv = { ...process.env };
+loadEnv();
+loadEnv({ path: ".env.local", override: true });
+Object.assign(process.env, preExistingEnv);
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
 const sources = [

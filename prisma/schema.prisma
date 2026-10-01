@@ -1,22 +1,22 @@
-// Vigil — local-development database schema.
+// Vigil — Prisma/PostgreSQL (Supabase) database schema.
 //
-// SQLite/Prisma is TEMPORARY local-development infrastructure (see
-// Decisions.md in the Obsidian vault, "Current backend strategy"). This
-// schema is a separate, parallel layer for the source-ingestion pipeline
+// This schema is a separate, parallel layer for the source-ingestion pipeline
 // and admin review workflow — it does not replace the existing mock-data
 // layer (lib/data/*) that the globe/map/conflict pages already read from.
 // "Published" events from here are merged into the live event feed
 // alongside mock data (see lib/data/world-events.ts).
 //
-// SQLite has no native enum type, so every enum-shaped field below is a
-// plain String, validated/typed at the TypeScript boundary instead (see
-// lib/types/db.ts) — the same "validate at the boundary" pattern
-// ARCHITECTURE.md already uses for the mock-data Zod schemas.
+// Migrated from SQLite (see prisma/migrations-sqlite-archive/ for the
+// original migration history). Every enum-shaped field below stayed a plain
+// String, validated/typed at the TypeScript boundary instead (see
+// lib/types/db.ts) — that was originally a SQLite limitation, kept
+// deliberately on Postgres too so the two layers share one convention with
+// the mock-data Zod schemas (ARCHITECTURE.md's "validate at the boundary"
+// pattern), rather than splitting some fields into native Postgres enums.
 //
 // Field names intentionally mirror DATA_MODEL.md's target Postgres schema
-// where the shapes overlap, so a future Supabase migration stays close to
-// mechanical; where this schema is richer (source management fields for
-// the admin UI), that's noted inline.
+// where the shapes overlap; where this schema is richer (source management
+// fields for the admin UI), that's noted inline.
 
 generator client {
   provider = "prisma-client-js"
@@ -27,7 +27,7 @@ generator client {
 // adapter (see lib/db/client.ts), not this block — `provider` here only
 // tells Prisma which SQL dialect to generate for.
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 model Source {

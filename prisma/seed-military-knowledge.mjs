@@ -98,6 +98,9 @@ export async function seedMilitaryKnowledge(prisma) {
   if (participants.length) ops.push(prisma.conflictParticipant.createMany({ data: participants }));
   stats.participants = participants.length;
 
-  await prisma.$transaction(ops);
+  // Prisma's default interactive-transaction timeout (5s) was sized for SQLite's near-zero local
+  // latency; each of these ops is its own round trip over a real network connection to Postgres,
+  // so the batch as a whole needs more headroom.
+  await prisma.$transaction(ops, { timeout: 30_000 });
   console.log(`Seeded military knowledge layer: ${stats.aliases} aliases, ${stats.typed} typed, ${stats.history} parent-history rows, ${stats.participants} participant links, ${stats.observed} observation dates.`);
 }

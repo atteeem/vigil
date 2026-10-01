@@ -18,28 +18,38 @@ function health(source: Source): "live" | "error" | "disabled" {
 // other two — see lib/db/repositories/ingestion-logs.ts for why a plain
 // items-today count can't answer "errors today" or distinguish
 // already-known items re-served by a feed from genuinely new ones).
+//
+// Bounded query count regardless of source count: one groupBy for today's raw-item counts and one
+// (already-grouped, see getDailyIngestionStatsBySource) query for today's log stats — never one query
+// per source. The previous per-source count() loop (one round trip per source, all fired concurrently)
+// was fine against a local SQLite file but became a real outage against a real Postgres pooler with 122
+// sources: this page also refetches every 15s, so it was launching 122 concurrent queries that often that
+// the pooler connection budget, exhausting it and failing the whole request — the client then showed the
+// empty "No sources yet" state instead of an error, because the queryFn had no error handling at all.
 export async function GET() {
-  const sources = await listSources();
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
+  try {
+    const sources = await listSources();
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
 
-  const [itemCounts, dailyStats] = await Promise.all([
-    Promise.all(
-      sources.map((source) =>
-        prisma.rawIngestionItem.count({ where: { sourceId: source.id, receivedAt: { gte: startOfToday } } }),
-      ),
-    ),
-    getDailyIngestionStatsBySource(startOfToday),
-  ]);
+    const [itemCountRows, dailyStats] = await Promise.all([
+      prisma.rawIngestionItem.groupBy({ by: ["sourceId"], where: { receivedAt: { gte: startOfToday } }, _count: { _all: true } }),
+      getDailyIngestionStatsBySource(startOfToday),
+    ]);
+    const itemCountsBySource = new Map(itemCountRows.map((r) => [r.sourceId, r._count._all]));
 
-  const withHealth = sources.map((source, i) => ({
-    ...source,
-    itemsToday: itemCounts[i],
-    newItemsToday: dailyStats.get(source.id)?.newItemsToday ?? 0,
-    errorsToday: dailyStats.get(source.id)?.errorsToday ?? 0,
-    health: health(source),
-  }));
-  return NextResponse.json(withHealth);
+    const withHealth = sources.map((source) => ({
+      ...source,
+      itemsToday: itemCountsBySource.get(source.id) ?? 0,
+      newItemsToday: dailyStats.get(source.id)?.newItemsToday ?? 0,
+      errorsToday: dailyStats.get(source.id)?.errorsToday ?? 0,
+      health: health(source),
+    }));
+    return NextResponse.json(withHealth);
+  } catch (err) {
+    console.error("[admin/sources] GET failed:", err);
+    return NextResponse.json({ error: "Failed to load sources." }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {
