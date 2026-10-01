@@ -62,9 +62,18 @@ function toPayload(form: SourceFormState) {
 
 export default function AdminSourcesPage() {
   const queryClient = useQueryClient();
-  const { data: sources = [], isLoading: loading } = useQuery({
+  const {
+    data: sources = [],
+    isLoading: loading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ["admin", "sources"],
-    queryFn: async (): Promise<SourceDTO[]> => (await fetch("/api/admin/sources")).json(),
+    queryFn: async (): Promise<SourceDTO[]> => {
+      const res = await fetch("/api/admin/sources");
+      if (!res.ok) throw new Error("Could not load sources. The server reported an error.");
+      return res.json();
+    },
     refetchInterval: 15_000, // keeps health/next-poll columns current without a manual reload
   });
   const [showForm, setShowForm] = useState(false);
@@ -367,7 +376,17 @@ export default function AdminSourcesPage() {
                 </td>
               </tr>
             )}
-            {!loading && sources.length === 0 && (
+            {!loading && isError && (
+              <tr>
+                <td colSpan={13} className="px-4 py-8 text-center">
+                  <p className="text-sm text-high">Could not load sources. The server reported an error.</p>
+                  <Button size="sm" variant="ghost" className="mt-2" onClick={() => refetch()}>
+                    Retry
+                  </Button>
+                </td>
+              </tr>
+            )}
+            {!loading && !isError && sources.length === 0 && (
               <tr>
                 <td colSpan={13} className="px-4 py-8 text-center text-ink-faint">
                   No sources yet. Add one to get started.
@@ -502,7 +521,15 @@ export default function AdminSourcesPage() {
           the fixed MobileTabBar (~62px) regardless of scroll position. */}
       <div className="space-y-3 pb-20 sm:hidden">
         {loading && <p className="py-8 text-center text-sm text-ink-faint">Loading…</p>}
-        {!loading && sources.length === 0 && (
+        {!loading && isError && (
+          <div className="py-8 text-center">
+            <p className="text-sm text-high">Could not load sources. The server reported an error.</p>
+            <Button size="sm" variant="ghost" className="mt-2" onClick={() => refetch()}>
+              Retry
+            </Button>
+          </div>
+        )}
+        {!loading && !isError && sources.length === 0 && (
           <p className="py-8 text-center text-sm text-ink-faint">No sources yet. Add one to get started.</p>
         )}
         {sources.map((source) => {
