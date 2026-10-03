@@ -78,7 +78,7 @@ export function PulsePanel({ items, loading, error, selectedId, hiddenClaims, on
       </ul>
       {shown.length === 0 && (
         <p className="mt-6 text-center text-xs text-ink-faint" data-testid="pulse-empty">
-          {loading ? "Loading developments…" : error ? "Developments are unavailable right now." : "No major developments in this window."}
+          {loading ? "Loading developments…" : error ? "Live developments are unavailable right now. The map is unaffected." : "No major developments in this window."}
         </p>
       )}
       {hiddenClaims > 0 && (

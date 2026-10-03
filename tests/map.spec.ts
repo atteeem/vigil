@@ -5,7 +5,7 @@ test.describe("World map (/world)", () => {
   test("loads with the map, zoom controls, and basemap mode switch", async ({ page }) => {
     await page.goto("/world");
     await expect(page.getByRole("application", { name: "Operational conflict map" })).toBeVisible();
-    await openWorldControls(page, "layers");
+    await openWorldControls(page, "map");
     const basemapGroup = page.getByRole("radiogroup", { name: "Basemap" });
     await expect(basemapGroup.getByRole("radio", { name: "Intel" })).toBeVisible();
     await expect(basemapGroup.getByRole("radio", { name: "Street" })).toBeVisible();

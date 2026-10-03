@@ -22,10 +22,10 @@ const LAYER_HINT: Record<HazardLayer, string> = {
 /** One compact button that expands into the natural-hazard group. The conflict layers (Events /
  * Heatmap / Territorial Control) keep their own controls in the bar; every hazard layer here is an
  * independent toggle, off by default. */
-export function HazardLayerPanel({ enabled, onToggle, health }: { enabled: readonly HazardLayer[]; onToggle: (layer: HazardLayer) => void; health?: readonly HazardLayerHealth[] }) {
+export function HazardLayerPanel({ enabled, onToggle, health, inline = false }: { enabled: readonly HazardLayer[]; onToggle: (layer: HazardLayer) => void; health?: readonly HazardLayerHealth[]; /** Lay the list out in normal flow (inside a panel that scrolls) instead of floating it as a popover. */ inline?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="w-full sm:relative sm:w-auto" data-testid="hazard-layers">
+    <div className={cn("w-full", !inline && "sm:relative sm:w-auto")} data-testid="hazard-layers">
       <button
         onClick={() => setOpen(!open)}
         aria-expanded={open}
@@ -37,7 +37,7 @@ export function HazardLayerPanel({ enabled, onToggle, health }: { enabled: reado
         <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
       </button>
       {open && (
-        <div id="hazard-layer-list" className="mt-2 max-h-[36vh] w-full space-y-2 overflow-y-auto rounded-2xl border border-border bg-surface/95 p-2 shadow-xl backdrop-blur-xl sm:absolute sm:right-0 sm:top-full sm:z-20 sm:w-72" data-testid="hazard-layer-list">
+        <div id="hazard-layer-list" className={cn("mt-2 w-full space-y-2 rounded-2xl border border-border bg-surface/95 p-2 backdrop-blur-xl", !inline && "max-h-[36vh] overflow-y-auto shadow-xl sm:absolute sm:right-0 sm:top-full sm:z-20 sm:w-72")} data-testid="hazard-layer-list">
           {LAYER_GROUPS.map((group) => (
             <section key={group.id} data-testid={`layer-group-${group.id}`}>
               <h3 className="px-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">{group.label}</h3>

@@ -5,6 +5,7 @@ import { layers as protomapsLayers, DARK, LIGHT, type Flavor } from "@protomaps/
 import { landObject, worldTopology } from "@/lib/globe/world-topology";
 import { getHeatBorders } from "@/lib/heat/borders";
 import { COUNTRY_RECORDS } from "@/lib/countries/registry";
+import { cutFeatureCollection } from "./antimeridian";
 
 // Vigil's own basemap styles. Two builders, one visual language (a dark, quiet intelligence map):
 //  - buildPmtilesStyle: the Protomaps basemap schema served from a PMTiles archive (roads, places, boundaries...).
@@ -18,6 +19,9 @@ export const BASEMAP_LAYER_PREFIX = "bm-";
 export type BasemapRole = "basemap-border" | "basemap-label" | "basemap-fill";
 
 const role = (r: BasemapRole) => ({ "vigil:role": r });
+/** Metadata flag on the bundled coastline: heat mode draws the same coastline itself (heat-borders), so the basemap's
+ * copy steps aside there and no coast is ever stroked twice. */
+export const HEAT_DRAWS_COAST = "vigil:heat-draws-this";
 
 /** A restrained dark flavor: subtle land, near-black water, neutral borders, quiet labels. */
 export const VIGIL_INTEL_FLAVOR: Flavor = {
@@ -100,7 +104,8 @@ let bundledCache: { land: Feature<Polygon | MultiPolygon> | FeatureCollection<Po
 /** Land polygons, and one label point per country (rank = the registry's suggested zoom: big countries label first). */
 function bundledData() {
   if (bundledCache) return bundledCache;
-  const land = feature(worldTopology, landObject) as unknown as FeatureCollection<Polygon | MultiPolygon>;
+  // The topology stores its antimeridian cut as a 360-degree step; planar GeoJSON must be cut for real (see antimeridian.ts).
+  const land = cutFeatureCollection(feature(worldTopology, landObject) as unknown as FeatureCollection<Polygon | MultiPolygon>) as FeatureCollection<Polygon | MultiPolygon>;
   const countries: FeatureCollection<Point, { name: string; code: string; rank: number }> = {
     type: "FeatureCollection",
     features: COUNTRY_RECORDS.map((c) => ({ type: "Feature" as const, properties: { name: c.name, code: c.code, rank: c.zoom }, geometry: { type: "Point" as const, coordinates: [c.lng, c.lat] } })),
@@ -125,7 +130,7 @@ export function buildBundledStyle(glyphs: string): StyleSpecification {
     layers: [
       { id: `${BASEMAP_LAYER_PREFIX}ocean`, type: "background", paint: { "background-color": VIGIL_INTEL_FLAVOR.water }, metadata: role("basemap-fill") },
       { id: `${BASEMAP_LAYER_PREFIX}land`, type: "fill", source: "vigil-land", paint: { "fill-color": VIGIL_INTEL_FLAVOR.earth }, metadata: role("basemap-fill") },
-      { id: `${BASEMAP_LAYER_PREFIX}coast`, type: "line", source: "vigil-borders", filter: ["==", ["get", "kind"], "coast"], paint: { "line-color": "#4b586b", "line-width": ["interpolate", ["linear"], ["zoom"], 1, 0.5, 6, 1] }, metadata: role("basemap-fill") },
+      { id: `${BASEMAP_LAYER_PREFIX}coast`, type: "line", source: "vigil-borders", filter: ["==", ["get", "kind"], "coast"], paint: { "line-color": "#4b586b", "line-width": ["interpolate", ["linear"], ["zoom"], 1, 0.5, 6, 1] }, metadata: { ...role("basemap-fill"), [HEAT_DRAWS_COAST]: true } },
       { id: `${BASEMAP_LAYER_PREFIX}boundaries_country`, type: "line", source: "vigil-borders", filter: ["==", ["get", "kind"], "border"], paint: { "line-color": VIGIL_INTEL_FLAVOR.boundaries, "line-opacity": 0.75, "line-width": ["interpolate", ["linear"], ["zoom"], 1, 0.4, 5, 0.8, 9, 1.2] }, metadata: role("basemap-border") },
       {
         id: `${BASEMAP_LAYER_PREFIX}places_country`,

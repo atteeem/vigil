@@ -1,8 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { X, History, SlidersHorizontal, Layers, HelpCircle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { X, History, SlidersHorizontal, Layers, HelpCircle, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { MapFilters, type TypeFilter, type RegionFilter, type ViewMode } from "@/components/map/map-filters";
 import { EventCard } from "@/components/events/event-card";
 import { EventDetailPanel } from "@/components/events/event-detail-panel";
@@ -24,12 +24,16 @@ import { TerritorySelector } from "@/components/map/territory-selector";
 import { useTerritorialDatasets } from "@/hooks/use-territorial-datasets";
 import { TerritoryDetailPanel } from "@/components/map/territory-detail-panel";
 import type { TerritoryFeatureProperties } from "@/lib/types/territorial-control";
-import { HAZARD_LAYERS, type HazardLayer } from "@/lib/hazards/types";
+import { HAZARD_LAYERS, HAZARD_LAYER_LABEL, type HazardLayer } from "@/lib/hazards/types";
 import { useHazards, type HazardViewport } from "@/hooks/use-hazards";
 import { HazardPanel } from "@/components/hazards/hazard-panel";
 import Link from "next/link";
 import { getCountryByCode } from "@/lib/reference/countries";
 import { WhatChangedPanel } from "@/components/brief/what-changed-panel";
+import { MapCommandBar, MapControlPanel, PanelSection, type ActiveChip, type MapPanelId } from "@/components/map/map-command-bar";
+import { EVENT_TYPE_LABEL } from "@/components/events/event-type-icon";
+import { MAP_BASEMAP_MODE_LABEL } from "@/lib/map/style";
+import { useSessionFlag } from "@/hooks/use-session-flag";
 import type { BriefDevelopment } from "@/lib/brief/types";
 import { useCommandCenter } from "@/hooks/use-command-center";
 import { useLiveView, LIVE_VIEW_STEP_MS } from "@/hooks/use-live-view";
@@ -130,7 +134,7 @@ export default function WorldPage() {
   }, []);
   const basemapMode = useAppStore((s) => s.mapBasemapMode);
   const setBasemapMode = useAppStore((s) => s.setMapBasemapMode);
-  const { events: liveEvents, failed: eventsFailed, retry: retryEvents } = useLiveEventsState();
+  const { events: liveEvents, failed: eventsFailed, loaded: liveEventsLoaded, retry: retryEvents } = useLiveEventsState();
   const baseCountry = useAppStore((s) => s.baseCountryCode);
   const [selectedConflictSlug, setSelectedConflictSlug] = useState<string | null>(null);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
@@ -140,7 +144,12 @@ export default function WorldPage() {
   const isPhone = useIsPhone();
   const [mobileTimelineOpen, setMobileTimelineOpen] = useState(false);
   const [mobileSheet, setMobileSheet] = useState<null | "filters" | "layers" | "legend">(null);
-  const [legendOpen, setLegendOpen] = useState(false);
+  // Desktop: ONE expandable map-control panel at a time under the command bar (null = all collapsed).
+  const [openPanel, setOpenPanel] = useState<MapPanelId | null>(null);
+  // Side rails: the left rail collapses to a slim strip; the right rail is a slim strip until something is selected
+  // (a selection opens the detail rail, closing it gives the map its space back) or the overview is opened.
+  const [leftCollapsed, setLeftCollapsed] = useSessionFlag("vigil.world.leftRail.collapsed", false);
+  const [overviewOpen, setOverviewOpen] = useSessionFlag("vigil.world.overview.open", false);
   const anySelection = !!(selected || selectedTerritory || selectedHazardId || selectedConflictSlug || selectedCountry);
   useEffect(() => {
     // A selection opens its own detail sheet; never stack it on a control sheet.
@@ -152,6 +161,13 @@ export default function WorldPage() {
   // selected — see hooks/use-world-timeline.ts for why that single value
   // is enough state for a later Play/Pause animation too.
   const timeline = useWorldTimeline();
+  // Entering a historical moment opens the timeline panel (playback controls and the past-state explanation) once; the
+  // user may close it, and the command bar keeps showing the past-state chip and Return to Live either way.
+  const wasHistorical = useRef(false);
+  useEffect(() => {
+    if (timeline.isHistorical && !wasHistorical.current) setOpenPanel("timeline");
+    wasHistorical.current = timeline.isHistorical;
+  }, [timeline.isHistorical]);
   useEffect(() => {
     if (deepLinkAt) timeline.selectCustomTimestamp(deepLinkAt);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- apply the deep-link timestamp once
@@ -396,6 +412,51 @@ export default function WorldPage() {
   };
   const activeFilterCount = Number(typeFilter !== "all") + Number(region !== "Global") + Number(timeRange !== "24H");
   const layerCount = territoryIds.length + hazardLayers.length + Number(viewMode === "heatmap");
+  // Desktop command bar: the time range sits in the bar itself and Markers/Heatmap is "Map mode", so its Filters badge
+  // counts type + region and its Layers badge counts territorial datasets + hazard layers.
+  const desktopFilterCount = Number(typeFilter !== "all") + Number(region !== "Global");
+  const desktopLayerCount = territoryIds.length + hazardLayers.length;
+  const activeChips: ActiveChip[] = [
+    ...(typeFilter !== "all" ? [{ id: "type", label: `Type: ${EVENT_TYPE_LABEL[typeFilter]}` }] : []),
+    ...(region !== "Global" ? [{ id: "region", label: `Region: ${region}` }] : []),
+    ...(basemapMode !== "intel" ? [{ id: "basemap", label: `Basemap: ${MAP_BASEMAP_MODE_LABEL[basemapMode]}` }] : []),
+    ...(territoryIds.length > 0 ? [{ id: "territory", label: `Territorial control: ${territoryIds.length} dataset${territoryIds.length === 1 ? "" : "s"}` }] : []),
+    ...hazardLayers.map((l) => ({ id: `hazard-${l}`, label: HAZARD_LAYER_LABEL[l] })),
+  ];
+  // Zero published events is an ordinary state (an empty database, or filters that match nothing), never an error:
+  // a failed read has its own notice, and neither says anything about the basemap.
+  const eventsLoading = timeline.isHistorical ? historicalLoading : !liveEventsLoaded && !eventsFailed;
+  const noEvents = !eventsLoading && !eventsFailed && filteredEvents.length === 0;
+  const timelineControls = (
+    <TimelineControls
+      preset={timeline.preset}
+      asOf={timeline.asOf}
+      rangeStart={timeline.rangeStart}
+      rangeEnd={timeline.rangeEnd}
+      isPlaying={timeline.isPlaying}
+      speed={timeline.speed}
+      onSelectPreset={timeline.selectPreset}
+      onSelectCustom={timeline.selectCustomTimestamp}
+      onReturnToLive={timeline.returnToLive}
+      onPlay={timeline.play}
+      onPause={timeline.pause}
+      onStepForward={timeline.stepForward}
+      onStepBackward={timeline.stepBackward}
+      onSetSpeed={timeline.setSpeed}
+      onScrubProgress={timeline.scrubToProgress}
+    />
+  );
+  const territorySelector = (
+    <TerritorySelector datasets={territoryDatasets.data} loading={territoryDatasets.isPending} error={territoryDatasets.isError} selectedIds={territoryIds} onToggle={toggleTerritoryDataset} onClose={() => setTerritoryOpen(false)} />
+  );
+  const rightOpen = anySelection || overviewOpen;
+  const GRID = {
+    "open-open": "sm:grid-cols-[1fr_300px] lg:grid-cols-[288px_1fr_320px] min-[1400px]:grid-cols-[320px_1fr_360px]",
+    "open-slim": "sm:grid-cols-[1fr_44px] lg:grid-cols-[288px_1fr_44px] min-[1400px]:grid-cols-[320px_1fr_44px]",
+    "slim-open": "sm:grid-cols-[1fr_300px] lg:grid-cols-[44px_1fr_320px] min-[1400px]:grid-cols-[44px_1fr_360px]",
+    "slim-slim": "sm:grid-cols-[1fr_44px] lg:grid-cols-[44px_1fr_44px] min-[1400px]:grid-cols-[44px_1fr_44px]",
+  } as const;
+  const gridClass = GRID[`${leftCollapsed ? "slim" : "open"}-${rightOpen ? "open" : "slim"}` as keyof typeof GRID];
   // One phone sheet at a time: opening a control sheet closes the Pulse / Overview panel and vice versa.
   const openMobileSheet = (k: "filters" | "layers" | "legend") => {
     setDrawer(null);
@@ -412,19 +473,34 @@ export default function WorldPage() {
       />
       {/* The ticker repeats Pulse; phones keep the vertical space for the map. */}
       {!isPhone && <Ticker items={cc.data?.ticker ?? []} loading={cc.isPending} error={cc.isError} onSelect={onManualItem} />}
-      <div className="grid min-h-0 flex-1 grid-cols-1 sm:grid-cols-[1fr_300px] lg:grid-cols-[288px_1fr_320px] min-[1400px]:grid-cols-[320px_1fr_360px]">
-        {/* Desktop left column: Pulse (meaningful developments) and the raw event feed */}
-        <aside className="hidden min-h-0 flex-col overflow-hidden border-r border-border bg-surface/60 p-4 lg:flex" data-testid="left-column">
-          <div className="mb-3 flex gap-1" role="tablist" aria-label="Left panel">
-            {(["pulse", "events"] as const).map((t) => (
-              <button key={t} type="button" role="tab" aria-selected={leftTab === t} onClick={() => setLeftTab(t)} data-testid={`left-tab-${t}`} className={cn("rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide", leftTab === t ? "bg-ink text-bg" : "text-ink-faint hover:text-ink")}>
-                {t === "pulse" ? "Pulse" : "Events"}
+      <div className={cn("grid min-h-0 flex-1 grid-cols-1", gridClass)}>
+        {/* Desktop left column: Pulse (meaningful developments) and the raw event feed. Collapses to a slim strip. */}
+        <aside className={cn("hidden min-h-0 flex-col overflow-hidden border-r border-border bg-surface/60 lg:flex", leftCollapsed ? "items-center p-1.5" : "p-4")} data-testid="left-column" data-collapsed={leftCollapsed}>
+          {leftCollapsed && (
+            <>
+              <button type="button" onClick={() => setLeftCollapsed(false)} aria-label="Expand Pulse and Events panel" aria-expanded={false} title="Expand Pulse and Events" data-testid="left-rail-toggle" className="rounded-lg p-1.5 text-ink-faint hover:bg-card hover:text-ink">
+                <ChevronsRight className="h-4 w-4" />
               </button>
-            ))}
-          </div>
-          {leftTab === "pulse" && <PulsePanel items={cc.data?.pulse ?? []} loading={cc.isPending} error={cc.isError} selectedId={highlightId} hiddenClaims={cc.data?.meta.partyClaimsHidden ?? 0} onSelect={onManualItem} />}
-          {
-            // Always mounted (hidden while Pulse is shown) so the feed count stays readable to other views.
+              <span className="mt-3 text-[10px] font-semibold uppercase tracking-widest text-ink-faint [writing-mode:vertical-rl]" aria-hidden>
+                Pulse · Events
+              </span>
+            </>
+          )}
+          {/* Always mounted (only hidden while collapsed) so the feed count stays readable to other views. */}
+          <div className={cn("flex min-h-0 flex-1 flex-col", leftCollapsed && "hidden")}>
+            <div className="mb-3 flex items-center gap-1">
+              <div className="flex gap-1" role="tablist" aria-label="Left panel">
+                {(["pulse", "events"] as const).map((t) => (
+                  <button key={t} type="button" role="tab" aria-selected={leftTab === t} onClick={() => setLeftTab(t)} data-testid={`left-tab-${t}`} title={t === "pulse" ? "Pulse: the meaningful developments, ranked" : "Events: every published report in the current range"} className={cn("rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide", leftTab === t ? "bg-ink text-bg" : "text-ink-faint hover:text-ink")}>
+                    {t === "pulse" ? "Pulse" : "Events"}
+                  </button>
+                ))}
+              </div>
+              <button type="button" onClick={() => setLeftCollapsed(true)} aria-label="Collapse Pulse and Events panel" aria-expanded title="Collapse panel" data-testid="left-rail-collapse" className="ml-auto rounded-lg p-1.5 text-ink-faint hover:bg-card hover:text-ink">
+                <ChevronsLeft className="h-4 w-4" />
+              </button>
+            </div>
+            {leftTab === "pulse" && <PulsePanel items={cc.data?.pulse ?? []} loading={cc.isPending} error={cc.isError} selectedId={highlightId} hiddenClaims={cc.data?.meta.partyClaimsHidden ?? 0} onSelect={onManualItem} />}
             <div className={cn("min-h-0 flex-1 overflow-y-auto", leftTab === "pulse" && "hidden")}>
               <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-ink-faint">
                 {timeline.isHistorical ? "Historical Event Feed" : "Live Event Feed"}
@@ -446,15 +522,23 @@ export default function WorldPage() {
                   </button>
                 ))}
                 {filteredEvents.length === 0 && (
-                  <p className="mt-8 text-center text-xs text-ink-faint">No events match your filters.</p>
+                  <p className="mt-8 text-center text-xs text-ink-faint">{eventsLoading ? "Loading events…" : eventsFailed ? "Live event data is unavailable right now." : allEvents.length === 0 ? "No published events yet." : "No events match your filters."}</p>
                 )}
               </div>
             </div>
-          }
+          </div>
         </aside>
 
         {/* Map */}
-        <div className="relative h-full min-h-0" onPointerDownCapture={manual} onWheelCapture={manual}>
+        <div
+          className="relative h-full min-h-0"
+          onPointerDownCapture={(e) => {
+            manual();
+            // A click on the map itself collapses the open control panel; clicks inside the controls do not.
+            if (openPanel && !(e.target as Element).closest("[data-map-overlay]")) setOpenPanel(null);
+          }}
+          onWheelCapture={manual}
+        >
           <WorldMap
             events={filteredEvents}
             viewMode={viewMode}
@@ -483,15 +567,15 @@ export default function WorldPage() {
               // persistent amber ring around the viewport itself, not
               // just the banner text, so it reads at a glance even if
               // the top overlay scrolls out of view on mobile.
-              timeline.isHistorical && "ring-2 ring-inset ring-accent/50",
+              timeline.isHistorical && "ring-2 ring-inset ring-elevated/60",
             )}
           />
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 px-3 pt-2 sm:px-4 sm:pt-3">
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 px-3 pt-2 sm:px-14 sm:pt-3" data-map-overlay>
             {isPhone ? (
               // Phones: one compact row of controls; everything else opens in a sheet so the map keeps the screen.
               <>
                 <div className="pointer-events-auto no-scrollbar flex w-[calc(100%-2.75rem)] items-center gap-1.5 self-start overflow-x-auto" data-testid="mobile-map-controls" role="toolbar" aria-label="Map controls">
-                  <button type="button" onClick={() => setMobileTimelineOpen((v) => !v)} aria-expanded={mobileTimelineOpen || timeline.isHistorical} data-testid="mobile-timeline-toggle" className={cn(CHIP, timeline.isHistorical ? "border-accent/50 text-accent" : "text-ink")}>
+                  <button type="button" onClick={() => setMobileTimelineOpen((v) => !v)} aria-expanded={mobileTimelineOpen || timeline.isHistorical} data-testid="mobile-timeline-toggle" className={cn(CHIP, timeline.isHistorical ? "border-elevated/50 text-elevated" : "text-ink")}>
                     <History className="h-3.5 w-3.5" aria-hidden />
                     {timeline.isHistorical && timeline.asOf ? `${timeline.asOf.toISOString().slice(5, 16).replace("T", " ")} UTC` : "Live"}
                   </button>
@@ -510,58 +594,94 @@ export default function WorldPage() {
                 {/* Viewing the past is never hidden on a phone: the panel (with "Viewing …" and Return to Live) stays open. */}
                 {(mobileTimelineOpen || timeline.isHistorical) && (
                   <div className="pointer-events-auto w-full rounded-2xl border border-border bg-surface/90 p-3 backdrop-blur-xl" data-testid="mobile-timeline-panel">
-                    <TimelineControls
-                preset={timeline.preset}
-                asOf={timeline.asOf}
-                rangeStart={timeline.rangeStart}
-                rangeEnd={timeline.rangeEnd}
-                isPlaying={timeline.isPlaying}
-                speed={timeline.speed}
-                onSelectPreset={timeline.selectPreset}
-                onSelectCustom={timeline.selectCustomTimestamp}
-                onReturnToLive={timeline.returnToLive}
-                onPlay={timeline.play}
-                onPause={timeline.pause}
-                onStepForward={timeline.stepForward}
-                onStepBackward={timeline.stepBackward}
-                onSetSpeed={timeline.setSpeed}
-                onScrubProgress={timeline.scrubToProgress}
-              />
+                    {timelineControls}
                   </div>
                 )}
               </>
             ) : (
               <>
-                <div className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-border bg-surface/80 p-3 backdrop-blur-xl">
-                  <TimelineControls
-                preset={timeline.preset}
-                asOf={timeline.asOf}
-                rangeStart={timeline.rangeStart}
-                rangeEnd={timeline.rangeEnd}
-                isPlaying={timeline.isPlaying}
-                speed={timeline.speed}
-                onSelectPreset={timeline.selectPreset}
-                onSelectCustom={timeline.selectCustomTimestamp}
-                onReturnToLive={timeline.returnToLive}
-                onPlay={timeline.play}
-                onPause={timeline.pause}
-                onStepForward={timeline.stepForward}
-                onStepBackward={timeline.stepBackward}
-                onSetSpeed={timeline.setSpeed}
-                onScrubProgress={timeline.scrubToProgress}
-              />
-                </div>
-                <div className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-border bg-surface/80 p-3 backdrop-blur-xl">
-                  <MapFilters {...filterProps} />
-                </div>
+                <MapCommandBar
+                  openPanel={openPanel}
+                  onOpenPanel={setOpenPanel}
+                  isHistorical={timeline.isHistorical}
+                  asOf={timeline.asOf}
+                  onReturnToLive={timeline.returnToLive}
+                  timeRange={timeRange}
+                  onTimeRange={setTimeRange}
+                  filterCount={desktopFilterCount}
+                  layerCount={desktopLayerCount}
+                  viewMode={viewMode}
+                  basemapMode={basemapMode}
+                  chips={activeChips}
+                />
+                {openPanel === "timeline" && (
+                  <MapControlPanel id="timeline" title="Timeline" onClose={() => setOpenPanel(null)} wide>
+                    {timelineControls}
+                  </MapControlPanel>
+                )}
+                {openPanel === "filters" && (
+                  <MapControlPanel id="filters" title="Filters" onClose={() => setOpenPanel(null)}>
+                    <PanelSection title="Events">
+                      <MapFilters {...filterProps} section="events" />
+                    </PanelSection>
+                  </MapControlPanel>
+                )}
+                {openPanel === "map" && (
+                  <MapControlPanel id="map" title="Map mode" onClose={() => setOpenPanel(null)}>
+                    <PanelSection title="Map">
+                      <MapFilters {...filterProps} section="map" />
+                    </PanelSection>
+                  </MapControlPanel>
+                )}
+                {openPanel === "layers" && (
+                  <MapControlPanel id="layers" title="Layers" onClose={() => setOpenPanel(null)} wide>
+                    <PanelSection title="Intelligence layers">
+                      <MapFilters {...filterProps} section="intel" />
+                      {territoryOpen && (
+                        <div id="territory-selector" className="mt-3">
+                          {territorySelector}
+                        </div>
+                      )}
+                    </PanelSection>
+                    <PanelSection title="Hazards">
+                      <MapFilters {...filterProps} section="hazards" />
+                    </PanelSection>
+                  </MapControlPanel>
+                )}
+                {openPanel === "legend" && (
+                  <MapControlPanel id="legend" title="Legend" onClose={() => setOpenPanel(null)}>
+                    <div data-testid="map-legend-panel" role="region" aria-label="Map legend">
+                      <MapLegendContent />
+                    </div>
+                  </MapControlPanel>
+                )}
+                {openPanel === "changed" && (
+                  <MapControlPanel id="changed" title="What changed" onClose={() => setOpenPanel(null)}>
+                    <WhatChangedPanel open timeRange={timeRange} asOf={timeline.asOf} onClose={() => setOpenPanel(null)} onSelect={openDevelopment} />
+                  </MapControlPanel>
+                )}
               </>
             )}
+            {/* Data notices. Each names what is actually unavailable; none of them says the map or basemap failed. */}
             {eventsFailed && (
               <div className="pointer-events-auto rounded-full border border-elevated/40 bg-surface/90 px-3 py-1.5 text-xs text-ink backdrop-blur-xl" role="alert" data-testid="map-data-error">
-                Map data is unavailable right now; showing the last loaded state.{" "}
+                Live event data is unavailable right now. The map itself is working; showing the last loaded events.{" "}
                 <button type="button" onClick={retryEvents} className="font-medium text-accent hover:underline">
                   Retry
                 </button>
+              </div>
+            )}
+            {cc.isError && (
+              <div className="pointer-events-auto rounded-full border border-border bg-surface/90 px-3 py-1.5 text-xs text-ink-dim backdrop-blur-xl" role="status" data-testid="command-center-error">
+                Status, Pulse and ticker are unavailable (command center). The map is unaffected.{" "}
+                <button type="button" onClick={() => void cc.refetch()} className="font-medium text-accent hover:underline">
+                  Retry
+                </button>
+              </div>
+            )}
+            {noEvents && (
+              <div className="pointer-events-none rounded-full border border-border bg-surface/80 px-3 py-1 text-xs text-ink-faint backdrop-blur-xl" role="status" data-testid="map-empty-state">
+                {allEvents.length === 0 ? (timeline.isHistorical ? "No published events at this moment." : "No published events yet.") : "No events match the current filters."}
               </div>
             )}
             {fromConflict && (
@@ -574,42 +694,27 @@ export default function WorldPage() {
                 ← {getCountryByCode(fromCountry)?.name} country page
               </Link>
             )}
-            {/* Phones reach recent developments through Pulse; the range brief stays on larger screens. */}
-            {!isPhone && <WhatChangedPanel timeRange={timeRange} asOf={timeline.asOf} onSelect={openDevelopment} />}
-            {!isPhone && territoryOpen && (
-              <div id="territory-selector" className="w-full max-w-2xl">
-                <TerritorySelector datasets={territoryDatasets.data} loading={territoryDatasets.isPending} error={territoryDatasets.isError} selectedIds={territoryIds} onToggle={toggleTerritoryDataset} onClose={() => setTerritoryOpen(false)} />
-              </div>
-            )}
-            {!isPhone && showTerritorial && (
-              <div className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-border bg-surface/80 p-3 backdrop-blur-xl">
-                <TerritoryLegend featureCollection={territorialFeatures} />
-              </div>
-            )}
           </div>
-          {!isPhone && (
-            <div className="absolute bottom-8 right-3 z-10 flex flex-col items-end gap-2">
-              {legendOpen && (
-                <div className="max-h-[60vh] w-72 overflow-y-auto rounded-2xl border border-border bg-surface/95 p-4 shadow-xl backdrop-blur-xl" role="region" aria-label="Map legend" data-testid="map-legend-panel">
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Legend</span>
-                    <button type="button" onClick={() => setLegendOpen(false)} aria-label="Close legend" className="rounded p-1 text-ink-faint hover:text-ink">
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <MapLegendContent />
-                </div>
-              )}
-              <button type="button" onClick={() => setLegendOpen((v) => !v)} aria-expanded={legendOpen} data-testid="map-legend-button" className={cn(CHIP, "shadow-lg")}>
-                <HelpCircle className="h-3.5 w-3.5" aria-hidden /> Legend
-              </button>
+          {/* The territorial key stays on the map while territorial control is drawn (it explains the colours). */}
+          {!isPhone && showTerritorial && (
+            <div className="pointer-events-auto absolute bottom-8 right-3 z-10 max-h-[40vh] w-72 overflow-y-auto rounded-2xl border border-border bg-surface/90 p-3 backdrop-blur-xl" data-map-overlay>
+              <TerritoryLegend featureCollection={territorialFeatures} />
             </div>
           )}
         </div>
 
         {/* Desktop selected-event/territory panel */}
-        <aside className="hidden min-h-0 overflow-y-auto border-l border-border bg-surface/60 p-5 sm:block" data-testid="right-rail">
-          {selected ? (
+        <aside className={cn("hidden min-h-0 overflow-y-auto border-l border-border bg-surface/60 sm:block", rightOpen ? "p-5" : "p-1.5")} data-testid="right-rail" data-state={anySelection ? "detail" : overviewOpen ? "overview" : "collapsed"}>
+          {!rightOpen ? (
+            <div className="flex flex-col items-center">
+              <button type="button" onClick={() => setOverviewOpen(true)} aria-label="Open world overview" aria-expanded={false} title="Open the world overview: what changed, top entities, global signals" data-testid="right-rail-toggle" className="rounded-lg p-1.5 text-ink-faint hover:bg-card hover:text-ink">
+                <ChevronsLeft className="h-4 w-4" />
+              </button>
+              <span className="mt-3 text-[10px] font-semibold uppercase tracking-widest text-ink-faint [writing-mode:vertical-rl]" aria-hidden>
+                Overview
+              </span>
+            </div>
+          ) : selected ? (
             <>
               <button
                 onClick={() => setSelected(null)}
@@ -644,7 +749,15 @@ export default function WorldPage() {
           ) : selectedCountry ? (
             <CountryContextPanel code={selectedCountry} onClose={() => setSelectedCountry(null)} onSelectConflict={(slug) => selectConflict(slug)} />
           ) : (
-            <WorldRail data={cc.data} loading={cc.isPending} error={cc.isError} onSelectItem={onManualItem} onSelectEntity={onManualEntity} />
+            <>
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">World overview</span>
+                <button type="button" onClick={() => setOverviewOpen(false)} aria-label="Collapse world overview" aria-expanded title="Collapse overview" data-testid="right-rail-collapse" className="rounded-lg p-1.5 text-ink-faint hover:bg-card hover:text-ink">
+                  <ChevronsRight className="h-4 w-4" />
+                </button>
+              </div>
+              <WorldRail data={cc.data} loading={cc.isPending} error={cc.isError} onSelectItem={onManualItem} onSelectEntity={onManualEntity} />
+            </>
           )}
         </aside>
       </div>

@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
+import { closeWorldControls, openWorldControls } from "./helpers/world-controls";
 import { enableTerritory } from "./helpers/territory";
 import { aggregateReportBuckets, formatReportCount, hotspotCellDegrees, reportCountOf, sumReportCounts } from "@/lib/map/report-counts";
 import { clusterEvents, formatClusterCount } from "@/lib/globe/event-clusters";
@@ -184,8 +185,10 @@ test.describe.serial("Report counts on the rendered map", () => {
   test("5. Heatmap mode: unobtrusive hotspot labels that regroup with zoom, and marker counts step aside", async ({ page }) => {
     await page.goto("/world");
     await page.waitForFunction(() => Boolean((window as unknown as { __vigilMap?: unknown }).__vigilMap));
+    await openWorldControls(page, "map");
     await page.getByRole("button", { name: "Heatmap" }).click();
     await expect(page.getByRole("button", { name: "Heatmap" })).toHaveAttribute("aria-pressed", "true");
+    await closeWorldControls(page);
 
     await expect.poll(async () => mapCall<boolean>(page, `(map) => Boolean(map.getSource("report-heat-labels"))`)).toBe(true);
     const labelsNear = `(map) => map.getSource("report-heat-labels").getData().then((d) => d.features.filter((f) => Math.abs(f.geometry.coordinates[1] - (${LAT})) < 1 && Math.abs(f.geometry.coordinates[0] - (${LNG})) < 1).map((f) => f.properties.label).sort())`;

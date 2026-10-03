@@ -17,7 +17,7 @@ export function Ticker({ items, loading, error, onSelect }: { items: WorldItem[]
       </span>
       {items.length === 0 ? (
         <span className="px-3 text-xs text-ink-faint" data-testid="ticker-empty">
-          {loading ? "Loading developments…" : error ? "Developments are unavailable right now." : "No major developments in this window."}
+          {loading ? "Loading developments…" : error ? "Live developments are unavailable right now. The map is unaffected." : "No major developments in this window."}
         </span>
       ) : (
         <div className="vigil-ticker-track flex shrink-0 items-center gap-8 whitespace-nowrap pl-6" data-testid="ticker-track">

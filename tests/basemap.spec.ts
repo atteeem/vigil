@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { openWorldControls } from "./helpers/world-controls";
 import { readBasemapConfig, resolveBasemap, safeReason, type BasemapConfig } from "@/lib/map/basemap";
 import { buildBundledStyle, buildPmtilesStyle, BASEMAP_LAYER_PREFIX } from "@/lib/map/vigil-style";
 import { ensurePmtilesProtocol, probeArchive, pmtilesRegistrationCount, resetPmtilesProtocolForTests } from "@/lib/map/pmtiles-protocol";
@@ -207,6 +208,7 @@ test.describe("the map without any key", () => {
     await mapReady(page, "bm-land");
     const listeners = () => page.evaluate(() => (window as unknown as { __vigilMap: { _listeners: Record<string, unknown[]> } }).__vigilMap._listeners.click?.length ?? 0);
     const before = await listeners();
+    await openWorldControls(page, "map");
     const group = page.getByRole("radiogroup", { name: "Basemap" });
     for (const name of ["Street", "Satellite", "Intel", "Satellite", "Intel"]) {
       await group.getByRole("radio", { name: name }).click();

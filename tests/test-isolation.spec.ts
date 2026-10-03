@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { closeWorldControls, openWorldControls } from "./helpers/world-controls";
 import { disableTerritory, enableTerritory } from "./helpers/territory";
 import { existsSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -70,6 +71,7 @@ test.describe("Territorial Control empty state", () => {
       return route.fulfill({ contentType: "application/json", body: JSON.stringify({ type: "FeatureCollection", features: [] }) });
     });
     await page.goto("/world");
+    await openWorldControls(page, "layers");
     await page.getByTestId("territorial-toggle").click();
     await expect(page.getByTestId("territory-no-datasets")).toHaveText("No territorial datasets are currently available.");
     await expect(page.getByTestId("territory-dataset-list")).toHaveCount(0);

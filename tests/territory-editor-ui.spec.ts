@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
+import { closeWorldControls, openWorldControls } from "./helpers/world-controls";
 import { enableTerritory } from "./helpers/territory";
 import { planarArea, sameArea } from "@/lib/territory/geometry";
 import type { TerritorialGeometry } from "@/lib/types/territorial-control";
@@ -456,7 +457,9 @@ test.describe("Public map", () => {
       .toEqual([w.a.name, w.b.name].sort());
 
     // "Both": heatmap on with territory still visible, and marker layers stay above the territory layers.
+    await openWorldControls(page, "map");
     await page.getByRole("button", { name: "Heatmap" }).click();
+    await closeWorldControls(page);
     const order = await page.evaluate(() => {
       const map = (window as unknown as { __vigilMap: { getStyle: () => { layers: { id: string }[] }; getLayoutProperty: (l: string, p: string) => string } }).__vigilMap;
       const ids = map.getStyle().layers.map((l) => l.id);

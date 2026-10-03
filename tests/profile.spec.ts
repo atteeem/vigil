@@ -43,7 +43,7 @@ test.describe("Profile / local account (/profile)", () => {
 
     // Default map mode actually drives /world.
     await page.goto("/world");
-    await openWorldControls(page, "layers");
+    await openWorldControls(page, "map");
     await expect(
       page.getByRole("radiogroup", { name: "Basemap" }).getByRole("radio", { name: "Satellite" }),
     ).toHaveAttribute("aria-checked", "true");

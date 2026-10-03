@@ -14,7 +14,7 @@ export type TypeFilter = "all" | EventType;
 export type RegionFilter = "Global" | Region;
 export type ViewMode = "markers" | "heatmap";
 
-const WORLD_TIME_OPTIONS: { value: TimeRange; label: string }[] = [
+export const WORLD_TIME_OPTIONS: { value: TimeRange; label: string }[] = [
   { value: "1H", label: "1H" },
   { value: "6H", label: "6H" },
   { value: "24H", label: "24H" },
@@ -66,18 +66,29 @@ export function MapFilters({
   hazardLayers?: readonly HazardLayer[];
   onToggleHazardLayer?: (layer: HazardLayer) => void;
   hazardHealth?: readonly HazardLayerHealth[];
-  /** Phones split the controls into two sheets: "filters" (what is shown) and "layers" (how the map draws it). */
-  section?: "all" | "filters" | "layers";
+  /** Phones split the controls into two sheets: "filters" (what is shown) and "layers" (how the map draws it).
+   * Desktop's command-bar panels use one section each: "events" (type, region), "map" (basemap, markers/heatmap),
+   * "intel" (territorial control) and "hazards" (live data layers). Time range lives in the command bar there. */
+  section?: "all" | "filters" | "layers" | "events" | "map" | "intel" | "hazards";
   className?: string;
 }) {
-  const filters = section !== "layers";
-  const layers = section !== "filters";
+  const filters = section === "all" || section === "filters";
+  const layers = section === "all" || section === "layers";
+  const showType = filters || section === "events";
+  const showRegion = filters || section === "events";
+  const showBasemap = layers || section === "map";
+  const showView = layers || section === "map";
+  const showIntel = layers || section === "intel";
+  const showHazards = layers || section === "hazards";
   const sheet = section !== "all";
+  // Plain-language helper lines for the desktop panels (phones keep their compact sheets).
+  const panel = section === "events" || section === "map" || section === "intel" || section === "hazards";
   const heading = (text: string) => sheet && <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">{text}</p>;
+  const hint = (text: string) => panel && <p className="max-w-md text-[11px] leading-snug text-ink-faint">{text}</p>;
   return (
     <div className={cn("flex flex-col gap-2.5", className)}>
-      {filters && heading("Event type")}
-      {filters && (
+      {showType && heading("Event type")}
+      {showType && (
       <div className={cn("no-scrollbar flex items-center gap-1.5", sheet ? "flex-wrap" : "overflow-x-auto")} role="group" aria-label="Event type">
         {(["all", ...EVENT_TYPES] as TypeFilter[]).map((t) => (
           <button
@@ -98,8 +109,8 @@ export function MapFilters({
       )}
 
       <div className={cn("flex flex-wrap items-center gap-2", sheet && "flex-col items-start gap-3")}>
-        {layers && heading("Basemap")}
-        {layers && (
+        {showBasemap && heading("Basemap")}
+        {showBasemap && (
           <SegmentedControl
             aria-label="Basemap"
             options={MAP_BASEMAP_MODES.map((m) => ({ value: m, label: MAP_BASEMAP_MODE_LABEL[m] }))}
@@ -109,8 +120,8 @@ export function MapFilters({
         )}
         {filters && heading("Reports from the last")}
         {filters && <SegmentedControl aria-label="Time" options={WORLD_TIME_OPTIONS} value={timeRange} onChange={onTimeRange} />}
-        {filters && heading("Region")}
-        {filters && (
+        {showRegion && heading("Region")}
+        {showRegion && (
           <div className={cn(sheet && "no-scrollbar max-w-full overflow-x-auto")}>
             <SegmentedControl
               aria-label="Region"
@@ -120,9 +131,8 @@ export function MapFilters({
             />
           </div>
         )}
-        {layers && heading("Map view and layers")}
-        {layers && (
-        <>
+        {showView && heading(section === "map" ? "Map view" : "Map view and layers")}
+        {showView && (
         <div className={cn("flex items-center gap-1 rounded-full border border-border bg-surface/70 p-1", !sheet && "ml-auto")} role="group" aria-label="Map view">
           <button
             onClick={() => onViewMode("markers")}
@@ -145,6 +155,9 @@ export function MapFilters({
             <Flame className="h-3.5 w-3.5" /> Heatmap
           </button>
         </div>
+        )}
+        {showView && hint("Markers show individual published reports. Heatmap shows observed conflict intensity (not a forecast).")}
+        {showIntel && (
         <button
           onClick={onToggleTerritoryPanel}
           aria-pressed={showTerritorial}
@@ -159,9 +172,10 @@ export function MapFilters({
           <Flag className="h-3.5 w-3.5" /> Territorial Control
           {territoryCount > 0 && <span className="rounded-full bg-accent/20 px-1.5 text-[10px] font-semibold" data-testid="territory-count">{territoryCount}</span>}
         </button>
-        {onToggleHazardLayer && <HazardLayerPanel enabled={hazardLayers} onToggle={onToggleHazardLayer} health={hazardHealth} />}
-        </>
         )}
+        {showIntel && hint("Reported or de-facto control by an actor, from published datasets. Not legal sovereignty.")}
+        {showHazards && onToggleHazardLayer && <HazardLayerPanel enabled={hazardLayers} onToggle={onToggleHazardLayer} health={hazardHealth} inline={panel} />}
+        {showHazards && hint("Natural hazards and infrastructure status from official and sensor feeds. Independent of conflict reports.")}
       </div>
     </div>
   );

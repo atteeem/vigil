@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openWorldControls } from "./helpers/world-controls";
 
 // Real-browser coverage for the /world Global Timeline control (spec
 // "Global Timeline / Historical Playback"), complementing
@@ -20,6 +21,7 @@ test("1. Selecting a historical preset shows the 'Viewing ...' indicator and his
   });
 
   await page.goto("/world");
+  await openWorldControls(page, "timeline");
   if (isMobile) {
     // Desktop-only feed column ("Live/Historical Event Feed" heading);
     // mobile uses the bottom sheet instead — same convention as
@@ -48,6 +50,7 @@ test("1. Selecting a historical preset shows the 'Viewing ...' indicator and his
 
 test("2. The timeline control and the pre-existing recency filter are two distinct, independently operable controls", async ({ page, isMobile }) => {
   await page.goto("/world");
+  await openWorldControls(page, "timeline");
   if (isMobile) {
     test.skip();
   }
@@ -86,6 +89,7 @@ test("3. A custom timestamp can be selected via the date/time picker and produce
   await request.post(`/api/admin/events/${event.id}/publish`);
 
   await page.goto("/world");
+  await openWorldControls(page, "timeline");
   const timeline = page.getByTestId("timeline-controls");
   await timeline.getByTestId("timeline-custom-toggle").click();
 

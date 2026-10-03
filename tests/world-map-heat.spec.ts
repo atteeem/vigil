@@ -10,7 +10,7 @@ const mapEval = <T,>(page: Page, fn: (map: any) => T) => page.evaluate(`(${fn.to
 
 async function openHeatmap(page: Page) {
   await page.goto("/world");
-  await openWorldControls(page, "layers");
+  await openWorldControls(page, "map");
   await page.getByRole("button", { name: "Heatmap" }).click();
   await closeWorldControls(page);
   await expect(page.locator("[data-heat-signature]")).toHaveCount(1);
@@ -46,8 +46,8 @@ test.describe("World map heatmap (continuous surface)", () => {
     expect(peak).toBeGreaterThanOrEqual(90); // curated full-scale war reaches the deepest band
 
     // Markers mode hides the surface and computes nothing.
-    await openWorldControls(page, "layers");
-    await page.getByRole("button", { name: "Markers" }).click();
+    await openWorldControls(page, "map");
+    await page.getByRole("button", { name: "Markers", exact: true }).click();
     await closeWorldControls(page);
     await expect(page.locator("[data-heat-signature]")).toHaveCount(0);
     expect(await mapEval(page, (map) => map.getLayoutProperty("heat-surface", "visibility"))).toBe("none");
@@ -101,6 +101,7 @@ test.describe("World map heatmap (continuous surface)", () => {
     await openHeatmap(page);
     const live = await signature(page);
     expect(live).toMatch(/^[0-9a-f]{8}$/);
+    await openWorldControls(page, "timeline");
     await page.getByTestId("timeline-controls").getByRole("radio", { name: "7D", exact: true }).click();
     await expect(page.getByTestId("historical-indicator")).toBeVisible();
     await expect.poll(() => signature(page)).not.toBe(live);

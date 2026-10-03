@@ -17,10 +17,12 @@ export function useLiveEvents(): ConflictEvent[] {
   return useLiveEventsState().events;
 }
 
-/** The same poll plus its health: `failed` after a failed read (until the next success), `retry` polls at once. */
-export function useLiveEventsState(): { events: ConflictEvent[]; failed: boolean; retry: () => void } {
+/** The same poll plus its health: `failed` after a failed read (until the next success), `loaded` once a read has
+ * succeeded (so "no events yet" can be told apart from "not loaded yet"), `retry` polls at once. */
+export function useLiveEventsState(): { events: ConflictEvent[]; failed: boolean; loaded: boolean; retry: () => void } {
   const [events, setEvents] = useState<ConflictEvent[]>([]);
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const signature = useRef("");
 
@@ -36,7 +38,10 @@ export function useLiveEventsState(): { events: ConflictEvent[]; failed: boolean
           return;
         }
         const data = (await res.json()) as ConflictEvent[];
-        if (!cancelled) setFailed(false);
+        if (!cancelled) {
+          setFailed(false);
+          setLoaded(true);
+        }
         // An unchanged payload keeps the previous array: no re-render, no heat/label recomputation, no setData.
         const sig = eventListSignature(data);
         if (!cancelled && sig !== signature.current) {
@@ -61,5 +66,5 @@ export function useLiveEventsState(): { events: ConflictEvent[]; failed: boolean
     };
   }, [attempt]);
 
-  return { events, failed, retry: () => setAttempt((n) => n + 1) };
+  return { events, failed, loaded, retry: () => setAttempt((n) => n + 1) };
 }

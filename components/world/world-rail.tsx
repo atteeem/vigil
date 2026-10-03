@@ -39,7 +39,7 @@ function ItemRow({ item, onSelect, testId }: { item: WorldItem; onSelect: (i: Wo
 /** Default right rail (no selection): What changed, Top entities, Global signals. */
 export function WorldRail({ data, loading, error, onSelectItem, onSelectEntity }: { data: CommandCenter | undefined; loading: boolean; error: boolean; onSelectItem: (i: WorldItem) => void; onSelectEntity: (e: TopEntity) => void }) {
   const [win, setWin] = useState<EntityWindow>("6h");
-  const empty = loading ? "Loading…" : error ? "Unavailable right now." : EMPTY;
+  const empty = loading ? "Loading…" : error ? "Overview unavailable right now. The map is unaffected." : EMPTY;
   const entities = data?.topEntities[win] ?? [];
   return (
     <div className="space-y-4" data-testid="world-rail">

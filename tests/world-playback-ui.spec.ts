@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { openWorldControls } from "./helpers/world-controls";
 
 // Real-browser coverage for Animated Global Timeline Playback (spec
 // "turn the existing historical timeline into smooth Play/Pause
@@ -22,6 +23,7 @@ async function currentProgress(page: import("@playwright/test").Page): Promise<n
 
 async function selectSixHourRange(page: import("@playwright/test").Page) {
   await page.goto("/world");
+  await openWorldControls(page, "timeline");
   const timeline = page.getByTestId("timeline-controls");
   await timeline.getByRole("radio", { name: "6H" }).click();
   await expect(page.getByTestId("playback-controls")).toBeVisible();
@@ -141,6 +143,7 @@ test("6. Playback does not flood the network — request count over a playback w
 test("7. Rapidly switching presets settles on the LAST selection and never flips back to an earlier one arriving late", async ({ page, isMobile }) => {
   test.skip(isMobile);
   await page.goto("/world");
+  await openWorldControls(page, "timeline");
   const timeline = page.getByTestId("timeline-controls");
 
   await timeline.getByRole("radio", { name: "1H" }).click();

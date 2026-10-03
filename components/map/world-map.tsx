@@ -16,6 +16,7 @@ import { EVENT_TYPES } from "@/lib/types";
 import type { MapBasemapMode } from "@/lib/map/style";
 import { readBasemapConfig, resolveBasemap, safeReason, type BasemapProviderId, type BasemapResolution } from "@/lib/map/basemap";
 import { probeArchive } from "@/lib/map/pmtiles-protocol";
+import { HEAT_DRAWS_COAST } from "@/lib/map/vigil-style";
 import { glyphStats } from "@/lib/map/glyph-protocol";
 import { registerBasemapProtocols } from "@/lib/map/register-protocols";
 import { recordBasemapState } from "@/lib/map/basemap-state";
@@ -722,10 +723,11 @@ export function WorldMap({
     HEAT_LAYER_IDS.forEach((id) => {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", heatVis);
     });
-    // The heat mode draws its own borders (heat-borders) from the same topology; the basemap's are hidden there so
-    // no border is ever traced twice.
+    // The heat mode draws its own borders and coastline (heat-borders) from the same topology; the basemap's are hidden
+    // there so no line is ever traced twice.
     for (const layer of map.getStyle()?.layers ?? []) {
-      if ((layer.metadata as Record<string, unknown> | undefined)?.["vigil:role"] === "basemap-border") map.setLayoutProperty(layer.id, "visibility", viewModeRef.current === "heatmap" ? "none" : "visible");
+      const meta = layer.metadata as Record<string, unknown> | undefined;
+      if (meta?.["vigil:role"] === "basemap-border" || meta?.[HEAT_DRAWS_COAST] === true) map.setLayoutProperty(layer.id, "visibility", viewModeRef.current === "heatmap" ? "none" : "visible");
     }
   };
 

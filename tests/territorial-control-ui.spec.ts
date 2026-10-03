@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { closeWorldControls, openWorldControls } from "./helpers/world-controls";
 import { disableTerritory, enableTerritory } from "./helpers/territory";
 
 // Real-browser coverage for Territorial Control Mode's public /world map
@@ -105,6 +106,7 @@ async function waitForFeatureAt(page: Page, layerIds: string[], lng: number, lat
 // Territorial Control is now chosen dataset by dataset (see tests/helpers/territory.ts): "toggling" means ticking every
 // available dataset, or unticking them all.
 async function toggleTerritorial(page: Page) {
+  await openWorldControls(page, "layers"); // the toggle lives in the Layers panel
   const wasPressed = (await page.getByTestId("territorial-toggle").getAttribute("aria-pressed")) === "true";
   if (wasPressed) await disableTerritory(page);
   else await enableTerritory(page);
@@ -127,7 +129,9 @@ test("1. Toggling Territorial Control on/off shows and hides the legend", async 
   await expect(page.getByTestId("territory-legend")).not.toBeVisible();
   await toggleTerritorial(page);
   await expect(page.getByTestId("territory-legend")).toBeVisible();
+  await openWorldControls(page, "layers");
   await expect(page.getByTestId("territorial-toggle")).toHaveAttribute("aria-pressed", "true");
+  await closeWorldControls(page);
 
   await toggleTerritorial(page);
   await expect(page.getByTestId("territory-legend")).not.toBeVisible();
@@ -183,7 +187,9 @@ test("3. Clicking a territorial polygon opens a detail panel with status, confid
   // marker-takes-priority guard (see world-map.tsx's territory-fill
   // click handler). Test 4 covers that priority guard directly with its
   // own dedicated marker; this test is purely about the territory click.
+  await openWorldControls(page, "map");
   await page.getByRole("button", { name: "Heatmap" }).click();
+  await closeWorldControls(page);
   await toggleTerritorial(page);
   await waitForFeatureAt(page, ["territory-fill"], CENTER_LNG, CENTER_LAT);
   const { x, y } = await mapPixel(page, CENTER_LNG, CENTER_LAT);
@@ -321,6 +327,7 @@ test("6. Historical playback reconstructs a control change: the old actor shows 
 
   // Historical (well before the change): the OLD actor controls it —
   // the same asOf the rest of the timeline/playback system already uses.
+  await openWorldControls(page, "timeline");
   const timeline = page.getByTestId("timeline-controls");
   await timeline.getByRole("radio", { name: "6H" }).click();
   await expect(page.getByTestId(`territory-legend-actor-${oldActorName}`)).toBeVisible();
@@ -349,9 +356,11 @@ test("7. Heatmap and Territorial Control can be active at the same time ('Both')
   });
 
   await page.goto("/world");
+  await openWorldControls(page, "map");
   await page.getByRole("button", { name: "Heatmap" }).click();
-  await toggleTerritorial(page);
   await expect(page.getByRole("button", { name: "Heatmap" })).toHaveAttribute("aria-pressed", "true");
+  await toggleTerritorial(page);
+  await openWorldControls(page, "layers");
   await expect(page.getByTestId("territorial-toggle")).toHaveAttribute("aria-pressed", "true");
   await page.waitForTimeout(500);
 

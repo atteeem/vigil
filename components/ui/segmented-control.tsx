@@ -12,12 +12,15 @@ export function SegmentedControl<T extends string>({
   value,
   onChange,
   className,
+  size = "md",
   "aria-label": ariaLabel,
 }: {
   options: SegmentedOption<T>[];
   value: T;
   onChange: (v: T) => void;
   className?: string;
+  /** "sm" is the compact variant used inside dense control bars. */
+  size?: "sm" | "md";
   "aria-label"?: string;
 }) {
   return (
@@ -36,7 +39,8 @@ export function SegmentedControl<T extends string>({
           aria-checked={value === opt.value}
           onClick={() => onChange(opt.value)}
           className={cn(
-            "rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+            "rounded-full text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+            size === "sm" ? "px-2 py-1" : "px-3 py-1.5",
             value === opt.value
               ? "bg-ink text-bg"
               : "text-ink-dim hover:text-ink",

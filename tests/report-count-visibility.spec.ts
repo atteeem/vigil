@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
+import { closeWorldControls, openWorldControls } from "./helpers/world-controls";
 
 // Report counts must be visible wherever they are meant to be: cluster counts and per-event counts in Markers mode,
 // hotspot counts in Heatmap mode. Events published at a city / region carry a point and count; country-level reports
@@ -59,7 +60,9 @@ test.describe("report counts on the flat map", () => {
 
   test("Heatmap mode: hotspot count labels are produced for located reports and stay separate from the intensity colour", async ({ page }) => {
     await page.goto("/world?focus=49.99,36.23,5");
+    await openWorldControls(page, "map");
     await page.getByRole("button", { name: "Heatmap" }).click();
+    await closeWorldControls(page);
     await expect.poll(() => page.evaluate(() => (window as unknown as { __vigilMap: MapHandle }).__vigilMap.querySourceFeatures("report-heat-labels").length), { timeout: 30_000 }).toBeGreaterThan(0);
     const vis = await page.evaluate(() => (window as unknown as { __vigilMap: MapHandle }).__vigilMap.getLayoutProperty("report-heat-label", "visibility"));
     expect(vis).toBe("visible");

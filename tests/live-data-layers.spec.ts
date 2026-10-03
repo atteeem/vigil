@@ -464,9 +464,10 @@ test.describe.serial("World map UI", () => {
     await expect(page.locator("[data-hazard-layers]").first()).toHaveAttribute("data-hazard-layers", "weather");
     // Independent of the conflict controls: Territorial Control and Heatmap behave as before.
     await enableTerritory(page);
-    await openWorldControls(page, "layers");
+    await openWorldControls(page, "map");
     await page.getByRole("button", { name: "Heatmap" }).click();
     await expect(page.getByRole("button", { name: "Heatmap" })).toHaveAttribute("aria-pressed", "true");
+    await openWorldControls(page, "layers");
     if (!(await page.getByTestId("hazard-toggle-weather").isVisible())) await page.getByTestId("hazard-layers-button").click();
     await expect(page.getByTestId("hazard-toggle-weather")).toBeChecked();
     // Remembered across a reload.
@@ -536,6 +537,7 @@ test.describe.serial("World map UI", () => {
     await enableLayer(page, "earthquakes");
     const count = () => page.locator("[data-hazard-count]").first().getAttribute("data-hazard-count");
     await expect.poll(count).toBe("4");
+    await openWorldControls(page, "timeline");
     await page.getByRole("radiogroup", { name: "Playback" }).getByRole("radio", { name: "24H", exact: true }).click();
     await expect(page.getByTestId("historical-indicator")).toBeVisible();
     await expect.poll(count).toBe("1"); // only the 26-hour-old quake had occurred a day ago

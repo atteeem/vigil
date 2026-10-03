@@ -149,11 +149,11 @@ export function TimelineControls({
 
       {isHistorical && (
         <div
-          className="flex flex-wrap items-center gap-2 rounded-lg border border-accent/30 bg-accent-dim/40 px-3 py-1.5 text-xs text-accent"
+          className="flex flex-wrap items-center gap-2 rounded-lg border border-elevated/40 bg-elevated-dim px-3 py-1.5 text-xs text-elevated"
           data-testid="historical-indicator"
         >
           <span>Viewing {formatAbsoluteTime(asOf.toISOString(), "UTC")}</span>
-          <span className="text-accent/70" title="Conflict markers and the Active conflicts / High tension counters read the current registry — there is no historical version history for them yet.">
+          <span className="text-elevated/80" title="Conflict markers and the Active conflicts / High tension counters read the current registry — there is no historical version history for them yet.">
             · conflict markers & status counters are current, not historical
           </span>
           <Button size="sm" variant="ghost" onClick={onReturnToLive} className="ml-auto" data-testid="return-to-live-button">

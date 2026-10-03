@@ -7,6 +7,12 @@ import type { CommandCenter, WorldItem } from "@/lib/world/types";
 // driven by a mocked aggregate payload so it does not depend on which rows other specs left in the shared test
 // database; the endpoint itself is exercised for real in "the aggregate endpoint".
 
+/** The right rail is a slim strip until something is selected; opens the world overview (what changed, top entities...). */
+async function openOverview(page: Page) {
+  const toggle = page.getByTestId("right-rail-toggle");
+  if (await toggle.isVisible()) await toggle.click();
+}
+
 const NOW = new Date("2026-09-21T12:00:00Z");
 const ago = (min: number) => new Date(NOW.getTime() - min * 60_000).toISOString();
 
@@ -209,6 +215,7 @@ test.describe("World Command Center UI", () => {
     await mockWorld(page);
     await page.route("**/api/countries/JP/intelligence", (route) => route.fulfill({ json: { country: { code: "JP", name: "Japan", flag: "" }, overview: { exposureScore: 12, exposureLabel: "Low", activeDomesticConflicts: 0, highImpactNearbyConflicts: 0, significantDisruptions: 0, latestDevelopment: null, statusLine: "No active conflict inside Japan." }, domesticConflicts: [], nearbyConflicts: [], developments: [] } }));
     await page.goto("/world");
+    await openOverview(page);
     await expect(page.getByTestId("world-rail")).toBeVisible();
     await page.getByTestId("entity-row").first().click(); // Ukraine (conflict)
     const ctx = page.getByTestId("right-rail").getByTestId("conflict-context");
@@ -250,6 +257,7 @@ test.describe("World Command Center UI", () => {
     await page.goto("/world");
     await expect(page.getByTestId("ticker-empty")).toHaveText("No major developments in this window.");
     await expect(page.getByTestId("pulse-empty")).toHaveText("No major developments in this window.");
+    await openOverview(page);
     await expect(page.getByTestId("rail-what-changed")).toContainText("No major developments in this window.");
     await expect(page.getByTestId("stat-active")).toHaveText("0");
     await expect(page.getByTestId("live-indicator")).toContainText("NO DATA");

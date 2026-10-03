@@ -32,7 +32,7 @@ test.describe("Map/feed filters (/world)", () => {
 
   test("heatmap toggle switches the map display mode", async ({ page }) => {
     await page.goto("/world");
-    await openWorldControls(page, "layers");
+    await openWorldControls(page, "map");
     const heatmapBtn = page.getByRole("button", { name: "Heatmap" });
     const markersBtn = page.getByRole("button", { name: "Markers" });
     await expect(markersBtn).toHaveAttribute("aria-pressed", "true");

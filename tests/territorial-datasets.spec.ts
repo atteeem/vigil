@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
+import { closeWorldControls, openWorldControls } from "./helpers/world-controls";
 import { matchesDatasetFilter } from "@/lib/territory/dataset-types";
 import { disableTerritory, enableTerritory } from "./helpers/territory";
 
@@ -140,6 +141,7 @@ test.describe("the selector", () => {
     await openWorld(page);
     expect(await features(page)).toBe(0); // nothing drawn, nothing fetched, until a dataset is chosen
 
+    await openWorldControls(page, "layers");
     await page.getByTestId("territorial-toggle").click();
     await expect(page.getByTestId(`territory-dataset-${control.dataset.id}`)).toBeVisible();
     await expect(page.getByTestId(`territory-dataset-${draft.dataset.id}`)).toHaveCount(0);
@@ -163,6 +165,7 @@ test.describe("the selector", () => {
     const control = await setup(request, { type: "TERRITORIAL_CONTROL", publish: true });
     const presence = await setup(request, { type: "PRESENCE", publish: true });
     await openWorld(page);
+    await openWorldControls(page, "layers");
     await page.getByTestId("territorial-toggle").click();
     await page.getByTestId("territory-filter-influence").click();
     await expect(page.getByTestId(`territory-dataset-${presence.dataset.id}`)).toBeVisible();
